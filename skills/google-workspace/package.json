@@ -1,0 +1,15 @@
+{
+  "name": "@workspace-skills/google-workspace",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@workspace/runtime": "workspace:*",
+    "@workspace/google-workspace": "workspace:*",
+    "@radix-ui/react-icons": "^1.3.2",
+    "@radix-ui/themes": "^3.2.1",
+    "react": "^19.2.0"
+  }
+}

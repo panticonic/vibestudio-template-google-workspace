@@ -1,0 +1,4 @@
+systemEpoch: 57
+templates:
+  use:
+    - url: git+https://github.com/panticonic/vibestudio-workspace-base.git

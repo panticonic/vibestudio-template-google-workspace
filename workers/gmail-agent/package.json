@@ -1,0 +1,144 @@
+{
+  "name": "@workspace-workers/gmail-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "durable": {
+      "classes": [
+        {
+          "className": "GmailAgentWorker"
+        }
+      ]
+    },
+    "agent": {
+      "displayName": "Gmail Agent",
+      "description": "Reads and triages your Gmail",
+      "defaultConfig": {
+        "handle": "gmail",
+        "respondPolicy": "mentioned-or-followup"
+      }
+    },
+    "exposeModules": [
+      "@earendil-works/pi-ai",
+      "@workspace/runtime",
+      "@workspace/pubsub",
+      "@workspace/gmail",
+      "zod"
+    ],
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "accounts.connect",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "context"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "context.clone",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.materialize",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "credential.use",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "subagents.create",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:channel",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:gad.workspace",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:models",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.runtime-state.manage",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^0.82.0",
+    "@vibestudio/shared": "workspace:*",
+    "@vibestudio/trajectory-identity": "workspace:*",
+    "@workspace/runtime": "workspace:*",
+    "@workspace/agentic-do": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/gmail": "workspace:*",
+    "@workspace/pubsub": "workspace:*",
+    "@workspace/harness": "workspace:*",
+    "@workspace/pi-core": "workspace:*",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@workspace/agent-loop": "workspace:*",
+    "vitest": "^3.2.2"
+  }
+}

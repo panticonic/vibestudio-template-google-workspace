@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/google-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Google Workspace credential descriptors and API clients for Gmail, Calendar, and Drive.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./calendar": "./src/calendar.ts",
+    "./drive": "./src/drive.ts",
+    "./providers": "./src/providers.ts"
+  },
+  "dependencies": {
+    "@vibestudio/credential-client": "workspace:*",
+    "@workspace/integrations": "workspace:*",
+    "@workspace/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@vibestudio/rpc": "workspace:*",
+    "vitest": "^3.2.2"
+  }
+}

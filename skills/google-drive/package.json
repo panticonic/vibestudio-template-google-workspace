@@ -1,0 +1,13 @@
+{
+  "name": "@workspace-skills/google-drive",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@workspace/google-workspace": "workspace:*",
+    "@workspace/runtime": "workspace:*",
+    "@workspace-skills/google-workspace": "workspace:*"
+  }
+}
