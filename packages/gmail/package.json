@@ -17,7 +17,7 @@
     "@workspace-skills/agents": "workspace:*",
     "@workspace-skills/google-workspace": "workspace:*",
     "@workspace/runtime": "workspace:*",
-    "react": "^19.2.0"
+    "react": "^19.0.0"
   },
   "devDependencies": {
     "vitest": "^3.2.2"
