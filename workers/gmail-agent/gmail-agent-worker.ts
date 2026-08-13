@@ -4,16 +4,22 @@ import {
   type AgentToolExecutionContext,
   type RespondPolicy,
 } from "@workspace/agentic-do";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { builtinModels } from "@workspace/pi-ai/providers/all";
 import { rpc } from "@workspace/runtime/worker";
-import type { DurableObjectContext, WebhookDeliveryEvent } from "@workspace/runtime/worker";
+import type {
+  DurableObjectContext,
+  WebhookDeliveryEvent,
+} from "@workspace/runtime/worker";
+import { type ActorRef } from "@workspace/agentic-protocol";
 import {
-  AGENTIC_PROTOCOL_VERSION,
-  type ActorRef,
-  type AgenticEvent,
-} from "@workspace/agentic-protocol";
-import { createGmailClient, type GmailClient, type GmailThread } from "@workspace/gmail";
-import type { GmailAttentionPrefs, GmailSetupState } from "@workspace/gmail/card-types";
+  createGmailClient,
+  type GmailClient,
+  type GmailThread,
+} from "@workspace/gmail";
+import type {
+  GmailAttentionPrefs,
+  GmailSetupState,
+} from "@workspace/gmail/card-types";
 import {
   reduce as reduceGmailThread,
   type GmailThreadState,
@@ -26,7 +32,6 @@ import { DEFAULT_ATTENTION_PREFERENCES, createGmailTables } from "./schema.js";
 import {
   DEFAULT_POLL_INTERVAL_MS,
   booleanArg,
-  numberArg,
   record,
   stringArg,
   type GmailChannelState,
@@ -34,7 +39,7 @@ import {
 import { TriageStore } from "./triage/triage-store.js";
 import { TriageEngine } from "./triage/triage-engine.js";
 import { PeopleStore } from "./people/people-store.js";
-import { WAKE_DEBOUNCE_MS, WakeQueue, buildWakeDigestPrompt } from "./triage/wake.js";
+import { WakeQueue, buildWakeDigestPrompt } from "./triage/wake.js";
 import { SyncEngine } from "./sync/sync-engine.js";
 import {
   GMAIL_MESSAGE_TYPES,
@@ -54,7 +59,10 @@ import {
   type GmailOperation,
   type GmailOperationContext,
 } from "./agent/operations.js";
-import { GMAIL_SETUP_ONBOARDING_PROMPT, GMAIL_SYSTEM_PROMPT } from "./agent/prompts.js";
+import {
+  GMAIL_SETUP_ONBOARDING_PROMPT,
+  GMAIL_SYSTEM_PROMPT,
+} from "./agent/prompts.js";
 import { generateDraftReplyBody as generateDraftReplyBodyLlm } from "./agent/draft-writer.js";
 
 const GMAIL_ACTION_BAR_FILE = "packages/gmail/src/action-bar.tsx";
@@ -75,9 +83,13 @@ const TRIAGE_MODEL_BY_PROVIDER: Record<string, string> = {
   anthropic: "claude-haiku-4-5",
 };
 
-export function triageModelCandidates(channelModelRef: string, override?: string): string[] {
+export function triageModelCandidates(
+  channelModelRef: string,
+  override?: string,
+): string[] {
   const colonIdx = channelModelRef.indexOf(":");
-  const provider = colonIdx > 0 ? channelModelRef.slice(0, colonIdx) : channelModelRef;
+  const provider =
+    colonIdx > 0 ? channelModelRef.slice(0, colonIdx) : channelModelRef;
   return [
     ...(override ? [override] : []),
     ...(TRIAGE_MODEL_BY_PROVIDER[provider]
@@ -94,7 +106,7 @@ const WATCH_FALLBACK_POLL_MS = 30 * 60 * 1000;
 const GMAIL_DO_SOURCE = "workers/gmail-agent";
 const GMAIL_DO_CLASS = "GmailAgentWorker";
 const GMAIL_PUSH_ROUTER_KEY = "gmail-push-router";
-const GMAIL_AGENT_SCHEMA_BASELINE = 7;
+const GMAIL_AGENT_SCHEMA_BASELINE = 1;
 
 type GmailTool = AgentTool;
 
@@ -105,16 +117,7 @@ interface GmailPushTarget {
 }
 
 export class GmailAgentWorker extends AgentWorkerBase {
-  // Version 7 is the first supported production shape. Earlier experimental
-  // layouts have no proven lossless translation and are rejected intact.
   static override schemaVersion = GMAIL_AGENT_SCHEMA_BASELINE;
-
-  protected override schemaProductionBaseline() {
-    return {
-      version: GMAIL_AGENT_SCHEMA_BASELINE,
-      name: "gmail-agent-v7",
-    } as const;
-  }
 
   private gmailClients = new Map<string, GmailClient>();
   private recoveredChannels = new Set<string>();
@@ -155,7 +158,8 @@ export class GmailAgentWorker extends AgentWorkerBase {
       wake: this.wake,
       runTriageModel: (channelId, systemPrompt, userPrompt) =>
         this.runTriageModel(channelId, systemPrompt, userPrompt),
-      isConfigured: (channelId) => this.getChannelState(channelId).setupStatus === "configured",
+      isConfigured: (channelId) =>
+        this.getChannelState(channelId).setupStatus === "configured",
       applyDecision: (channelId, threadId, decision) =>
         this.syncEngine.applyTriageDecision(channelId, threadId, decision),
       now,
@@ -185,8 +189,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
       getChannelState: (channelId) => this.getChannelState(channelId),
       saveChannelState: (state) => this.saveChannelState(state),
       publishSetup: (channelId) => this.publishSetupCard(channelId),
-      generateDraftReplyBody: (channelId, thread) => this.generateDraftReplyBody(channelId, thread),
-      isSubscribed: (channelId) => Boolean(this.subscriptions.getParticipantId(channelId)),
+      generateDraftReplyBody: (channelId, thread) =>
+        this.generateDraftReplyBody(channelId, thread),
+      isSubscribed: (channelId) =>
+        Boolean(this.subscriptions.getParticipantId(channelId)),
       writeFile: (path, data) => this.writeWorkspaceFile(path, data),
       now,
     });
@@ -233,7 +239,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
   }
 
   protected createGmailClient(credentialId?: string): GmailClient {
-    return createGmailClient(this.credentials, credentialId ? { credentialId } : {});
+    return createGmailClient(
+      this.credentials,
+      credentialId ? { credentialId } : {},
+    );
   }
 
   private getGmailCredentialId(channelId: string): string | undefined {
@@ -241,7 +250,9 @@ export class GmailAgentWorker extends AgentWorkerBase {
     if (state.credentialId) return state.credentialId;
     const config = record(this.subscriptions.getConfig(channelId));
     return (
-      stringArg(config, "googleCredentialId") ?? stringArg(config, "credentialId") ?? undefined
+      stringArg(config, "googleCredentialId") ??
+      stringArg(config, "credentialId") ??
+      undefined
     );
   }
 
@@ -259,7 +270,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
     this.sql.exec(
       `INSERT OR IGNORE INTO gmail_channel_state (channel_id, poll_interval_ms) VALUES (?, ?)`,
       channelId,
-      DEFAULT_POLL_INTERVAL_MS
+      DEFAULT_POLL_INTERVAL_MS,
     );
   }
 
@@ -273,15 +284,20 @@ export class GmailAgentWorker extends AgentWorkerBase {
       historyId: (row["history_id"] as string | null) ?? undefined,
       emailAddress: (row["email_address"] as string | null) ?? undefined,
       credentialId: (row["credential_id"] as string | null) ?? undefined,
-      pollIntervalMs: Number(row["poll_interval_ms"]) || DEFAULT_POLL_INTERVAL_MS,
+      pollIntervalMs:
+        Number(row["poll_interval_ms"]) || DEFAULT_POLL_INTERVAL_MS,
       lastSyncAt: (row["last_sync_at"] as number | null) ?? undefined,
       lastError: (row["last_error"] as string | null) ?? undefined,
-      setupStatus: row["setup_status"] === "configured" ? "configured" : "needs-user-preferences",
+      setupStatus:
+        row["setup_status"] === "configured"
+          ? "configured"
+          : "needs-user-preferences",
       setupPromptedAt: (row["setup_prompted_at"] as number | null) ?? undefined,
       configuredAt: (row["configured_at"] as number | null) ?? undefined,
       setupSummary: (row["setup_summary"] as string | null) ?? undefined,
       syncState: row["sync_state"] === "auth-needed" ? "auth-needed" : "ok",
-      rateLimitedUntil: (row["rate_limited_until"] as number | null) ?? undefined,
+      rateLimitedUntil:
+        (row["rate_limited_until"] as number | null) ?? undefined,
       backoffMs: (row["backoff_ms"] as number | null) ?? undefined,
       lastSetupJson: (row["last_setup_json"] as string | null) ?? undefined,
       peopleApiStatus:
@@ -315,7 +331,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
       state.backoffMs ?? null,
       state.lastSetupJson ?? null,
       state.peopleApiStatus ?? null,
-      state.watchExpiration ?? null
+      state.watchExpiration ?? null,
     );
   }
 
@@ -333,7 +349,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
     return GMAIL_SYSTEM_PROMPT;
   }
 
-  protected async generateDraftReplyBody(channelId: string, thread: GmailThread): Promise<string> {
+  protected async generateDraftReplyBody(
+    channelId: string,
+    thread: GmailThread,
+  ): Promise<string> {
     return generateDraftReplyBodyLlm({
       modelRef: this.getAgentSettings().model,
       apiKey: await this.resolveModelApiKey(channelId),
@@ -349,7 +368,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
   protected async runTriageModel(
     channelId: string,
     systemPrompt: string,
-    userPrompt: string
+    userPrompt: string,
   ): Promise<string> {
     const channelModelRef = this.getAgentSettings().model;
     const override = this.store.getPrefs(channelId).triageModel;
@@ -358,21 +377,30 @@ export class GmailAgentWorker extends AgentWorkerBase {
     for (const candidate of candidates) {
       const idx = candidate.indexOf(":");
       if (idx <= 0) continue;
-      model = PI_MODELS.getModel(candidate.slice(0, idx), candidate.slice(idx + 1));
+      model = PI_MODELS.getModel(
+        candidate.slice(0, idx),
+        candidate.slice(idx + 1),
+      );
       if (model) break;
     }
-    if (!model) throw new Error(`No triage model metadata for: ${candidates.join(", ")}`);
+    if (!model)
+      throw new Error(`No triage model metadata for: ${candidates.join(", ")}`);
     const apiKey = await this.resolveModelApiKey(channelId);
     const response = await PI_MODELS.complete(
       model,
       {
         systemPrompt,
-        messages: [{ role: "user", timestamp: Date.now(), content: userPrompt }],
+        messages: [
+          { role: "user", timestamp: Date.now(), content: userPrompt },
+        ],
       },
-      { apiKey, temperature: 0, maxTokens: 800 }
+      { apiKey, temperature: 0, maxTokens: 800 },
     );
     return response.content
-      .filter((block): block is { type: "text"; text: string } => block.type === "text")
+      .filter(
+        (block): block is { type: "text"; text: string } =>
+          block.type === "text",
+      )
       .map((block) => block.text)
       .join("")
       .trim();
@@ -380,11 +408,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
 
   protected override async getLoopTools(
     channelId: string,
-    execution?: AgentToolExecutionContext
+    execution?: AgentToolExecutionContext,
   ): Promise<AgentTool[]> {
-    const universalTools = (await super.getLoopTools(channelId, execution)).filter((tool) =>
-      GMAIL_UNIVERSAL_LOOP_TOOL_NAMES.has(tool.name)
-    );
+    const universalTools = (
+      await super.getLoopTools(channelId, execution)
+    ).filter((tool) => GMAIL_UNIVERSAL_LOOP_TOOL_NAMES.has(tool.name));
     const gmailTools = toolOperations().map(
       (op) =>
         ({
@@ -394,20 +422,26 @@ export class GmailAgentWorker extends AgentWorkerBase {
           parameters: op.schema,
           execute: async (_toolCallId: string, params: unknown) => {
             if (op.needsRecovery) await this.ensureRecovered(channelId);
-            const details = await op.run(this.operationContext, channelId, record(params));
+            const details = await op.run(
+              this.operationContext,
+              channelId,
+              record(params),
+            );
             return {
-              content: [{ type: "text", text: JSON.stringify(details, null, 2) }],
+              content: [
+                { type: "text", text: JSON.stringify(details, null, 2) },
+              ],
               details,
             };
           },
-        }) as GmailTool
+        }) as GmailTool,
     );
     return [...universalTools, ...gmailTools];
   }
 
   protected override getParticipantInfo(
     _channelId: string,
-    config?: unknown
+    config?: unknown,
   ): ParticipantDescriptor {
     const cfg = record(config);
     return {
@@ -422,7 +456,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
   // ── lifecycle ─────────────────────────────────────────────────────────────
 
   override async subscribeChannel(
-    opts: Parameters<AgentWorkerBase["subscribeChannel"]>[0]
+    opts: Parameters<AgentWorkerBase["subscribeChannel"]>[0],
   ): Promise<{ ok: boolean; participantId: string }> {
     const result = await super.subscribeChannel(opts);
     this.ensureChannelState(opts.channelId);
@@ -444,14 +478,17 @@ export class GmailAgentWorker extends AgentWorkerBase {
   private nextGmailAlarmSchedule(now = this.now()): DoAlarmSchedule | null {
     const wakeTimes: number[] = [];
     const reminderAt = this.store.nextReminderAt();
-    if (reminderAt !== undefined) wakeTimes.push(Math.max(reminderAt, now + 1000));
+    if (reminderAt !== undefined)
+      wakeTimes.push(Math.max(reminderAt, now + 1000));
 
     for (const channelId of this.store.channelsWithPendingCandidates()) {
       const wakeAt = this.triage.nextWakeAt(channelId, now);
       if (wakeAt !== undefined) wakeTimes.push(wakeAt);
     }
     const attentionChannels = this.sql
-      .exec(`SELECT DISTINCT channel_id FROM gmail_attention_queue ORDER BY channel_id`)
+      .exec(
+        `SELECT DISTINCT channel_id FROM gmail_attention_queue ORDER BY channel_id`,
+      )
       .toArray();
     for (const row of attentionChannels) {
       const wakeAt = this.wake.nextWakeAt(String(row["channel_id"]), now);
@@ -461,7 +498,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
     const channels = this.sql
       .exec(
         `SELECT poll_interval_ms, sync_state, rate_limited_until, watch_expiration
-           FROM gmail_channel_state`
+           FROM gmail_channel_state`,
       )
       .toArray();
     for (const row of channels) {
@@ -469,14 +506,19 @@ export class GmailAgentWorker extends AgentWorkerBase {
       const rateLimitedUntil = Number(row["rate_limited_until"] ?? 0);
       const watchExpiration = Number(row["watch_expiration"] ?? 0);
       const watchActive = watchExpiration > now + WATCH_RENEW_MARGIN_MS;
-      const basePoll = Number(row["poll_interval_ms"]) || DEFAULT_POLL_INTERVAL_MS;
+      const basePoll =
+        Number(row["poll_interval_ms"]) || DEFAULT_POLL_INTERVAL_MS;
       const poll = watchActive
         ? Math.min(
             Math.max(basePoll, WATCH_FALLBACK_POLL_MS),
-            Math.max(watchExpiration - WATCH_RENEW_MARGIN_MS - now, 60_000)
+            Math.max(watchExpiration - WATCH_RENEW_MARGIN_MS - now, 60_000),
           )
         : basePoll;
-      wakeTimes.push(rateLimitedUntil > now ? Math.max(rateLimitedUntil, now + 1000) : now + poll);
+      wakeTimes.push(
+        rateLimitedUntil > now
+          ? Math.max(rateLimitedUntil, now + 1000)
+          : now + poll,
+      );
     }
     return wakeTimes.length === 0 ? null : { wakeAt: Math.min(...wakeTimes) };
   }
@@ -493,7 +535,9 @@ export class GmailAgentWorker extends AgentWorkerBase {
     await super.alarm();
     const now = this.now();
     const rows = this.sql
-      .exec(`SELECT channel_id, sync_state, rate_limited_until FROM gmail_channel_state`)
+      .exec(
+        `SELECT channel_id, sync_state, rate_limited_until FROM gmail_channel_state`,
+      )
       .toArray();
     for (const row of rows) {
       const channelId = String(row["channel_id"]);
@@ -502,7 +546,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
       if (rateLimitedUntil > now) continue;
       await this.ensureRecovered(channelId);
       await this.syncEngine.syncChannel(channelId).catch((err) => {
-        console.error(`[GmailAgentWorker] sync failed for channel=${channelId}:`, err);
+        console.error(
+          `[GmailAgentWorker] sync failed for channel=${channelId}:`,
+          err,
+        );
       });
       await this.ensureWatch(channelId);
     }
@@ -526,7 +573,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
       const state = this.getChannelState(channelId);
       if (!state.emailAddress) return; // first sync hasn't resolved the mailbox yet
       const now = this.now();
-      if (!state.watchExpiration || state.watchExpiration - now < WATCH_RENEW_MARGIN_MS) {
+      if (
+        !state.watchExpiration ||
+        state.watchExpiration - now < WATCH_RENEW_MARGIN_MS
+      ) {
         const result = await this.gmailForChannel(channelId).watch({
           topicName,
         });
@@ -547,7 +597,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
       ]);
     } catch (err) {
       // Push is an optimization; polling keeps working without it.
-      console.warn(`[GmailAgentWorker] ensureWatch failed for channel=${channelId}:`, err);
+      console.warn(
+        `[GmailAgentWorker] ensureWatch failed for channel=${channelId}:`,
+        err,
+      );
     }
   }
 
@@ -556,19 +609,27 @@ export class GmailAgentWorker extends AgentWorkerBase {
    * server has already verified and decoded the Cloud Pub/Sub envelope; Gmail
    * interpretation and fanout stay here.
    */
-  @rpc({ principals: ["host"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
-  async onWebhookDelivery(event: WebhookDeliveryEvent): Promise<{ synced: string[] }> {
+  @rpc({
+    principals: ["host"],
+    effect: { kind: "open" },
+    tier: "open",
+    sensitivity: "write",
+  })
+  async onWebhookDelivery(
+    event: WebhookDeliveryEvent,
+  ): Promise<{ synced: string[] }> {
     if (event.payload.type !== "cloud-pubsub") return { synced: [] };
     const data = record(event.payload.dataJson);
     const email = stringArg(data, "emailAddress")?.toLowerCase();
-    const historyId = stringArg(data, "historyId") ?? String(data["historyId"] ?? "");
+    const historyId =
+      stringArg(data, "historyId") ?? String(data["historyId"] ?? "");
     if (!email || !historyId) return { synced: [] };
     const rows = this.sql
       .exec(
         `SELECT source, class_name, object_key
          FROM gmail_push_targets
          WHERE email_address = ?`,
-        email
+        email,
       )
       .toArray();
     const synced = new Set<string>();
@@ -579,21 +640,28 @@ export class GmailAgentWorker extends AgentWorkerBase {
         objectKey: String(row["object_key"]),
       };
       try {
-        const result = (await this.rpc.call(gmailTargetId(target), "onGmailPushNotification", [
-          { emailAddress: email, historyId },
-        ])) as { synced?: string[] } | undefined;
+        const result = (await this.rpc.call(
+          gmailTargetId(target),
+          "onGmailPushNotification",
+          [{ emailAddress: email, historyId }],
+        )) as { synced?: string[] } | undefined;
         for (const channelId of result?.synced ?? []) synced.add(channelId);
       } catch (err) {
         console.warn(
           `[GmailAgentWorker] push dispatch failed for ${email} -> ${gmailTargetId(target)}:`,
-          err
+          err,
         );
       }
     }
     return { synced: [...synced] };
   }
 
-  @rpc({ principals: ["code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
+  @rpc({
+    principals: ["code"],
+    effect: { kind: "open" },
+    tier: "open",
+    sensitivity: "write",
+  })
   registerPushTarget(input: {
     emailAddress: string;
     source: string;
@@ -605,7 +673,9 @@ export class GmailAgentWorker extends AgentWorkerBase {
     const className = stringArg(record(input), "className");
     const objectKey = stringArg(record(input), "objectKey");
     if (!email || !source || !className || !objectKey) {
-      throw new Error("registerPushTarget requires emailAddress, source, className, and objectKey");
+      throw new Error(
+        "registerPushTarget requires emailAddress, source, className, and objectKey",
+      );
     }
     this.sql.exec(
       `INSERT OR REPLACE INTO gmail_push_targets
@@ -615,12 +685,17 @@ export class GmailAgentWorker extends AgentWorkerBase {
       source,
       className,
       objectKey,
-      this.now()
+      this.now(),
     );
     return { registered: true };
   }
 
-  @rpc({ principals: ["code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
+  @rpc({
+    principals: ["code"],
+    effect: { kind: "open" },
+    tier: "open",
+    sensitivity: "write",
+  })
   unregisterPushTarget(input: {
     emailAddress: string;
     source: string;
@@ -631,7 +706,8 @@ export class GmailAgentWorker extends AgentWorkerBase {
     const source = stringArg(record(input), "source");
     const className = stringArg(record(input), "className");
     const objectKey = stringArg(record(input), "objectKey");
-    if (!email || !source || !className || !objectKey) return { unregistered: false };
+    if (!email || !source || !className || !objectKey)
+      return { unregistered: false };
     const before = this.sql
       .exec(
         `SELECT COUNT(*) AS count FROM gmail_push_targets
@@ -639,7 +715,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
         email,
         source,
         className,
-        objectKey
+        objectKey,
       )
       .toArray()[0];
     this.sql.exec(
@@ -648,7 +724,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
       email,
       source,
       className,
-      objectKey
+      objectKey,
     );
     return { unregistered: Number(before?.["count"] ?? 0) > 0 };
   }
@@ -658,21 +734,31 @@ export class GmailAgentWorker extends AgentWorkerBase {
    * Sync every channel bound to that address now; the follow-up alarm runs
    * the triage/wake pipeline.
    */
-  @rpc({ principals: ["host", "code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
-  async onGmailPushNotification(payload: { emailAddress: string; historyId: string }): Promise<{
+  @rpc({
+    principals: ["host", "code"],
+    effect: { kind: "open" },
+    tier: "open",
+    sensitivity: "write",
+  })
+  async onGmailPushNotification(payload: {
+    emailAddress: string;
+    historyId: string;
+  }): Promise<{
     synced: string[];
   }> {
     const caller = this.caller;
     const expectedRouter = gmailPushRouterTarget();
     if (!caller || caller.callerId !== expectedRouter) {
-      throw new Error("onGmailPushNotification is only dispatched by the Gmail push router");
+      throw new Error(
+        "onGmailPushNotification is only dispatched by the Gmail push router",
+      );
     }
     const email = String(payload?.emailAddress ?? "").toLowerCase();
     if (!email) return { synced: [] };
     const rows = this.sql
       .exec(
         `SELECT channel_id FROM gmail_channel_state WHERE lower(email_address) = ? AND sync_state != 'auth-needed'`,
-        email
+        email,
       )
       .toArray();
     const synced: string[] = [];
@@ -680,7 +766,9 @@ export class GmailAgentWorker extends AgentWorkerBase {
       const channelId = String(row["channel_id"]);
       if (!this.subscriptions.getParticipantId(channelId)) continue;
       await this.ensureRecovered(channelId);
-      const result = await this.syncEngine.syncChannel(channelId).catch(() => null);
+      const result = await this.syncEngine
+        .syncChannel(channelId)
+        .catch(() => null);
       if (result?.ok) synced.push(channelId);
     }
     // Let the normal alarm pipeline drain triage candidates + wake digests.
@@ -713,9 +801,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
           wake: true,
           directiveId: "reminder",
           directiveName: "Reminder",
-          reason: reminder.note ? `Reminder: ${reminder.note}` : "Snoozed thread is due",
+          reason: reminder.note
+            ? `Reminder: ${reminder.note}`
+            : "Snoozed thread is due",
           actions: ["surface"],
-        }
+        },
       );
     }
     const next = this.store.nextReminderAt();
@@ -730,7 +820,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
         const { retryInMs } = await this.triage.runTriagePass(channelId);
         nextDelay = minDefined(nextDelay, retryInMs);
       } catch (err) {
-        console.error(`[GmailAgentWorker] triage failed for channel=${channelId}:`, err);
+        console.error(
+          `[GmailAgentWorker] triage failed for channel=${channelId}:`,
+          err,
+        );
       }
     }
     return nextDelay;
@@ -764,7 +857,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
         await this.submitAgentInitiatedTurn(
           channelId,
           { content: buildWakeDigestPrompt(hits) },
-          { mode: "sequential", steeringId: `gmail-attention-digest:${channelId}:${now}` }
+          { steeringId: `gmail-attention-digest:${channelId}:${now}` },
         );
       }
     }
@@ -775,22 +868,39 @@ export class GmailAgentWorker extends AgentWorkerBase {
     channelId: string,
     _transportCallId: string,
     methodName: string,
-    args: unknown
+    args: unknown,
   ): Promise<{ result: unknown; isError?: boolean }> {
     try {
-      const standardResult = await this.handleStandardAgentMethodCall(channelId, methodName, args);
+      const standardResult = await this.handleStandardAgentMethodCall(
+        channelId,
+        methodName,
+        args,
+      );
       if (standardResult) return standardResult;
 
       const op = this.operationIndex.get(methodName);
-      if (!op) return { result: { error: `unknown method: ${methodName}` }, isError: true };
+      if (!op)
+        return {
+          result: { error: `unknown method: ${methodName}` },
+          isError: true,
+        };
       if (op.needsRecovery) await this.ensureRecovered(channelId);
-      const result = await op.run(this.operationContext, channelId, record(args));
+      const result = await op.run(
+        this.operationContext,
+        channelId,
+        record(args),
+      );
       const isError = Boolean(
-        result && typeof result === "object" && "error" in (result as Record<string, unknown>)
+        result &&
+        typeof result === "object" &&
+        "error" in (result as Record<string, unknown>),
       );
       return isError ? { result, isError: true } : { result };
     } catch (err) {
-      return { result: { error: err instanceof Error ? err.message : String(err) }, isError: true };
+      return {
+        result: { error: err instanceof Error ? err.message : String(err) },
+        isError: true,
+      };
     }
   }
 
@@ -802,25 +912,38 @@ export class GmailAgentWorker extends AgentWorkerBase {
     }
   }
 
-  @rpc({ principals: ["host", "user", "code"], effect: { kind: "open" }, tier: "open", sensitivity: "read" })
+  @rpc({
+    principals: ["host", "user", "code"],
+    effect: { kind: "open" },
+    tier: "open",
+    sensitivity: "read",
+  })
   async getAttentionPrefs(channelId: string): Promise<GmailAttentionPrefs> {
     this.assertSubscribedChannel(channelId);
     return this.handlers.getAttentionPrefs(channelId);
   }
 
-  @rpc({ principals: ["host", "user", "code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
+  @rpc({
+    principals: ["host", "user", "code"],
+    effect: { kind: "open" },
+    tier: "open",
+    sensitivity: "write",
+  })
   async setAttentionPrefs(
     channelId: string,
-    args: unknown
+    args: unknown,
   ): Promise<{ saved: true; preferences: GmailAttentionPrefs }> {
     const caller = this.caller;
     if (caller && caller.callerKind !== "panel") {
-      throw new Error("Attention preferences may only be changed by a user-facing panel");
+      throw new Error(
+        "Attention preferences may only be changed by a user-facing panel",
+      );
     }
     this.assertSubscribedChannel(channelId);
     const input = record(args);
     const result = await this.handlers.setAttention(channelId, {
-      preferences: stringArg(input, "preferences") ?? stringArg(input, "preferencesText"),
+      preferences:
+        stringArg(input, "preferences") ?? stringArg(input, "preferencesText"),
       ...(booleanArg(input, "knownSenderShortcut") !== undefined
         ? { knownSenderShortcut: booleanArg(input, "knownSenderShortcut") }
         : {}),
@@ -835,7 +958,8 @@ export class GmailAgentWorker extends AgentWorkerBase {
 
   private localActor(channelId: string): ActorRef & { participantId?: string } {
     const participantId = this.subscriptions.getParticipantId(channelId);
-    if (!participantId) throw new Error(`Gmail agent is not subscribed to channel ${channelId}`);
+    if (!participantId)
+      throw new Error(`Gmail agent is not subscribed to channel ${channelId}`);
     return {
       kind: "agent",
       id: participantId,
@@ -884,10 +1008,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
     await this.submitAgentInitiatedTurn(
       channelId,
       { content: GMAIL_SETUP_ONBOARDING_PROMPT },
-      {
-        mode: "sequential",
-        steeringId: `gmail-setup:${channelId}`,
-      }
+      { steeringId: `gmail-setup:${channelId}` },
     );
     state.setupPromptedAt = Date.now();
     this.saveChannelState(state);
@@ -916,7 +1037,9 @@ export class GmailAgentWorker extends AgentWorkerBase {
         ? prefs.preferencesText
         : DEFAULT_ATTENTION_PREFERENCES,
       pollIntervalMs: state.pollIntervalMs,
-      ...(state.lastSyncAt ? { lastSyncAt: new Date(state.lastSyncAt).toISOString() } : {}),
+      ...(state.lastSyncAt
+        ? { lastSyncAt: new Date(state.lastSyncAt).toISOString() }
+        : {}),
       ...(state.lastError ? { lastError: state.lastError } : {}),
       addressBook: {
         knownPeople: this.people.count(channelId),
@@ -944,7 +1067,8 @@ export class GmailAgentWorker extends AgentWorkerBase {
 
     const folded = await this.indexOwnCustomMessages(channelId, (typeId) => {
       if (typeId === "gmail.thread") {
-        return (state, update) => reduceGmailThread(state as GmailThreadState, update as never);
+        return (state, update) =>
+          reduceGmailThread(state as GmailThreadState, update as never);
       }
       return undefined;
     });
@@ -952,22 +1076,32 @@ export class GmailAgentWorker extends AgentWorkerBase {
     const setup = folded.get("gmail.setup");
     if (setup && setup.size > 0) {
       const messageId = [...setup.keys()][0]!;
-      this.gmailCards.adoptRecoveredCard(channelId, SETUP_CARD_KEY, "gmail.setup", messageId);
+      this.gmailCards.adoptRecoveredCard(
+        channelId,
+        SETUP_CARD_KEY,
+        "gmail.setup",
+        messageId,
+      );
     }
 
     for (const [messageId, value] of folded.get("gmail.thread") ?? []) {
       const thread = record(value);
-      const threadId = typeof thread["threadId"] === "string" ? thread["threadId"] : undefined;
+      const threadId =
+        typeof thread["threadId"] === "string" ? thread["threadId"] : undefined;
       if (!threadId) continue;
       this.gmailCards.adoptRecoveredCard(
         channelId,
         threadCardKey(threadId),
         "gmail.thread",
-        messageId
+        messageId,
       );
-      const subject = typeof thread["subject"] === "string" ? thread["subject"] : "(no subject)";
+      const subject =
+        typeof thread["subject"] === "string"
+          ? thread["subject"]
+          : "(no subject)";
       const from =
-        Array.isArray(thread["participants"]) && typeof thread["participants"][0] === "string"
+        Array.isArray(thread["participants"]) &&
+        typeof thread["participants"][0] === "string"
           ? thread["participants"][0]
           : "";
       const snippet =
@@ -976,14 +1110,19 @@ export class GmailAgentWorker extends AgentWorkerBase {
           : typeof thread["snippet"] === "string"
             ? thread["snippet"]
             : "";
-      const unreadCount = typeof thread["unreadCount"] === "number" ? thread["unreadCount"] : 0;
-      const status = typeof thread["status"] === "string" ? thread["status"] : "unread";
-      const category = typeof thread["category"] === "string" ? thread["category"] : null;
+      const unreadCount =
+        typeof thread["unreadCount"] === "number" ? thread["unreadCount"] : 0;
+      const status =
+        typeof thread["status"] === "string" ? thread["status"] : "unread";
+      const category =
+        typeof thread["category"] === "string" ? thread["category"] : null;
       const actionable =
         Boolean(thread["actionable"]) ||
         (unreadCount > 0 &&
           status !== "archived" &&
-          !["Promotions", "Social", "Updates", "Forums"].includes(category ?? ""));
+          !["Promotions", "Social", "Updates", "Forums"].includes(
+            category ?? "",
+          ));
       this.sql.exec(
         `INSERT OR REPLACE INTO gmail_threads
          (channel_id, thread_id, subject, from_addr, snippet, unread, in_inbox, actionable, category, updated_at)
@@ -997,13 +1136,16 @@ export class GmailAgentWorker extends AgentWorkerBase {
         status === "archived" ? 0 : 1,
         actionable ? 1 : 0,
         category,
-        Date.now()
+        Date.now(),
       );
     }
   }
 }
 
-function minDefined(a: number | undefined, b: number | undefined): number | undefined {
+function minDefined(
+  a: number | undefined,
+  b: number | undefined,
+): number | undefined {
   if (a === undefined) return b;
   if (b === undefined) return a;
   return Math.min(a, b);

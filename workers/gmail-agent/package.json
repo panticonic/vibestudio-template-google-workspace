@@ -22,7 +22,7 @@
       }
     },
     "exposeModules": [
-      "@earendil-works/pi-ai",
+      "@workspace/pi-ai",
       "@workspace/runtime",
       "@workspace/pubsub",
       "@workspace/gmail",
@@ -125,7 +125,6 @@
     }
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "^0.82.0",
     "@vibestudio/shared": "workspace:*",
     "@vibestudio/trajectory-identity": "workspace:*",
     "@workspace/runtime": "workspace:*",
@@ -135,6 +134,7 @@
     "@workspace/pubsub": "workspace:*",
     "@workspace/harness": "workspace:*",
     "@workspace/pi-core": "workspace:*",
+    "@workspace/pi-ai": "workspace:*",
     "zod": "^3.24.0"
   },
   "devDependencies": {

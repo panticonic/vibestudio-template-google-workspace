@@ -1,4 +1,14 @@
-systemEpoch: 57
+systemEpoch: 58
+template:
+  name: Google Workspace
+  description: Connect Google Workspace and add a Gmail agent.
+  repositories:
+    - packages/gmail
+    - packages/google-workspace
+    - skills/google-drive
+    - skills/google-workspace
+    - workers/gmail-agent
+  files: []
 templates:
   use:
     - url: git+https://github.com/panticonic/vibestudio-workspace-base.git

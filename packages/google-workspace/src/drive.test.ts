@@ -9,12 +9,21 @@ import { createDriveClient } from "./drive.js";
 function makeMockEnv(
   respond: (
     url: string,
-    init?: { method?: string; headers?: Record<string, string>; body?: string; bodyBase64?: string }
-  ) => Response
+    init?: {
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;
+      bodyBase64?: string;
+    },
+  ) => Response,
 ) {
   const stats = {
     resolveCalls: 0,
-    fetchCalls: [] as Array<{ url: string; method: string; headers: Record<string, string> }>,
+    fetchCalls: [] as Array<{
+      url: string;
+      method: string;
+      headers: Record<string, string>;
+    }>,
   };
   const credential: StoredCredentialSummary = {
     id: "cred-drive",
@@ -22,7 +31,11 @@ function makeMockEnv(
     providerId: "mock",
     accountIdentity: { providerUserId: "mock" },
     audience: [],
-    injection: { type: "header", name: "authorization", valueTemplate: "Bearer {token}" },
+    injection: {
+      type: "header",
+      name: "authorization",
+      valueTemplate: "Bearer {token}",
+    },
     bindings: [],
     scopes: [],
     metadata: {},
@@ -30,7 +43,11 @@ function makeMockEnv(
   } as unknown as StoredCredentialSummary;
 
   const rpc: RpcCaller = {
-    call: (async <T = unknown>(_targetId: string, method: string, _args: unknown[]): Promise<T> => {
+    call: (async <T = unknown>(
+      _targetId: string,
+      method: string,
+      _args: unknown[],
+    ): Promise<T> => {
       if (method === "credentials.resolveCredential") {
         stats.resolveCalls++;
         return credential as unknown as T;
@@ -86,7 +103,11 @@ describe("createDriveClient", () => {
     await drive.about();
 
     expect(stats.resolveCalls).toBe(1);
-    expect(stats.fetchCalls.map((call) => call.method)).toEqual(["GET", "GET", "GET"]);
+    expect(stats.fetchCalls.map((call) => call.method)).toEqual([
+      "GET",
+      "GET",
+      "GET",
+    ]);
   });
 
   it("requests only supported fields from Drive about", async () => {
@@ -95,14 +116,14 @@ describe("createDriveClient", () => {
         kind: "drive#about",
         user: { emailAddress: "user@example.com" },
         storageQuota: { usage: "1" },
-      })
+      }),
     );
     const drive = createDriveClient(credentials);
 
     await drive.about();
 
     expect(stats.fetchCalls[0]?.url).toBe(
-      "https://www.googleapis.com/drive/v3/about?fields=kind,user,storageQuota"
+      "https://www.googleapis.com/drive/v3/about?fields=kind,user,storageQuota",
     );
   });
 
@@ -111,7 +132,7 @@ describe("createDriveClient", () => {
       jsonResponse({
         files: [{ id: "file-1", name: "Spec.docx" }],
         nextPageToken: "next-token",
-      })
+      }),
     );
     const drive = createDriveClient(credentials);
 
@@ -131,7 +152,9 @@ describe("createDriveClient", () => {
     expect(stats.fetchCalls[0]?.url).toContain("pageSize=10");
     expect(stats.fetchCalls[0]?.url).toContain("corpora=allDrives");
     expect(stats.fetchCalls[0]?.url).toContain("driveId=drive-1");
-    expect(stats.fetchCalls[0]?.url).toContain("orderBy=modifiedTime+desc%2Cname");
+    expect(stats.fetchCalls[0]?.url).toContain(
+      "orderBy=modifiedTime+desc%2Cname",
+    );
   });
 
   it("downloads file bytes with response metadata", async () => {
@@ -143,7 +166,7 @@ describe("createDriveClient", () => {
             "content-type": "application/pdf",
             "content-disposition": 'attachment; filename="poem.pdf"',
           },
-        })
+        }),
     );
     const drive = createDriveClient(credentials);
 
@@ -154,10 +177,10 @@ describe("createDriveClient", () => {
     expect(result.mimeType).toBe("application/pdf");
     expect(result.filename).toBe("poem.pdf");
     expect(result.responseUrl).toBe(
-      "https://www.googleapis.com/drive/v3/files/file-1?supportsAllDrives=true&alt=media"
+      "https://www.googleapis.com/drive/v3/files/file-1?supportsAllDrives=true&alt=media",
     );
     expect(stats.fetchCalls[0]?.url).toBe(
-      "https://www.googleapis.com/drive/v3/files/file-1?supportsAllDrives=true&alt=media"
+      "https://www.googleapis.com/drive/v3/files/file-1?supportsAllDrives=true&alt=media",
     );
   });
 
@@ -168,9 +191,10 @@ describe("createDriveClient", () => {
           status: 200,
           headers: {
             "content-type": "application/pdf",
-            "content-disposition": "attachment; filename*=UTF-8''poem%20export.pdf",
+            "content-disposition":
+              "attachment; filename*=UTF-8''poem%20export.pdf",
           },
-        })
+        }),
     );
     const drive = createDriveClient(credentials);
 
@@ -180,7 +204,7 @@ describe("createDriveClient", () => {
     expect(result.mimeType).toBe("application/pdf");
     expect(result.filename).toBe("poem export.pdf");
     expect(stats.fetchCalls[0]?.url).toBe(
-      "https://www.googleapis.com/drive/v3/files/doc-1/export?mimeType=application%2Fpdf&supportsAllDrives=true"
+      "https://www.googleapis.com/drive/v3/files/doc-1/export?mimeType=application%2Fpdf&supportsAllDrives=true",
     );
   });
 
@@ -197,12 +221,12 @@ describe("createDriveClient", () => {
     const drive = createDriveClient(credentials);
 
     await expect(drive.downloadFileBytes("file-1")).rejects.toThrow(
-      "Google Drive download response body read failed: Maximum call stack size exceeded"
+      "Google Drive download response body read failed: Maximum call stack size exceeded",
     );
   });
 
   it("uploads files with multipart/related content when media is provided", async () => {
-    const { credentials, stats } = makeMockEnv((url, init) => {
+    const { credentials, stats } = makeMockEnv((url, _init) => {
       if (url.includes("upload/drive/v3/files")) {
         return jsonResponse({ id: "new-file", name: "hello.txt" });
       }
@@ -217,12 +241,16 @@ describe("createDriveClient", () => {
           mimeType: "text/plain",
           body: "hello world",
         },
-      }
+      },
     );
 
     expect(result.id).toBe("new-file");
-    expect(stats.fetchCalls[0]?.url).toContain("/upload/drive/v3/files?uploadType=multipart");
-    expect(stats.fetchCalls[0]?.headers["content-type"]).toMatch(/^multipart\/related; boundary=/);
+    expect(stats.fetchCalls[0]?.url).toContain(
+      "/upload/drive/v3/files?uploadType=multipart",
+    );
+    expect(stats.fetchCalls[0]?.headers["content-type"]).toMatch(
+      /^multipart\/related; boundary=/,
+    );
   });
 
   it("builds move, permission, and change sync requests", async () => {
@@ -240,7 +268,10 @@ describe("createDriveClient", () => {
     });
     const drive = createDriveClient(credentials);
 
-    await drive.moveFile("file-1", { addParents: ["folder-a"], removeParents: "folder-b" });
+    await drive.moveFile("file-1", {
+      addParents: ["folder-a"],
+      removeParents: "folder-b",
+    });
     await drive.createPermission("file-1", {
       type: "user",
       role: "writer",
@@ -253,13 +284,21 @@ describe("createDriveClient", () => {
     });
 
     expect(changes.changes).toHaveLength(1);
-    expect(stats.fetchCalls.some((call) => call.url.includes("/files/file-1?"))).toBe(true);
-    expect(stats.fetchCalls.some((call) => call.url.includes("/files/file-1/permissions"))).toBe(
-      true
-    );
-    expect(stats.fetchCalls.some((call) => call.url.includes("/changes/startPageToken"))).toBe(
-      true
-    );
-    expect(stats.fetchCalls.some((call) => call.url.includes("/changes?"))).toBe(true);
+    expect(
+      stats.fetchCalls.some((call) => call.url.includes("/files/file-1?")),
+    ).toBe(true);
+    expect(
+      stats.fetchCalls.some((call) =>
+        call.url.includes("/files/file-1/permissions"),
+      ),
+    ).toBe(true);
+    expect(
+      stats.fetchCalls.some((call) =>
+        call.url.includes("/changes/startPageToken"),
+      ),
+    ).toBe(true);
+    expect(
+      stats.fetchCalls.some((call) => call.url.includes("/changes?")),
+    ).toBe(true);
   });
 });

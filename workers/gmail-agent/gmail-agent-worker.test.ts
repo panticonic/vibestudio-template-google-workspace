@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { createTestDO } from "@workspace/runtime/worker/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createTestDO as createRuntimeTestDO } from "@workspace/runtime/worker/test-utils";
 import type { WebhookDeliveryEvent } from "@workspace/runtime/worker";
 import {
   GmailApiError,
@@ -11,15 +11,30 @@ import {
 } from "@workspace/gmail";
 import { fakeGmailClient } from "@workspace/gmail/test-utils";
 import { AGENTIC_EVENT_PAYLOAD_KIND } from "@workspace/agentic-protocol";
-import { AgentWorkerBase } from "@workspace/agentic-do";
 import { ids } from "@workspace/agent-loop";
 import { logIdForChannel } from "@vibestudio/trajectory-identity";
-import { getBuiltinModel } from "@earendil-works/pi-ai/providers/all";
+import { getBuiltinModel } from "@workspace/pi-ai/providers/all";
 
-import { GmailAgentWorker, triageModelCandidates } from "./gmail-agent-worker.js";
+import {
+  GmailAgentWorker,
+  triageModelCandidates,
+} from "./gmail-agent-worker.js";
 import { GMAIL_MESSAGE_TYPES } from "./cards/cards.js";
 
 const WORKSPACE_ROOT = path.resolve(__dirname, "../..");
+const testDatabases: Array<{ close(): void }> = [];
+
+async function createTestDO<T>(
+  ...args: Parameters<typeof createRuntimeTestDO<T>>
+): ReturnType<typeof createRuntimeTestDO<T>> {
+  const result = await createRuntimeTestDO<T>(...args);
+  testDatabases.push(result.db);
+  return result;
+}
+
+afterEach(() => {
+  for (const database of testDatabases.splice(0)) database.close();
+});
 
 function message(
   id: string,
@@ -27,7 +42,7 @@ function message(
   headers: Record<string, string>,
   body = "hello",
   snippet = body,
-  labelIds = ["INBOX", "UNREAD"]
+  labelIds = ["INBOX", "UNREAD"],
 ): GmailMessage {
   return {
     id,
@@ -36,23 +51,23 @@ function message(
     snippet,
     payload: {
       mimeType: "text/plain",
-      headers: Object.entries(headers).map(([name, value]) => ({ name, value })),
+      headers: Object.entries(headers).map(([name, value]) => ({
+        name,
+        value,
+      })),
       body: { data: Buffer.from(body, "utf8").toString("base64url") },
     },
   };
 }
 
 class TestGmailAgentWorker extends GmailAgentWorker {
-  schemaProductionBaselineForTest() {
-    return this.schemaProductionBaseline();
-  }
-
   published: Array<{
     participantId: string;
     event: { kind?: string; payload?: unknown };
     opts?: unknown;
   }> = [];
-  signals: Array<{ participantId: string; content: string; type?: string }> = [];
+  signals: Array<{ participantId: string; content: string; type?: string }> =
+    [];
   closedSubscriptions: string[] = [];
   gadCalls: Array<{ method: string; args: unknown[] }> = [];
   rawSqlRows: Array<Record<string, unknown>> = [{ seq: null }];
@@ -102,7 +117,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
           Date: "Fri, 22 May 2026 10:00:00 +0000",
         },
         "Private full email body",
-        "Short snippet"
+        "Short snippet",
       ),
     ],
   }));
@@ -120,21 +135,30 @@ class TestGmailAgentWorker extends GmailAgentWorker {
           Date: "Fri, 22 May 2026 10:00:00 +0000",
         },
         "Private full email body",
-        "Short snippet"
+        "Short snippet",
       ),
     ],
   };
-  sent = vi.fn(async (params: unknown) => ({ id: "sent-1", threadId: "thr-1", params }));
+  sent = vi.fn(async (params: unknown) => ({
+    id: "sent-1",
+    threadId: "thr-1",
+    params,
+  }));
   searchContacts = vi.fn(async (_query: string, _opts?: unknown) => [
     { email: "zelda@hyrule.example", displayName: "Zelda Hyrule" },
   ]);
   searchOtherContacts = vi.fn(
-    async (_query: string, _opts?: unknown) => [] as Array<{ email: string }>
+    async (_query: string, _opts?: unknown) => [] as Array<{ email: string }>,
   );
-  createDraft = vi.fn(async () => ({ id: "draft-1", message: { id: "m", threadId: "t" } }));
+  createDraft = vi.fn(async () => ({
+    id: "draft-1",
+    message: { id: "m", threadId: "t" },
+  }));
   modifyLabels = vi.fn(async () => ({}));
   batchModify = vi.fn(async () => undefined);
-  draftBodies = vi.fn(async () => "Thanks for the context. I will follow up shortly.");
+  draftBodies = vi.fn(
+    async () => "Thanks for the context. I will follow up shortly.",
+  );
   blobs = new Map<string, string>();
   unreadableRendererSources = false;
   rendererSourceOverrides = new Map<string, string | Uint8Array | null>();
@@ -146,7 +170,10 @@ class TestGmailAgentWorker extends GmailAgentWorker {
   /** Fake clock: null = real time (most tests); set for alarm-loop tests. */
   clock: number | null = null;
 
-  protected override async writeWorkspaceFile(path: string, data: Uint8Array): Promise<void> {
+  protected override async writeWorkspaceFile(
+    path: string,
+    data: Uint8Array,
+  ): Promise<void> {
     this.writtenFiles.push({ path, data });
   }
 
@@ -158,69 +185,86 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     return this.nextAlarmAfterRequest();
   }
 
-  rpcCall = vi.fn(async (_target: string, method: string, args?: unknown[]): Promise<unknown> => {
-    if (_target === "do:gad:test") {
-      this.gadCalls.push({ method, args: args ?? [] });
-      if (method === "rawSql") return { rows: this.rawSqlRows };
-      if (method === "forkLog") return { inherited: (args?.[0] as { atSeq?: number })?.atSeq ?? 0 };
-      if (method === "getLogHead") return null;
-      if (method === "readLog") return [];
-      if (method === "getLogEvent") return null;
-      if (method === "appendLogEvent") {
-        return { envelopes: [], headSeq: 0, headHash: "0".repeat(64), published: [] };
+  rpcCall = vi.fn(
+    async (
+      _target: string,
+      method: string,
+      args?: unknown[],
+    ): Promise<unknown> => {
+      if (_target === "do:gad:test") {
+        this.gadCalls.push({ method, args: args ?? [] });
+        if (method === "rawSql") return { rows: this.rawSqlRows };
+        if (method === "resolveTrajectoryForkPoint") return { seq: 0 };
+        if (method === "forkLog")
+          return { inherited: (args?.[0] as { atSeq?: number })?.atSeq ?? 0 };
+        if (method === "getLogHead") return null;
+        if (method === "readLog") return [];
+        if (method === "getLogEvent") return null;
+        if (method === "appendLogEvent") {
+          return {
+            envelopes: [],
+            headSeq: 0,
+            headHash: "0".repeat(64),
+            published: [],
+          };
+        }
       }
-    }
-    if (method === "runtime.resolveContext") return "ctx-1";
-    if (method === "workers.resolveService") {
-      if (args?.[0] === "vibestudio.gad.workspace.v1") {
-        return {
-          kind: "durable-object",
-          source: "vibestudio/internal",
-          className: "GadWorkspaceDO",
-          objectKey: "workspace",
-          targetId: "do:gad:test",
-        };
+      if (method === "runtime.resolveContext") return "ctx-1";
+      if (method === "workers.resolveService") {
+        if (args?.[0] === "vibestudio.gad.workspace.v1") {
+          return {
+            kind: "durable-object",
+            source: "vibestudio/internal",
+            className: "GadWorkspaceDO",
+            objectKey: "workspace",
+            targetId: "do:gad:test",
+          };
+        }
+        return { kind: "durable-object", targetId: "do:channel:test" };
       }
-      return { kind: "durable-object", targetId: "do:channel:test" };
-    }
-    if (method === "workspace.getAgentsMd") return "";
-    if (method === "workspace.listSkills") return [];
-    if (method === "blobstore.putText") {
-      const value = String(args?.[0] ?? "");
-      const digest = `blob-${this.blobs.size + 1}`;
-      this.blobs.set(digest, value);
-      return { digest, size: value.length };
-    }
-    if (method === "credentials.connect") return { id: "cred-1" };
-    if (method === "credentials.resolveCredential") return { id: "cred-1" };
-    if (method === "workspace-state.alarmSet" || method === "workspace-state.alarmClear") {
-      return undefined;
-    }
-    if (
-      _target === "main" &&
-      (method === "workspace-state.lifecycleLeaseUpsert" ||
-        method === "workspace-state.lifecycleLeaseClear")
-    ) {
-      this.lifecycleLeaseCalls.push({ method, input: args?.[0] });
-      return undefined;
-    }
-    if (method === "fs.readFile") {
-      if (this.unreadableRendererSources) {
-        throw new Error("test renderer source unavailable");
+      if (method === "workspace.getAgentsMd") return "";
+      if (method === "workspace.listSkills") return [];
+      if (method === "blobstore.putText") {
+        const value = String(args?.[0] ?? "");
+        const digest = `blob-${this.blobs.size + 1}`;
+        this.blobs.set(digest, value);
+        return { digest, size: value.length };
       }
-      const filePath = args?.[0];
-      const encoding = args?.[1];
-      if (typeof filePath !== "string") throw new Error("fs.readFile path must be a string");
-      if (this.rendererSourceOverrides.has(filePath)) {
-        return this.rendererSourceOverrides.get(filePath);
+      if (method === "credentials.connect") return { id: "cred-1" };
+      if (method === "credentials.resolveCredential") return { id: "cred-1" };
+      if (
+        method === "workspace-state.alarmSet" ||
+        method === "workspace-state.alarmClear"
+      ) {
+        return undefined;
       }
-      return fs.readFile(
-        path.join(WORKSPACE_ROOT, filePath),
-        typeof encoding === "string" ? (encoding as BufferEncoding) : "utf8"
-      );
-    }
-    throw new Error(`unexpected rpc ${_target}.${method}`);
-  });
+      if (
+        _target === "main" &&
+        (method === "workspace-state.lifecycleLeaseUpsert" ||
+          method === "workspace-state.lifecycleLeaseClear")
+      ) {
+        this.lifecycleLeaseCalls.push({ method, input: args?.[0] });
+        return undefined;
+      }
+      if (method === "fs.readFile") {
+        if (this.unreadableRendererSources) {
+          throw new Error("test renderer source unavailable");
+        }
+        const filePath = args?.[0];
+        const encoding = args?.[1];
+        if (typeof filePath !== "string")
+          throw new Error("fs.readFile path must be a string");
+        if (this.rendererSourceOverrides.has(filePath)) {
+          return this.rendererSourceOverrides.get(filePath);
+        }
+        return fs.readFile(
+          path.join(WORKSPACE_ROOT, filePath),
+          typeof encoding === "string" ? (encoding as BufferEncoding) : "utf8",
+        );
+      }
+      throw new Error(`unexpected rpc ${_target}.${method}`);
+    },
+  );
 
   protected override get rpc(): never {
     return {
@@ -251,7 +295,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
 
   protected override generateDraftReplyBody(
     channelId: string,
-    thread: GmailThread
+    thread: GmailThread,
   ): Promise<string> {
     if (this.useBaseDraftGeneration) {
       return super.generateDraftReplyBody(channelId, thread);
@@ -262,7 +306,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
   protected override async runTriageModel(
     channelId: string,
     _systemPrompt: string,
-    userPrompt: string
+    userPrompt: string,
   ): Promise<string> {
     this.triageCalls.push({ channelId, userPrompt });
     const next = this.triageResponses.shift();
@@ -272,56 +316,57 @@ class TestGmailAgentWorker extends GmailAgentWorker {
 
   protected override async submitAgentInitiatedTurn(
     channelId: string,
-    input: { content?: string }
+    input: { content?: string },
   ): Promise<void> {
     this.agentInitiatedTurns.push({ channelId, content: input.content ?? "" });
   }
 
   protected override createChannelClient() {
     return {
-      openSubscription: async (participantId: string) => {
-        let settleClosed = () => {};
-        const closed = new Promise<void>((resolve) => {
-          settleClosed = resolve;
-        });
-        let isClosed = false;
-        return {
-          result: {
-            ok: true,
-            participantId,
-            channelConfig: undefined,
-            envelope: { mode: "initial", logEvents: [], snapshots: [], ready: {} },
-          },
-          closed,
-          close: () => {
-            if (isClosed) return;
-            isClosed = true;
-            this.closedSubscriptions.push(participantId);
-            settleClosed();
-          },
-        };
+      relationshipState: async () => null,
+      join: async (input: { participantId: string; revision: number }) => ({
+        ok: true,
+        participantId: input.participantId,
+        revision: input.revision,
+        channelConfig: undefined,
+        envelope: { mode: "initial", logEvents: [], snapshots: [], ready: {} },
+      }),
+      leave: async (participantId: string) => {
+        this.closedSubscriptions.push(participantId);
+        return { ok: true };
       },
       getConfig: async () => null,
       getParticipants: async () => [],
       getReplayAfter: async (request: { after: number }) => ({
         mode: "after",
-        logEvents: this.replayEvents.filter((event) => event.id > request.after),
+        logEvents: this.replayEvents.filter(
+          (event) => event.id > request.after,
+        ),
         snapshots: [],
-        ready: { totalCount: this.replayEvents.length, envelopeCount: this.replayEvents.length },
+        ready: {
+          totalCount: this.replayEvents.length,
+          envelopeCount: this.replayEvents.length,
+        },
       }),
       publishAgenticEvent: async (
         participantId: string,
         event: { kind?: string; payload?: unknown },
-        opts?: unknown
+        opts?: unknown,
       ) => {
         this.published.push({ participantId, event, opts });
         return { id: this.published.length };
       },
-      sendSignal: async (participantId: string, content: string, type?: string) => {
+      sendSignal: async (
+        participantId: string,
+        content: string,
+        type?: string,
+      ) => {
         this.signals.push({ participantId, content, type });
       },
       getMessageType: async (typeId: string) => {
-        const spec = GMAIL_MESSAGE_TYPES.find((entry) => entry.typeId === typeId);
+        const spec = GMAIL_MESSAGE_TYPES.find(
+          (entry) => entry.typeId === typeId,
+        );
         if (!spec) return null;
         return {
           typeId: spec.typeId,
@@ -335,13 +380,16 @@ class TestGmailAgentWorker extends GmailAgentWorker {
 
   seedSubscription(channelId = "ch-1", participantId = "agent-gmail") {
     this.sql.exec(
-      `INSERT OR REPLACE INTO subscriptions (channel_id, context_id, subscribed_at, config, participant_id)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO subscriptions
+         (channel_id, context_id, revision, subscribed_at, config, relationship_json, participant_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       channelId,
       "ctx-1",
+      1,
       Date.now(),
       JSON.stringify({ handle: "gmail" }),
-      participantId
+      JSON.stringify({ test: true }),
+      participantId,
     );
   }
 
@@ -349,7 +397,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     this.sql.exec(
       `UPDATE subscriptions SET config = ? WHERE channel_id = ?`,
       JSON.stringify(config),
-      channelId
+      channelId,
     );
   }
 
@@ -363,7 +411,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
       email,
       Date.now(),
       Date.now(),
-      "test"
+      "test",
     );
   }
 
@@ -388,12 +436,14 @@ class TestGmailAgentWorker extends GmailAgentWorker {
           ref: { kind: "user", id: "user:alice", participantId: "user:alice" },
           methods: [],
         },
-      ])
+      ]),
     );
   }
 
   async runnerTool(name: string, channelId = "ch-1") {
-    return (await this.getLoopTools(channelId)).find((tool) => tool.name === name);
+    return (await this.getLoopTools(channelId)).find(
+      (tool) => tool.name === name,
+    );
   }
 
   participant() {
@@ -420,7 +470,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     this.sql.exec(
       `UPDATE gmail_triage_queue SET enqueued_at = enqueued_at - ? WHERE channel_id = ?`,
       byMs,
-      channelId
+      channelId,
     );
   }
 
@@ -438,7 +488,9 @@ class TestGmailAgentWorker extends GmailAgentWorker {
 
   subscriptionRows() {
     return this.sql
-      .exec(`SELECT channel_id, participant_id FROM subscriptions ORDER BY channel_id`)
+      .exec(
+        `SELECT channel_id, participant_id FROM subscriptions ORDER BY channel_id`,
+      )
       .toArray();
   }
 
@@ -463,15 +515,8 @@ describe("GmailAgentWorker", () => {
     });
   });
 
-  it("owns the explicit v7 production schema baseline", async () => {
-    const { instance } = await createTestDO(TestGmailAgentWorker);
-    const worker = instance as TestGmailAgentWorker;
-    expect(GmailAgentWorker.schemaVersion).toBe(7);
-    expect(GmailAgentWorker.schemaVersion).toBeGreaterThan(AgentWorkerBase.schemaVersion);
-    expect(worker.schemaProductionBaselineForTest()).toEqual({
-      version: 7,
-      name: "gmail-agent-v7",
-    });
+  it("owns one current schema for this system epoch", () => {
+    expect(GmailAgentWorker.schemaVersion).toBe(1);
   });
 
   it("advertises Gmail and standard agent methods with mention-or-followup policy", async () => {
@@ -504,7 +549,9 @@ describe("GmailAgentWorker", () => {
     expect(worker.model()).toBe("anthropic:claude-sonnet-4-6");
     worker.configureAgent({ model: "openai-codex:gpt-5.5" });
     const driver = worker.driverForTest();
-    const deliverEffectOutcome = vi.spyOn(driver, "deliverEffectOutcome").mockResolvedValue(true);
+    const deliverEffectOutcome = vi
+      .spyOn(driver, "deliverEffectOutcome")
+      .mockResolvedValue(true);
     const wake = vi.spyOn(driver, "wake").mockResolvedValue(undefined);
 
     await expect(
@@ -514,37 +561,47 @@ describe("GmailAgentWorker", () => {
         browserOpenMode: "external",
         browserHandoffCallerId: "panel-1",
         browserHandoffCallerKind: "panel",
-      })
-    ).resolves.toMatchObject({ result: { id: "cred-1" } });
-    expect(worker.rpcCall).toHaveBeenCalledWith("main", "credentials.connect", [
-      expect.objectContaining({
-        spec: expect.objectContaining({
-          flow: expect.objectContaining({ type: "oauth2-auth-code-pkce" }),
-          credential: expect.objectContaining({
-            audience: [{ url: "https://chatgpt.com/backend-api", match: "path-prefix" }],
-            metadata: expect.objectContaining({
-              modelProviderId: "openai-codex",
-              accountIdentityJwtClaimField: "chatgpt_account_id",
-            }),
-          }),
-          redirect: expect.objectContaining({ type: "client-loopback" }),
-          browser: "external",
-        }),
-        handoffTarget: { callerId: "panel-1", callerKind: "panel" },
       }),
-    ]);
+    ).resolves.toMatchObject({ result: { id: "cred-1" } });
+    expect(worker.rpcCall).toHaveBeenCalledWith(
+      "main",
+      "credentials.connect",
+      [
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            flow: expect.objectContaining({ type: "oauth2-auth-code-pkce" }),
+            credential: expect.objectContaining({
+              audience: [
+                {
+                  url: "https://chatgpt.com/backend-api",
+                  match: "path-prefix",
+                },
+              ],
+              metadata: expect.objectContaining({
+                modelProviderId: "openai-codex",
+                accountIdentityJwtClaimField: "chatgpt_account_id",
+              }),
+            }),
+            redirect: expect.objectContaining({ type: "client-loopback" }),
+            browser: "external",
+          }),
+          handoffTarget: { callerId: "panel-1", callerKind: "panel" },
+        }),
+      ],
+      { signal: undefined },
+    );
     expect(deliverEffectOutcome).not.toHaveBeenCalled();
     expect(wake).not.toHaveBeenCalled();
 
     await expect(
       worker.onMethodCall("ch-1", "call-2", "credentialConnected", {
         providerId: "openai-codex",
-      })
+      }),
     ).resolves.toMatchObject({ result: { resumed: true } });
     expect(deliverEffectOutcome).toHaveBeenCalledWith(
       ids.credentialWaitEffect(ids.credKey("ch-1", "openai-codex")),
       { kind: "credential", resolved: true },
-      { channelId: "ch-1" }
+      { channelId: "ch-1" },
     );
     expect(wake).toHaveBeenCalledWith("ch-1");
   });
@@ -554,7 +611,9 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedUserRoster();
 
-    expect(await worker.runnerTools()).not.toContain("gmail_upsertAttentionRule");
+    expect(await worker.runnerTools()).not.toContain(
+      "gmail_upsertAttentionRule",
+    );
     expect(await worker.runnerTools()).toEqual([
       "suspend_turn",
       "ask_user",
@@ -576,25 +635,29 @@ describe("GmailAgentWorker", () => {
     const { instance } = await createTestDO(TestGmailAgentWorker);
     const worker = instance as TestGmailAgentWorker;
 
-    expect((await worker.runnerTool("gmail_search"))?.parameters).toMatchObject({
-      type: "object",
-      required: ["q"],
-      additionalProperties: false,
-      properties: {
-        q: { type: "string", minLength: 1 },
-        pageToken: { type: "string" },
-        limit: { type: "number", maximum: 50 },
+    expect((await worker.runnerTool("gmail_search"))?.parameters).toMatchObject(
+      {
+        type: "object",
+        required: ["q"],
+        additionalProperties: false,
+        properties: {
+          q: { type: "string", minLength: 1 },
+          pageToken: { type: "string" },
+          limit: { type: "number", maximum: 50 },
+        },
       },
-    });
-    expect((await worker.runnerTool("gmail_modify"))?.parameters).toMatchObject({
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        threadIds: { type: "array" },
-        addLabels: { type: "array" },
-        archive: { type: "boolean" },
+    );
+    expect((await worker.runnerTool("gmail_modify"))?.parameters).toMatchObject(
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          threadIds: { type: "array" },
+          addLabels: { type: "array" },
+          archive: { type: "boolean" },
+        },
       },
-    });
+    );
   });
 
   it("persists the Google credential pin from subscription config", async () => {
@@ -615,17 +678,6 @@ describe("GmailAgentWorker", () => {
       channel_id: "ch-1",
       credential_id: "google-cred-2",
     });
-    expect(worker.lifecycleLeaseCalls).toEqual([
-      {
-        method: "workspace-state.lifecycleLeaseUpsert",
-        input: {
-          source: "test",
-          className: "TestDO",
-          objectKey: "test-key",
-          detail: { kind: "channel-subscriptions" },
-        },
-      },
-    ]);
   });
 
   it("removes local subscription state when unsubscribing from a channel", async () => {
@@ -637,25 +689,12 @@ describe("GmailAgentWorker", () => {
       replay: false,
     });
 
-    await expect(worker.unsubscribeChannel("ch-1")).resolves.toEqual({ ok: true });
+    await expect(worker.unsubscribeChannel("ch-1")).resolves.toEqual({
+      ok: true,
+    });
 
     expect(worker.closedSubscriptions).toEqual([participantId]);
     expect(worker.subscriptionRows()).toEqual([]);
-    expect(worker.lifecycleLeaseCalls).toEqual([
-      {
-        method: "workspace-state.lifecycleLeaseUpsert",
-        input: {
-          source: "test",
-          className: "TestDO",
-          objectKey: "test-key",
-          detail: { kind: "channel-subscriptions" },
-        },
-      },
-      {
-        method: "workspace-state.lifecycleLeaseClear",
-        input: { source: "test", className: "TestDO", objectKey: "test-key" },
-      },
-    ]);
   });
 
   it("forks cloned agent state at genesis when no prior trajectory event was published", async () => {
@@ -668,13 +707,22 @@ describe("GmailAgentWorker", () => {
     worker.bootstrapIdentityForTest();
     worker.seedSubscription("old-channel", "agent-gmail");
 
-    await worker.postClone("parent-agent", "new-channel", "old-channel", 12, "ctx-forked");
+    await worker.postClone(
+      "parent-agent",
+      "new-channel",
+      "old-channel",
+      12,
+      "ctx-forked",
+    );
 
-    const rawSql = worker.gadCalls.find((call) => call.method === "rawSql");
-    expect(rawSql?.args).toEqual([
-      expect.stringContaining("ch.origin_head = ?"),
-      ["old-channel", 12, logIdForChannel("old-channel"), logIdForChannel("old-channel")],
-    ]);
+    const resolveFork = worker.gadCalls.find(
+      (call) => call.method === "resolveTrajectoryForkPoint",
+    );
+    expect(resolveFork?.args[0]).toMatchObject({
+      trajectoryId: logIdForChannel("old-channel"),
+      channelId: "old-channel",
+      channelSeq: 12,
+    });
     const forkLog = worker.gadCalls.find((call) => call.method === "forkLog");
     expect(forkLog?.args[0]).toMatchObject({
       fromLogId: logIdForChannel("old-channel"),
@@ -700,9 +748,15 @@ describe("GmailAgentWorker", () => {
 
     try {
       await expect(
-        worker.subscribeChannel({ channelId: "ch-1", contextId: "ctx-1", replay: false })
+        worker.subscribeChannel({
+          channelId: "ch-1",
+          contextId: "ctx-1",
+          replay: false,
+        }),
       ).resolves.toMatchObject({ ok: true });
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("renderer lint skipped"));
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("renderer lint skipped"),
+      );
     } finally {
       warn.mockRestore();
     }
@@ -727,12 +781,18 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.rendererSourceOverrides.set(
       GMAIL_MESSAGE_TYPES[0]!.path,
-      `import lodash from "lodash";\nexport default function GmailSetup() { return null; }\n`
+      `import lodash from "lodash";\nexport default function GmailSetup() { return null; }\n`,
     );
 
     await expect(
-      worker.subscribeChannel({ channelId: "ch-1", contextId: "ctx-1", replay: false })
-    ).rejects.toThrow(/Renderer registration blocked:[\s\S]*Value import "lodash"/);
+      worker.subscribeChannel({
+        channelId: "ch-1",
+        contextId: "ctx-1",
+        replay: false,
+      }),
+    ).rejects.toThrow(
+      /Renderer registration blocked:[\s\S]*Value import "lodash"/,
+    );
 
     expect(worker.published).toEqual([]);
   });
@@ -745,7 +805,11 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
 
     await expect(
-      worker.subscribeChannel({ channelId: "ch-1", contextId: "ctx-1", replay: false })
+      worker.subscribeChannel({
+        channelId: "ch-1",
+        contextId: "ctx-1",
+        replay: false,
+      }),
     ).resolves.toMatchObject({ ok: true });
 
     expect(worker.published.map((entry) => entry.event.kind)).toEqual([
@@ -759,7 +823,9 @@ describe("GmailAgentWorker", () => {
       "custom.started",
     ]);
     expect(
-      worker.published.map((entry) => (entry.event.payload as { typeId?: string }).typeId)
+      worker.published.map(
+        (entry) => (entry.event.payload as { typeId?: string }).typeId,
+      ),
     ).toEqual([
       "gmail.inbox",
       "gmail.setup",
@@ -791,7 +857,11 @@ describe("GmailAgentWorker", () => {
       },
     ]);
 
-    await worker.subscribeChannel({ channelId: "ch-1", contextId: "ctx-1", replay: false });
+    await worker.subscribeChannel({
+      channelId: "ch-1",
+      contextId: "ctx-1",
+      replay: false,
+    });
     expect(worker.agentInitiatedTurns).toHaveLength(1);
   });
 
@@ -815,11 +885,15 @@ describe("GmailAgentWorker", () => {
     expect(worker.agentInitiatedTurns).toEqual([]); // debounce window still open
     await worker.drainWake(Date.now() + 91_000);
     expect(worker.agentInitiatedTurns).toHaveLength(1);
-    expect(worker.agentInitiatedTurns[0]?.content).toContain("matched your attention preferences");
     expect(worker.agentInitiatedTurns[0]?.content).toContain(
-      "From someone you have replied to before"
+      "matched your attention preferences",
     );
-    expect(worker.agentInitiatedTurns[0]?.content).toContain("ONE short digest message");
+    expect(worker.agentInitiatedTurns[0]?.content).toContain(
+      "From someone you have replied to before",
+    );
+    expect(worker.agentInitiatedTurns[0]?.content).toContain(
+      "ONE short digest message",
+    );
 
     // The same message does not re-enqueue (gmail_attention_turns dedup).
     await worker.onMethodCall("ch-1", "call-3", "checkNow", {});
@@ -844,14 +918,15 @@ describe("GmailAgentWorker", () => {
             Date: "Fri, 22 May 2026 10:15:00 +0000",
           },
           "Production incident",
-          "Production incident"
+          "Production incident",
         ),
       ],
     };
 
     // Save preferences (also enables the LLM pass).
     await worker.onMethodCall("ch-1", "call-1", "gmail_set_attention", {
-      preferences: "Wake me for production incidents and urgent operational mail.",
+      preferences:
+        "Wake me for production incidents and urgent operational mail.",
       markConfigured: true,
     });
 
@@ -867,7 +942,11 @@ describe("GmailAgentWorker", () => {
     worker.ageTriageQueue();
     worker.triageResponses = [
       JSON.stringify([
-        { i: 1, decision: "wake", reason: "Production incident matches your preferences" },
+        {
+          i: 1,
+          decision: "wake",
+          reason: "Production incident matches your preferences",
+        },
       ]),
     ];
     await worker.drainTriage();
@@ -879,7 +958,7 @@ describe("GmailAgentWorker", () => {
     await worker.drainWake(Date.now() + 91_000);
     expect(worker.agentInitiatedTurns).toHaveLength(1);
     expect(worker.agentInitiatedTurns[0]?.content).toContain(
-      "Production incident matches your preferences"
+      "Production incident matches your preferences",
     );
   });
 
@@ -906,7 +985,10 @@ describe("GmailAgentWorker", () => {
     // Non-prior-reply fallback is surface: hit recorded, no wake turn.
     await worker.drainWake(Date.now() + 200_000);
     expect(worker.agentInitiatedTurns).toEqual([]);
-    const hits = worker.rows(`SELECT * FROM gmail_attention_hits WHERE channel_id = ?`, "ch-1");
+    const hits = worker.rows(
+      `SELECT * FROM gmail_attention_hits WHERE channel_id = ?`,
+      "ch-1",
+    );
     expect(hits).toHaveLength(1);
     expect(String(hits[0]?.["reason"])).toContain("Triage model unavailable");
   });
@@ -937,7 +1019,9 @@ describe("GmailAgentWorker", () => {
     // Candidate aged past 60s: the triage pass runs (and here wakes), so the
     // wake debounce deadline (~90s) becomes the earliest signal.
     worker.clock = base + 61_000;
-    worker.triageResponses = [JSON.stringify([{ i: 1, decision: "wake", reason: "urgent" }])];
+    worker.triageResponses = [
+      JSON.stringify([{ i: 1, decision: "wake", reason: "urgent" }]),
+    ];
     const secondSchedule = await worker.alarm();
     expect(worker.triageCalls).toHaveLength(1);
     expect(worker.triageQueueRows()).toHaveLength(0);
@@ -950,7 +1034,9 @@ describe("GmailAgentWorker", () => {
     const thirdSchedule = await worker.alarm();
     expect(worker.agentInitiatedTurns).toHaveLength(1);
     expect(thirdSchedule).not.toBeNull();
-    expect(thirdSchedule!.wakeAt - worker.clock).toBeLessThanOrEqual(5 * 60 * 1000);
+    expect(thirdSchedule!.wakeAt - worker.clock).toBeLessThanOrEqual(
+      5 * 60 * 1000,
+    );
   });
 
   it("skips auth-needed channels and honors rate-limit backoff in alarm scheduling", async () => {
@@ -965,7 +1051,7 @@ describe("GmailAgentWorker", () => {
     worker.execSqlForTest(
       `UPDATE gmail_channel_state SET rate_limited_until = ? WHERE channel_id = ?`,
       base + 120_000,
-      "ch-1"
+      "ch-1",
     );
     worker.profile.mockClear();
     worker.sync.mockClear();
@@ -973,13 +1059,15 @@ describe("GmailAgentWorker", () => {
     expect(worker.sync).not.toHaveBeenCalled();
     // The alarm targets the backoff deadline, not the poll interval.
     expect(rateLimitSchedule).not.toBeNull();
-    expect(rateLimitSchedule!.wakeAt - worker.clock).toBeLessThanOrEqual(120_000);
+    expect(rateLimitSchedule!.wakeAt - worker.clock).toBeLessThanOrEqual(
+      120_000,
+    );
     expect(rateLimitSchedule!.wakeAt - worker.clock).toBeGreaterThan(60_000);
 
     // Auth-needed channels neither sync nor reschedule polling.
     worker.execSqlForTest(
       `UPDATE gmail_channel_state SET sync_state = 'auth-needed', rate_limited_until = NULL WHERE channel_id = ?`,
-      "ch-1"
+      "ch-1",
     );
     const authNeededSchedule = await worker.alarm();
     expect(worker.sync).not.toHaveBeenCalled();
@@ -991,7 +1079,9 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
 
-    await expect(worker.getAttentionPrefs("other-channel")).rejects.toThrow("not subscribed");
+    await expect(worker.getAttentionPrefs("other-channel")).rejects.toThrow(
+      "not subscribed",
+    );
 
     // Unsaved channels report the default preference text.
     await expect(worker.getAttentionPrefs("ch-1")).resolves.toMatchObject({
@@ -1001,17 +1091,21 @@ describe("GmailAgentWorker", () => {
 
     await expect(
       worker.onMethodCall("ch-1", "call-1", "gmail_set_attention", {
-        preferences: "Invoices, scheduling changes, and anything from acme.example.",
+        preferences:
+          "Invoices, scheduling changes, and anything from acme.example.",
         markConfigured: true,
         summary: "Watching invoices, scheduling, acme.example",
-      })
+      }),
     ).resolves.toMatchObject({
       result: { saved: true, configured: true },
     });
     await expect(worker.getAttentionPrefs("ch-1")).resolves.toMatchObject({
-      preferencesText: "Invoices, scheduling changes, and anything from acme.example.",
+      preferencesText:
+        "Invoices, scheduling changes, and anything from acme.example.",
     });
-    expect(worker.channelStateRow("ch-1")).toMatchObject({ setup_status: "configured" });
+    expect(worker.channelStateRow("ch-1")).toMatchObject({
+      setup_status: "configured",
+    });
 
     // append mode extends rather than replaces.
     await worker.onMethodCall("ch-1", "call-2", "gmail_set_attention", {
@@ -1028,9 +1122,9 @@ describe("GmailAgentWorker", () => {
         _currentVerifiedCaller: { callerId: string; callerKind: string } | null;
       }
     )._currentVerifiedCaller = { callerId: "do:other", callerKind: "do" };
-    await expect(worker.setAttentionPrefs("ch-1", { preferences: "hijacked" })).rejects.toThrow(
-      "user-facing panel"
-    );
+    await expect(
+      worker.setAttentionPrefs("ch-1", { preferences: "hijacked" }),
+    ).rejects.toThrow("user-facing panel");
     (
       worker as unknown as {
         _currentVerifiedCaller: { callerId: string; callerKind: string } | null;
@@ -1038,7 +1132,9 @@ describe("GmailAgentWorker", () => {
     )._currentVerifiedCaller = null;
 
     await expect(
-      worker.setAttentionPrefs("ch-1", { preferences: "Only mail from my team." })
+      worker.setAttentionPrefs("ch-1", {
+        preferences: "Only mail from my team.",
+      }),
     ).resolves.toMatchObject({ saved: true });
   });
 
@@ -1065,24 +1161,41 @@ describe("GmailAgentWorker", () => {
     await worker.onMethodCall("ch-1", "call-2", "checkNow", {});
     await worker.onMethodCall("ch-1", "call-3", "checkNow", {});
     worker.ageTriageQueue();
-    worker.triageResponses = [JSON.stringify([{ i: 1, decision: "wake", reason: "incident" }])];
+    worker.triageResponses = [
+      JSON.stringify([{ i: 1, decision: "wake", reason: "incident" }]),
+    ];
     await worker.drainTriage();
 
     // Now narrow the preferences; the dry run re-evaluates the recorded hit.
     worker.triageResponses = [
-      JSON.stringify([{ i: 1, decision: "ignore", reason: "no longer relevant" }]),
+      JSON.stringify([
+        { i: 1, decision: "ignore", reason: "no longer relevant" },
+      ]),
     ];
-    const result = await worker.onMethodCall("ch-1", "call-4", "gmail_set_attention", {
-      preferences: "Only wake me for mail from my manager.",
-    });
+    const result = await worker.onMethodCall(
+      "ch-1",
+      "call-4",
+      "gmail_set_attention",
+      {
+        preferences: "Only wake me for mail from my manager.",
+      },
+    );
     expect(result.isError).toBeUndefined();
     expect(result.result).toMatchObject({
       saved: true,
       dryRun: {
         reEvaluated: 1,
-        changed: [expect.objectContaining({ threadId: "thr-1", before: "wake", after: "ignore" })],
+        changed: [
+          expect.objectContaining({
+            threadId: "thr-1",
+            before: "wake",
+            after: "ignore",
+          }),
+        ],
         unchanged: 0,
-        note: expect.stringContaining("previously ignored mail is not re-checked"),
+        note: expect.stringContaining(
+          "previously ignored mail is not re-checked",
+        ),
       },
     });
     // The dry run is read-only: it does not consume the triage queue (the
@@ -1091,7 +1204,9 @@ describe("GmailAgentWorker", () => {
 
     // dryRun: false (the setAttentionPrefs RPC path) skips the model call.
     worker.triageCalls = [];
-    await worker.setAttentionPrefs("ch-1", { preferences: "Everything important." });
+    await worker.setAttentionPrefs("ch-1", {
+      preferences: "Everything important.",
+    });
     expect(worker.triageCalls).toEqual([]);
   });
 
@@ -1103,7 +1218,7 @@ describe("GmailAgentWorker", () => {
     await expect(
       worker.onMethodCall("ch-1", "call-1", "markConfigured", {
         summary: "Watching invoices and scheduling mail.",
-      })
+      }),
     ).resolves.toMatchObject({
       result: {
         configured: true,
@@ -1112,7 +1227,8 @@ describe("GmailAgentWorker", () => {
     });
 
     const setup = worker.published.find(
-      (entry) => (entry.event.payload as { typeId?: string }).typeId === "gmail.setup"
+      (entry) =>
+        (entry.event.payload as { typeId?: string }).typeId === "gmail.setup",
     );
     expect(setup?.event.payload).toMatchObject({
       initialState: {
@@ -1135,15 +1251,20 @@ describe("GmailAgentWorker", () => {
       throw new Error(`unexpected rpc method ${String(method)}`);
     });
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "draftReply", { threadId: "thr-1" });
+    const result = await worker.onMethodCall("ch-1", "call-1", "draftReply", {
+      threadId: "thr-1",
+    });
 
     expect(result).toMatchObject({
       isError: true,
       result: {
-        error: "No URL-bound model credential is configured for model provider: openai-codex",
+        error:
+          "No URL-bound model credential is configured for model provider: openai-codex",
       },
     });
-    const inlineUi = worker.published.find((entry) => entry.event.kind === "ui.inline_rendered");
+    const inlineUi = worker.published.find(
+      (entry) => entry.event.kind === "ui.inline_rendered",
+    );
     expect(inlineUi?.event.payload).toMatchObject({
       uiType: "inline",
       props: expect.objectContaining({
@@ -1189,7 +1310,9 @@ describe("GmailAgentWorker", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const payload = result.result as { messages: Array<Record<string, unknown>> };
+    const payload = result.result as {
+      messages: Array<Record<string, unknown>>;
+    };
     expect(payload.messages[0]).toMatchObject({ subject: "Question" });
     expect(payload.messages[0]).not.toHaveProperty("bodyText");
   });
@@ -1237,14 +1360,18 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "draftReply", { threadId: "thr-1" });
+    const result = await worker.onMethodCall("ch-1", "call-1", "draftReply", {
+      threadId: "thr-1",
+    });
 
     expect(result.isError).toBeUndefined();
     expect(worker.draftBodies).toHaveBeenCalledOnce();
     expect(result.result).toMatchObject({
       body: "Thanks for the context. I will follow up shortly.",
     });
-    expect(worker.published[worker.published.length - 1]?.event.payload).toMatchObject({
+    expect(
+      worker.published[worker.published.length - 1]?.event.payload,
+    ).toMatchObject({
       typeId: "gmail.compose",
       initialState: {
         to: "a@example.com",
@@ -1272,7 +1399,9 @@ describe("GmailAgentWorker", () => {
     expect(result.result).toMatchObject({ status: "review" });
     // The main model writes the body itself — no one-shot generator call.
     expect(worker.draftBodies).not.toHaveBeenCalled();
-    expect(worker.published[worker.published.length - 1]?.event.payload).toMatchObject({
+    expect(
+      worker.published[worker.published.length - 1]?.event.payload,
+    ).toMatchObject({
       typeId: "gmail.compose",
       initialState: {
         to: "a@example.com",
@@ -1298,10 +1427,14 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
 
-    await expect(worker.onMethodCall("ch-1", "call-1", "checkNow", {})).resolves.toMatchObject({
+    await expect(
+      worker.onMethodCall("ch-1", "call-1", "checkNow", {}),
+    ).resolves.toMatchObject({
       result: { ok: true, historyId: "h1", threadsUpdated: 0 },
     });
-    await expect(worker.onMethodCall("ch-1", "call-2", "checkNow", {})).resolves.toMatchObject({
+    await expect(
+      worker.onMethodCall("ch-1", "call-2", "checkNow", {}),
+    ).resolves.toMatchObject({
       result: { ok: true, historyId: "h2", threadsUpdated: 1 },
     });
 
@@ -1311,7 +1444,9 @@ describe("GmailAgentWorker", () => {
       .map((entry) => (entry.event.payload as { typeId?: string }).typeId)
       .filter(Boolean);
     expect(new Set(typeIds)).toEqual(new Set(["gmail.setup"]));
-    expect(JSON.stringify(worker.published)).not.toContain("Private full email body");
+    expect(JSON.stringify(worker.published)).not.toContain(
+      "Private full email body",
+    );
   });
 
   it("applies local categories through gmail_modify", async () => {
@@ -1325,14 +1460,14 @@ describe("GmailAgentWorker", () => {
       worker.onMethodCall("ch-1", "call-3", "gmail_modify", {
         threadIds: ["thr-1"],
         localCategory: "urgent",
-      })
+      }),
     ).resolves.toMatchObject({
       result: { modified: true, threadIds: ["thr-1"] },
     });
     const row = worker.rows(
       `SELECT category FROM gmail_threads WHERE channel_id = ? AND thread_id = ?`,
       "ch-1",
-      "thr-1"
+      "thr-1",
     )[0];
     expect(row).toMatchObject({ category: "urgent" });
     // Local-only category: no Gmail label mutation.
@@ -1352,9 +1487,12 @@ describe("GmailAgentWorker", () => {
         threadIds: ["thr-1"],
         markRead: true,
         archive: true,
-      })
+      }),
     ).resolves.toMatchObject({
-      result: { modified: true, removedLabels: expect.arrayContaining(["UNREAD", "INBOX"]) },
+      result: {
+        modified: true,
+        removedLabels: expect.arrayContaining(["UNREAD", "INBOX"]),
+      },
     });
     expect(worker.modifyLabels).toHaveBeenCalledWith({
       threadId: "thr-1",
@@ -1364,7 +1502,7 @@ describe("GmailAgentWorker", () => {
     const row = worker.rows(
       `SELECT unread, in_inbox FROM gmail_threads WHERE channel_id = ? AND thread_id = ?`,
       "ch-1",
-      "thr-1"
+      "thr-1",
     )[0];
     expect(row).toMatchObject({ unread: 0, in_inbox: 0 });
 
@@ -1385,19 +1523,26 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "gmail_search", { q: "from:a" });
+    const result = await worker.onMethodCall("ch-1", "call-1", "gmail_search", {
+      q: "from:a",
+    });
     expect(result.isError).toBeUndefined();
     expect(result.result).toMatchObject({ query: "from:a", count: 0 });
 
     const searchEvents = worker.published.filter(
-      (entry) => (entry.event.payload as { typeId?: string }).typeId === "gmail.search"
+      (entry) =>
+        (entry.event.payload as { typeId?: string }).typeId === "gmail.search",
     );
     expect(searchEvents.length).toBeGreaterThanOrEqual(1);
     expect(searchEvents[0]?.event.payload).toMatchObject({
       initialState: { query: "from:a", status: "searching" },
     });
-    const updated = worker.published.find((entry) => entry.event.kind === "custom.updated");
-    expect(updated?.event.payload).toMatchObject({ update: { status: "done" } });
+    const updated = worker.published.find(
+      (entry) => entry.event.kind === "custom.updated",
+    );
+    expect(updated?.event.payload).toMatchObject({
+      update: { status: "done" },
+    });
 
     // Internal lookups skip the card entirely.
     const before = worker.published.length;
@@ -1419,7 +1564,7 @@ describe("GmailAgentWorker", () => {
             threads: [{ id: "thr-1" }, { id: "thr-2" }],
             nextPageToken: "page-2",
             resultSizeEstimate: 3,
-          }
+          },
     );
     const batchGetThreads = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({
@@ -1435,7 +1580,7 @@ describe("GmailAgentWorker", () => {
             }),
           ],
         },
-      }))
+      })),
     );
     const client = worker["gmailForChannel"]("ch-1") as unknown as {
       listThreads: typeof listThreads;
@@ -1453,7 +1598,10 @@ describe("GmailAgentWorker", () => {
       count: 2,
       nextPageToken: "page-2",
       results: [
-        expect.objectContaining({ threadId: "thr-1", subject: "Subject thr-1" }),
+        expect.objectContaining({
+          threadId: "thr-1",
+          subject: "Subject thr-1",
+        }),
         expect.objectContaining({ threadId: "thr-2" }),
       ],
     });
@@ -1469,7 +1617,9 @@ describe("GmailAgentWorker", () => {
       count: 1,
       results: [expect.objectContaining({ threadId: "thr-3" })],
     });
-    expect((page2.result as { nextPageToken?: string }).nextPageToken).toBeUndefined();
+    expect(
+      (page2.result as { nextPageToken?: string }).nextPageToken,
+    ).toBeUndefined();
   });
 
   it("appends the default send-as signature at draft time and offers a From picker", async () => {
@@ -1495,12 +1645,15 @@ describe("GmailAgentWorker", () => {
       body: "Sounds good, see you then.",
     });
     expect(result.isError).toBeUndefined();
-    const compose = worker.published[worker.published.length - 1]?.event.payload as {
+    const compose = worker.published[worker.published.length - 1]?.event
+      .payload as {
       initialState: { body: string; fromOptions?: string[] };
     };
     // Signature converted to plain text and appended exactly once, visibly,
     // at draft time (never silently at send time).
-    expect(compose.initialState.body).toBe("Sounds good, see you then.\n\nBest,\nGabriel");
+    expect(compose.initialState.body).toBe(
+      "Sounds good, see you then.\n\nBest,\nGabriel",
+    );
     expect(compose.initialState.fromOptions).toEqual([
       "me@example.com",
       "Support <support@example.com>",
@@ -1514,7 +1667,8 @@ describe("GmailAgentWorker", () => {
       composeCardId: (result.result as { messageId: string }).messageId,
     });
     expect(again.isError).toBeUndefined();
-    const updated = worker.published[worker.published.length - 1]?.event.payload as {
+    const updated = worker.published[worker.published.length - 1]?.event
+      .payload as {
       update?: { body?: string };
     };
     expect((updated.update?.body ?? "").match(/Best,/g)).toHaveLength(1);
@@ -1540,7 +1694,7 @@ describe("GmailAgentWorker", () => {
     });
     expect(ok.result).toEqual({ sent: true, id: "sent-1" });
     expect(worker.sent).toHaveBeenCalledWith(
-      expect.objectContaining({ from: "Support <support@example.com>" })
+      expect.objectContaining({ from: "Support <support@example.com>" }),
     );
 
     const bad = await worker.onMethodCall("ch-1", "call-2", "gmail_send", {
@@ -1550,7 +1704,9 @@ describe("GmailAgentWorker", () => {
       body: "Hi",
     });
     expect(bad.isError).toBe(true);
-    expect(JSON.stringify(bad.result)).toContain("not a configured send-as alias");
+    expect(JSON.stringify(bad.result)).toContain(
+      "not a configured send-as alias",
+    );
   });
 
   it("saves attachments as workspace files with binary-safe decode and sanitized names", async () => {
@@ -1558,22 +1714,32 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
     // PNG-ish bytes that TextDecoder would corrupt.
-    const bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x0d, 0x0a]);
+    const bytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x0d, 0x0a,
+    ]);
     const data = Buffer.from(bytes).toString("base64url");
     const written: Array<{ path: string; data: Uint8Array }> = [];
     worker.writtenFiles = written;
     const client = worker["gmailForChannel"]("ch-1") as unknown as {
       getAttachment: ReturnType<typeof vi.fn>;
     };
-    client.getAttachment = vi.fn(async () => ({ size: bytes.byteLength, data }));
+    client.getAttachment = vi.fn(async () => ({
+      size: bytes.byteLength,
+      data,
+    }));
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "gmail_get_attachment", {
-      messageId: "msg-1",
-      attachmentId: "att-1",
-      filename: "../../etc/passwd <invoice>.png",
-      mimeType: "image/png",
-      threadId: "thr-1",
-    });
+    const result = await worker.onMethodCall(
+      "ch-1",
+      "call-1",
+      "gmail_get_attachment",
+      {
+        messageId: "msg-1",
+        attachmentId: "att-1",
+        filename: "../../etc/passwd <invoice>.png",
+        mimeType: "image/png",
+        threadId: "thr-1",
+      },
+    );
 
     expect(result.isError).toBeUndefined();
     expect(result.result).toMatchObject({
@@ -1615,10 +1781,15 @@ describe("GmailAgentWorker", () => {
       data: Buffer.from("hello").toString("base64url"),
     }));
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "gmail_get_attachment", {
-      messageId: "msg-1",
-      attachmentId: "att-9",
-    });
+    const result = await worker.onMethodCall(
+      "ch-1",
+      "call-1",
+      "gmail_get_attachment",
+      {
+        messageId: "msg-1",
+        attachmentId: "att-9",
+      },
+    );
     expect(result.result).toMatchObject({
       saved: true,
       path: "gmail-attachments/thr-9/report.pdf",
@@ -1626,13 +1797,21 @@ describe("GmailAgentWorker", () => {
     });
 
     // Oversized attachments are refused before decoding.
-    client.getAttachment = vi.fn(async () => ({ size: 50 * 1024 * 1024, data: "" }));
-    const tooBig = await worker.onMethodCall("ch-1", "call-2", "gmail_get_attachment", {
-      messageId: "msg-1",
-      attachmentId: "att-9",
-      filename: "huge.bin",
-      threadId: "thr-9",
-    });
+    client.getAttachment = vi.fn(async () => ({
+      size: 50 * 1024 * 1024,
+      data: "",
+    }));
+    const tooBig = await worker.onMethodCall(
+      "ch-1",
+      "call-2",
+      "gmail_get_attachment",
+      {
+        messageId: "msg-1",
+        attachmentId: "att-9",
+        filename: "huge.bin",
+        threadId: "thr-9",
+      },
+    );
     expect(tooBig.isError).toBe(true);
     expect(JSON.stringify(tooBig.result)).toContain("exceeds");
     expect(written).toHaveLength(1);
@@ -1647,27 +1826,37 @@ describe("GmailAgentWorker", () => {
       googlePubSubTopicName: "projects/p/topics/gmail-push",
     });
     const registered: unknown[] = [];
-    worker.rpcCall.mockImplementation(async (target: string, method: string, args?: unknown[]) => {
-      if (
-        target === "do:workers/gmail-agent:GmailAgentWorker:gmail-push-router" &&
-        method === "registerPushTarget"
-      ) {
-        registered.push(args?.[0]);
-        return { registered: true };
-      }
-      return { id: "cred-1" };
-    });
-    const watch = vi.fn(async () => ({ historyId: "h5", expiration: Date.now() + 7 * 86_400_000 }));
-    const client = worker["gmailForChannel"]("ch-1") as unknown as { watch: typeof watch };
+    worker.rpcCall.mockImplementation(
+      async (target: string, method: string, args?: unknown[]) => {
+        if (
+          target ===
+            "do:workers/gmail-agent:GmailAgentWorker:gmail-push-router" &&
+          method === "registerPushTarget"
+        ) {
+          registered.push(args?.[0]);
+          return { registered: true };
+        }
+        return { id: "cred-1" };
+      },
+    );
+    const watch = vi.fn(async () => ({
+      historyId: "h5",
+      expiration: Date.now() + 7 * 86_400_000,
+    }));
+    const client = worker["gmailForChannel"]("ch-1") as unknown as {
+      watch: typeof watch;
+    };
     client.watch = watch;
 
     // First sync resolves the mailbox address; then the watch can start.
     await worker.onMethodCall("ch-1", "call-1", "checkNow", {});
-    await (worker as unknown as { ensureWatch(channelId: string): Promise<void> }).ensureWatch(
-      "ch-1"
-    );
+    await (
+      worker as unknown as { ensureWatch(channelId: string): Promise<void> }
+    ).ensureWatch("ch-1");
 
-    expect(watch).toHaveBeenCalledWith({ topicName: "projects/p/topics/gmail-push" });
+    expect(watch).toHaveBeenCalledWith({
+      topicName: "projects/p/topics/gmail-push",
+    });
     expect(worker.channelStateRow("ch-1")).toMatchObject({
       watch_expiration: expect.any(Number),
     });
@@ -1681,9 +1870,9 @@ describe("GmailAgentWorker", () => {
     ]);
 
     // A live watch re-registers (heals server restarts) without re-watching.
-    await (worker as unknown as { ensureWatch(channelId: string): Promise<void> }).ensureWatch(
-      "ch-1"
-    );
+    await (
+      worker as unknown as { ensureWatch(channelId: string): Promise<void> }
+    ).ensureWatch("ch-1");
     expect(watch).toHaveBeenCalledTimes(1);
     expect(registered).toHaveLength(2);
   });
@@ -1713,7 +1902,10 @@ describe("GmailAgentWorker", () => {
 
     // Unknown mailboxes are a no-op.
     await expect(
-      worker.onGmailPushNotification({ emailAddress: "other@example.com", historyId: "h9" })
+      worker.onGmailPushNotification({
+        emailAddress: "other@example.com",
+        historyId: "h9",
+      }),
     ).resolves.toEqual({ synced: [] });
 
     // Only the Gmail push router may dispatch pushes.
@@ -1723,7 +1915,10 @@ describe("GmailAgentWorker", () => {
       }
     )._currentVerifiedCaller = { callerId: "panel:other", callerKind: "panel" };
     await expect(
-      worker.onGmailPushNotification({ emailAddress: "me@example.com", historyId: "h9" })
+      worker.onGmailPushNotification({
+        emailAddress: "me@example.com",
+        historyId: "h9",
+      }),
     ).rejects.toThrow("Gmail push router");
     (
       worker as unknown as {
@@ -1744,16 +1939,21 @@ describe("GmailAgentWorker", () => {
       className: "GmailAgentWorker",
       objectKey: "gmail-ch-1",
     });
-    router.rpcCall.mockImplementation(async (target: string, method: string, args?: unknown[]) => {
-      if (
-        target === "do:workers/gmail-agent:GmailAgentWorker:gmail-ch-1" &&
-        method === "onGmailPushNotification"
-      ) {
-        expect(args?.[0]).toEqual({ emailAddress: "me@example.com", historyId: "h9" });
-        return { synced: ["ch-1"] };
-      }
-      return { id: "cred-1" };
-    });
+    router.rpcCall.mockImplementation(
+      async (target: string, method: string, args?: unknown[]) => {
+        if (
+          target === "do:workers/gmail-agent:GmailAgentWorker:gmail-ch-1" &&
+          method === "onGmailPushNotification"
+        ) {
+          expect(args?.[0]).toEqual({
+            emailAddress: "me@example.com",
+            historyId: "h9",
+          });
+          return { synced: ["ch-1"] };
+        }
+        return { id: "cred-1" };
+      },
+    );
 
     const event: WebhookDeliveryEvent = {
       subscriptionId: "sub-1",
@@ -1768,7 +1968,9 @@ describe("GmailAgentWorker", () => {
         dataJson: { emailAddress: "ME@example.com", historyId: "h9" },
       },
     };
-    await expect(router.onWebhookDelivery(event)).resolves.toEqual({ synced: ["ch-1"] });
+    await expect(router.onWebhookDelivery(event)).resolves.toEqual({
+      synced: ["ch-1"],
+    });
   });
 
   it("snoozes a thread (archive + reminder) and wakes a digest when it is due", async () => {
@@ -1789,7 +1991,9 @@ describe("GmailAgentWorker", () => {
     expect(result.result).toMatchObject({ snoozed: true, archived: true });
     // Archived in Gmail immediately…
     expect(worker.modifyLabels).toHaveBeenCalledWith(
-      expect.objectContaining({ removeLabelIds: expect.arrayContaining(["INBOX"]) })
+      expect.objectContaining({
+        removeLabelIds: expect.arrayContaining(["INBOX"]),
+      }),
     );
     expect(worker.rows(`SELECT * FROM gmail_reminders`)).toHaveLength(1);
 
@@ -1805,7 +2009,9 @@ describe("GmailAgentWorker", () => {
     worker.clock = base + 61 * 60 * 1000 + 91_000;
     await worker.drainWake(worker.clock);
     expect(worker.agentInitiatedTurns).toHaveLength(1);
-    expect(worker.agentInitiatedTurns[0]?.content).toContain("Reminder: decide on the Q3 numbers");
+    expect(worker.agentInitiatedTurns[0]?.content).toContain(
+      "Reminder: decide on the Q3 numbers",
+    );
 
     // listReminders reflects cancellation too.
     await worker.onMethodCall("ch-1", "call-4", "gmail_snooze", {
@@ -1813,9 +2019,16 @@ describe("GmailAgentWorker", () => {
       inMs: 3_600_000,
     });
     await expect(
-      worker.onMethodCall("ch-1", "call-5", "cancelReminder", { threadId: "thr-1" })
+      worker.onMethodCall("ch-1", "call-5", "cancelReminder", {
+        threadId: "thr-1",
+      }),
     ).resolves.toMatchObject({ result: { cancelled: true } });
-    const list = await worker.onMethodCall("ch-1", "call-6", "gmail_list_reminders", {});
+    const list = await worker.onMethodCall(
+      "ch-1",
+      "call-6",
+      "gmail_list_reminders",
+      {},
+    );
     expect(list.result).toEqual({ reminders: [] });
   });
 
@@ -1824,27 +2037,36 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "gmail_publish_digest", {
-      headline: "3 new — 1 needs a reply",
-      items: [
-        {
-          threadId: "thr-1",
-          from: "a@example.com",
-          subject: "Question",
-          gist: "Asks about the Q3 numbers",
-          suggested: "reply",
-          unread: true,
-        },
-      ],
-      moreCount: 2,
-    });
+    const result = await worker.onMethodCall(
+      "ch-1",
+      "call-1",
+      "gmail_publish_digest",
+      {
+        headline: "3 new — 1 needs a reply",
+        items: [
+          {
+            threadId: "thr-1",
+            from: "a@example.com",
+            subject: "Question",
+            gist: "Asks about the Q3 numbers",
+            suggested: "reply",
+            unread: true,
+          },
+        ],
+        moreCount: 2,
+      },
+    );
 
     expect(result.isError).toBeUndefined();
-    expect(worker.published[worker.published.length - 1]?.event.payload).toMatchObject({
+    expect(
+      worker.published[worker.published.length - 1]?.event.payload,
+    ).toMatchObject({
       typeId: "gmail.digest",
       initialState: {
         headline: "3 new — 1 needs a reply",
-        items: [expect.objectContaining({ threadId: "thr-1", suggested: "reply" })],
+        items: [
+          expect.objectContaining({ threadId: "thr-1", suggested: "reply" }),
+        ],
         moreCount: 2,
       },
     });
@@ -1858,9 +2080,11 @@ describe("GmailAgentWorker", () => {
     await worker.onMethodCall("ch-1", "call-1", "checkNow", {});
     await worker.onMethodCall("ch-1", "call-2", "checkNow", {});
     await expect(
-      worker.onMethodCall("ch-1", "call-3", "listActionableThreads", {})
+      worker.onMethodCall("ch-1", "call-3", "listActionableThreads", {}),
     ).resolves.toMatchObject({
-      result: [expect.objectContaining({ threadId: "thr-1", actionable: true })],
+      result: [
+        expect.objectContaining({ threadId: "thr-1", actionable: true }),
+      ],
     });
 
     worker.fakeThread = {
@@ -1877,13 +2101,13 @@ describe("GmailAgentWorker", () => {
           },
           "Sale",
           "Sale",
-          ["INBOX", "UNREAD", "CATEGORY_PROMOTIONS"]
+          ["INBOX", "UNREAD", "CATEGORY_PROMOTIONS"],
         ),
       ],
     };
     await worker.onMethodCall("ch-1", "call-4", "checkNow", {});
     await expect(
-      worker.onMethodCall("ch-1", "call-5", "listActionableThreads", {})
+      worker.onMethodCall("ch-1", "call-5", "listActionableThreads", {}),
     ).resolves.toMatchObject({
       result: [],
     });
@@ -1901,13 +2125,13 @@ describe("GmailAgentWorker", () => {
             Date: "Fri, 22 May 2026 10:10:00 +0000",
           },
           "I replied",
-          "I replied"
+          "I replied",
         ),
       ],
     };
     await worker.onMethodCall("ch-1", "call-6", "checkNow", {});
     await expect(
-      worker.onMethodCall("ch-1", "call-7", "listActionableThreads", {})
+      worker.onMethodCall("ch-1", "call-7", "listActionableThreads", {}),
     ).resolves.toMatchObject({
       result: [],
     });
@@ -1932,9 +2156,14 @@ describe("GmailAgentWorker", () => {
     await worker.onMethodCall("ch-1", "call-1", "checkNow", {});
     await worker.onMethodCall("ch-1", "call-2", "checkNow", {});
 
-    const resolved = await worker.onMethodCall("ch-1", "call-3", "resolveContact", {
-      name: "alice",
-    });
+    const resolved = await worker.onMethodCall(
+      "ch-1",
+      "call-3",
+      "resolveContact",
+      {
+        name: "alice",
+      },
+    );
     expect(resolved.result).toMatchObject({
       query: "alice",
       candidates: [
@@ -1947,17 +2176,27 @@ describe("GmailAgentWorker", () => {
     });
     expect(worker.searchContacts).not.toHaveBeenCalled();
 
-    const suggested = await worker.onMethodCall("ch-1", "call-4", "contactSuggest", {
-      prefix: "ali",
-    });
+    const suggested = await worker.onMethodCall(
+      "ch-1",
+      "call-4",
+      "contactSuggest",
+      {
+        prefix: "ali",
+      },
+    );
     expect(suggested.result).toMatchObject({
       candidates: [expect.objectContaining({ email: "alice@example.com" })],
     });
 
     // The unified gmail_contacts tool reaches the same store.
-    const viaTool = await worker.onMethodCall("ch-1", "call-5", "gmail_contacts", {
-      query: "alice",
-    });
+    const viaTool = await worker.onMethodCall(
+      "ch-1",
+      "call-5",
+      "gmail_contacts",
+      {
+        query: "alice",
+      },
+    );
     expect(viaTool.result).toMatchObject({
       candidates: [expect.objectContaining({ email: "alice@example.com" })],
     });
@@ -1968,10 +2207,17 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "resolveContact", {
-      name: "zelda",
+    const result = await worker.onMethodCall(
+      "ch-1",
+      "call-1",
+      "resolveContact",
+      {
+        name: "zelda",
+      },
+    );
+    expect(worker.searchContacts).toHaveBeenCalledWith("zelda", {
+      pageSize: 5,
     });
-    expect(worker.searchContacts).toHaveBeenCalledWith("zelda", { pageSize: 5 });
     expect(result.result).toMatchObject({
       candidates: [
         {
@@ -1985,7 +2231,9 @@ describe("GmailAgentWorker", () => {
         },
       ],
     });
-    expect(worker.channelStateRow("ch-1")).toMatchObject({ people_api_status: "ok" });
+    expect(worker.channelStateRow("ch-1")).toMatchObject({
+      people_api_status: "ok",
+    });
   });
 
   it("degrades gracefully when the People API is forbidden (missing scopes)", async () => {
@@ -1993,24 +2241,37 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
     worker.searchContacts.mockRejectedValue(
-      new GmailApiError("missing scope", "forbidden", { status: 403 })
+      new GmailApiError("missing scope", "forbidden", { status: 403 }),
     );
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "resolveContact", {
-      name: "zelda",
-    });
+    const result = await worker.onMethodCall(
+      "ch-1",
+      "call-1",
+      "resolveContact",
+      {
+        name: "zelda",
+      },
+    );
     expect(result.isError).toBeUndefined();
     expect(result.result).toMatchObject({ query: "zelda", candidates: [] });
-    expect(worker.channelStateRow("ch-1")).toMatchObject({ people_api_status: "unavailable" });
+    expect(worker.channelStateRow("ch-1")).toMatchObject({
+      people_api_status: "unavailable",
+    });
 
     // Subsequent resolves skip the API entirely.
-    await worker.onMethodCall("ch-1", "call-2", "resolveContact", { name: "zelda" });
+    await worker.onMethodCall("ch-1", "call-2", "resolveContact", {
+      name: "zelda",
+    });
     expect(worker.searchContacts).toHaveBeenCalledTimes(1);
 
     const setup = [...worker.published]
       .reverse()
-      .find((entry) => JSON.stringify(entry.event.payload ?? {}).includes("addressBook"));
-    expect(JSON.stringify(setup?.event.payload)).toContain('"googleContacts":"unavailable"');
+      .find((entry) =>
+        JSON.stringify(entry.event.payload ?? {}).includes("addressBook"),
+      );
+    expect(JSON.stringify(setup?.event.payload)).toContain(
+      '"googleContacts":"unavailable"',
+    );
   });
 
   it("parks recipient-less saveDraft on a drafting compose card instead of erroring", async () => {
@@ -2032,7 +2293,8 @@ describe("GmailAgentWorker", () => {
     });
     expect(worker.createDraft).not.toHaveBeenCalled();
     const compose = worker.published.find(
-      (entry) => (entry.event.payload as { typeId?: string }).typeId === "gmail.compose"
+      (entry) =>
+        (entry.event.payload as { typeId?: string }).typeId === "gmail.compose",
     );
     expect(compose?.event.payload).toMatchObject({
       initialState: {
@@ -2070,7 +2332,9 @@ describe("GmailAgentWorker", () => {
     await worker.onMethodCall("ch-1", "call-1", "checkNow", {});
     await worker.onMethodCall("ch-1", "call-2", "checkNow", {});
 
-    const result = await worker.onMethodCall("ch-1", "call-3", "gmail_query", { q: "Hello" });
+    const result = await worker.onMethodCall("ch-1", "call-3", "gmail_query", {
+      q: "Hello",
+    });
     expect(result.result).toMatchObject({
       source: "cache",
       results: [
@@ -2115,9 +2379,14 @@ describe("GmailAgentWorker", () => {
       },
     ];
 
-    const result = await worker.onMethodCall("ch-1", "call-1", "listActionableThreads", {
-      limit: 3,
-    });
+    const result = await worker.onMethodCall(
+      "ch-1",
+      "call-1",
+      "listActionableThreads",
+      {
+        limit: 3,
+      },
+    );
 
     expect(result.isError).toBeUndefined();
     expect(result.result).toEqual([

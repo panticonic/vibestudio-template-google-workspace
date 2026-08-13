@@ -1,14 +1,18 @@
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import type { Context } from "@earendil-works/pi-ai";
+import { builtinModels } from "@workspace/pi-ai/providers/all";
+import type { Context } from "@workspace/pi-ai";
 import type { GmailMessage, GmailThread } from "@workspace/gmail";
 import { header, latestMessage, textFromPart } from "../sync/thread-model.js";
 import { DRAFT_REPLY_SYSTEM_PROMPT } from "./prompts.js";
 
 const PI_MODELS = builtinModels();
 
-function textContentFromAssistant(message: Awaited<ReturnType<typeof PI_MODELS.complete>>): string {
+function textContentFromAssistant(
+  message: Awaited<ReturnType<typeof PI_MODELS.complete>>,
+): string {
   return message.content
-    .filter((block): block is { type: "text"; text: string } => block.type === "text")
+    .filter(
+      (block): block is { type: "text"; text: string } => block.type === "text",
+    )
     .map((block) => block.text)
     .join("")
     .trim();
@@ -30,8 +34,10 @@ export function buildDraftReplyContext(thread: GmailThread): Context {
             [
               `From: ${header(message, "From") ?? ""}`,
               `Date: ${header(message, "Date") ?? ""}`,
-              textFromPart(message.payload).slice(0, 4_000) || message.snippet || "",
-            ].join("\n")
+              textFromPart(message.payload).slice(0, 4_000) ||
+                message.snippet ||
+                "",
+            ].join("\n"),
           ),
         ]
           .join("\n\n")
@@ -48,17 +54,23 @@ export async function generateDraftReplyBody(opts: {
   thread: GmailThread;
 }): Promise<string> {
   const colonIdx = opts.modelRef.indexOf(":");
-  if (colonIdx < 0) throw new Error(`Model must be "provider:model", got: ${opts.modelRef}`);
+  if (colonIdx < 0)
+    throw new Error(`Model must be "provider:model", got: ${opts.modelRef}`);
   const provider = opts.modelRef.slice(0, colonIdx);
   const modelId = opts.modelRef.slice(colonIdx + 1);
   const model = PI_MODELS.getModel(provider, modelId);
-  if (!model) throw new Error(`No model metadata found for model provider: ${provider}`);
+  if (!model)
+    throw new Error(`No model metadata found for model provider: ${provider}`);
 
-  const response = await PI_MODELS.complete(model, buildDraftReplyContext(opts.thread), {
-    apiKey: opts.apiKey,
-    temperature: 0.2,
-    maxTokens: 300,
-  });
+  const response = await PI_MODELS.complete(
+    model,
+    buildDraftReplyContext(opts.thread),
+    {
+      apiKey: opts.apiKey,
+      temperature: 0.2,
+      maxTokens: 300,
+    },
+  );
   return (
     textContentFromAssistant(response) ||
     "Thanks for the note. I will take a look and follow up shortly."
