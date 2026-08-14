@@ -72,6 +72,10 @@ export function buildWakeDigestPrompt(hits: QueuedAttentionHit[], overflowNote?:
   lines.push(
     "",
     "Write ONE short digest message for the user, then publish a digest card with gmail_publish_digest covering these threads (at most 5 items, with a one-line gist each).",
+    // Triage runs while nobody is watching, so a digest that only lands in the
+    // channel has effectively reported nothing. The rung is chosen from the
+    // mail, not from a guess about whether anyone is looking.
+    "Then reach the person with `notify({ to: \"owner\", title, content })`: `title` names the most important thread, `content` is the markdown gist list. Leave `alert` at its default (`inbox` — durable entry plus phone push) unless something here genuinely cannot wait, in which case pass `alert: \"interrupt\"`. Routine mail is never an interrupt.",
     "Do not send mail without an explicit user request; agent-prepared drafts must stay in review on a compose card."
   );
   if (overflowNote) lines.push("", overflowNote);

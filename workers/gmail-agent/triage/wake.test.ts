@@ -99,6 +99,10 @@ describe("buildWakeDigestPrompt", () => {
     expect(prompt).toContain("ONE short digest message");
     expect(prompt).toContain("gmail_publish_digest");
     expect(prompt).toContain("Do not send mail without an explicit user request");
+    // Triage runs unattended; a digest that only reaches the channel has not
+    // reached the person it is for.
+    expect(prompt).toContain('notify({ to: "owner"');
+    expect(prompt).toContain("Routine mail is never an interrupt");
   });
 
   it("uses singular phrasing for one hit", () => {

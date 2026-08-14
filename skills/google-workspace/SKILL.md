@@ -136,6 +136,34 @@ Use `checkGoogleConnection()` only for terse status checks. Prefer
 `getGoogleOnboardingStatus()` during onboarding because it includes next
 actions, warnings, and checklist state.
 
+## Reaching the Gmail agent from another conversation
+
+The Gmail agent joins its channel with the handle `gmail`, which registers it in
+the workspace agent directory as `gmail@<channelId>` — a directly addressable
+ref. Any agent in the workspace can find it and talk to it:
+
+```ts
+discover_agents({ query: "email" });
+// → agent:gmail@ch-inbox   [idle]   Gmail
+//     Triaged 12 threads; 2 need a reply.
+
+notify({
+  to: "agent:gmail@ch-inbox",
+  content: "Can you extract the newsletter senders from the last 20 messages tagged `newsletters`?",
+});
+```
+
+The message arrives as an ordinary message in the Gmail channel, marked as
+coming from you and from your conversation, and the reply comes back the same
+way. An agent instance is a (worker, channel) pair, so `agent:gmail` on its own
+is refused when the worker sits in more than one channel — name the channel.
+
+Outbound, the Gmail agent escalates to its owner: triage digests go out as
+`notify({ to: "owner" })` at the `inbox` rung (durable entry plus phone push),
+and anything that genuinely cannot wait uses `alert: "interrupt"`. Sync failures
+and reauth prompts take the same path rather than dying in logs. See the
+`messaging` skill for the grammar and the etiquette.
+
 ## Files
 
 | Document                                 | Content                             |

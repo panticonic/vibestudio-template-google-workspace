@@ -79,3 +79,8 @@ const extensionBytes = {
 | -------------------------------------------------------------------------------------------- | ------------------------------ |
 | [../../packages/google-workspace/src/drive.ts](../../packages/google-workspace/src/drive.ts) | Google Drive API client        |
 | [index.ts](index.ts)                                                                         | Importable Drive skill helpers |
+
+## Reaching this agent from another conversation
+
+The Google agent is directory-discoverable (`discover_agents({ query: "drive" })`)
+and addressable as `agent:<handle>@<channelId>` — see the `messaging` skill.
