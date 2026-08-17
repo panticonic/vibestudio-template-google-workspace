@@ -1053,10 +1053,51 @@ export class GmailAgentWorker extends AgentWorkerBase {
     };
     const setupJson = JSON.stringify(payload);
     if (state.lastSetupJson === setupJson) return;
+    const previouslyNeededAuth = state.lastSetupJson?.includes('"reconnect-required"') ?? false;
     await this.gmailCards.publishSetup(channelId, payload);
     const fresh = this.getChannelState(channelId);
     fresh.lastSetupJson = setupJson;
     this.saveChannelState(fresh);
+    // Reauth is a background failure the person cannot see from the channel
+    // alone: it happens on a poll while nobody is watching, and every later
+    // triage silently stops. Escalate ONCE per transition into
+    // reconnect-required (messaging plan §6.4), on the setup card that already
+    // carries the reconnect affordance — never per poll.
+    if (payload.auth.status === "reconnect-required" && !previouslyNeededAuth) {
+      await this.escalateReauth(channelId).catch((err) =>
+        console.warn(`[GmailAgentWorker] reauth escalation failed for channel=${channelId}:`, err),
+      );
+    }
+  }
+
+  /** The single person on this channel, when there is one — the messaging
+   *  plan's `owner` rule; several people means no unambiguous owner. */
+  private channelOwnerUserId(channelId: string): string | null {
+    const users = this.rosterSnapshot(channelId).filter((entry) => entry.ref.kind === "user");
+    if (users.length !== 1) return null;
+    const id = users[0]?.ref.participantId ?? users[0]?.participantId ?? "";
+    return id.startsWith("user:") ? id.slice("user:".length) : id || null;
+  }
+
+  private async escalateReauth(channelId: string): Promise<void> {
+    const owner = this.channelOwnerUserId(channelId);
+    const participantId = this.subscriptions.getParticipantId(channelId);
+    if (!owner || !participantId) return;
+    const setupCard = this.cards.find(channelId, SETUP_CARD_KEY);
+    const state = this.getChannelState(channelId);
+    await this.escalateNotify({
+      userId: owner,
+      channelId,
+      messageId: setupCard?.messageId ?? SETUP_CARD_KEY,
+      senderParticipantId: participantId,
+      senderHandle: "gmail",
+      rung: "inbox",
+      title: `Gmail needs to be reconnected${state.emailAddress ? ` (${state.emailAddress})` : ""}`,
+      message:
+        "Google rejected the stored credential, so mail sync and triage are paused. " +
+        "Open the conversation and use **Reconnect** on the setup card to resume." +
+        (state.lastError ? `\n\n_${state.lastError}_` : ""),
+    });
   }
 
   // ── replay recovery ───────────────────────────────────────────────────────
