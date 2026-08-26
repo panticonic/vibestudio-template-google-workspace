@@ -1,4 +1,4 @@
-systemEpoch: 62
+systemEpoch: 0
 template:
   name: Google Workspace
   description: Connect Google Workspace and add a Gmail agent.
