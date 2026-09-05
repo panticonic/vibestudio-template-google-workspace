@@ -562,7 +562,9 @@ describe("GmailAgentWorker", () => {
         browserHandoffCallerId: "panel-1",
         browserHandoffCallerKind: "panel",
       }),
-    ).resolves.toMatchObject({ result: { id: "cred-1" } });
+    ).resolves.toMatchObject({
+      result: { credential: { id: "cred-1" }, resumed: true },
+    });
     expect(worker.rpcCall).toHaveBeenCalledWith(
       "main",
       "credentials.connect",
@@ -582,7 +584,11 @@ describe("GmailAgentWorker", () => {
                 accountIdentityJwtClaimField: "chatgpt_account_id",
               }),
             }),
-            redirect: expect.objectContaining({ type: "client-loopback" }),
+            redirect: {
+            host: "localhost",
+            port: 1455,
+            callbackPath: "/auth/callback",
+          },
             browser: "external",
           }),
           handoffTarget: { callerId: "panel-1", callerKind: "panel" },
@@ -590,14 +596,6 @@ describe("GmailAgentWorker", () => {
       ],
       { signal: undefined },
     );
-    expect(deliverEffectOutcome).not.toHaveBeenCalled();
-    expect(wake).not.toHaveBeenCalled();
-
-    await expect(
-      worker.onMethodCall("ch-1", "call-2", "credentialConnected", {
-        providerId: "openai-codex",
-      }),
-    ).resolves.toMatchObject({ result: { resumed: true } });
     expect(deliverEffectOutcome).toHaveBeenCalledWith(
       ids.credentialWaitEffect(ids.credKey("ch-1", "openai-codex")),
       { kind: "credential", resolved: true },
