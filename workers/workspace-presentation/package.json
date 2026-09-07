@@ -1,0 +1,34 @@
+{
+  "name": "@workspace-workers/workspace-presentation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "title": "Workspace presentation",
+    "icon": "🖼️",
+    "kind": "worker",
+    "entry": "index.ts",
+    "durable": {
+      "classes": [
+        {
+          "className": "WorkspacePresentationDO",
+          "rpcSchema": "vibestudio.workspace-presentation.v1"
+        }
+      ]
+    },
+    "authority": {
+      "provides": [],
+      "requests": []
+    }
+  },
+  "dependencies": {
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@vibestudio/durable": "workspace:*",
+    "@vibestudio/rpc": "workspace:*",
+    "vitest": "^3.2.7"
+  }
+}

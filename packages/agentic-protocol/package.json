@@ -1,0 +1,21 @@
+{
+  "name": "@workspace/agentic-protocol",
+  "version": "0.1.0",
+  "description": "Pure trajectory event vocabulary, schemas, reducers, and hash helpers for agentic systems",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./stored-values": "./src/stored-values.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  }
+}

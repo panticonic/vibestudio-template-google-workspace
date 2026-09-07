@@ -1,0 +1,80 @@
+/**
+ * Diagram frame styles, moved here with the component (was inlined in
+ * `@workspace/agentic-chat/styles.css`). The component imports this itself, so
+ * a surface that renders a diagram gets its frame without importing the whole
+ * chat stylesheet — which is what let the overlay adopt diagrams at all.
+ */
+
+.ns-diagram-frame {
+  position: relative;
+  border: 1px solid var(--gray-5);
+  border-radius: var(--radius-3);
+  background: var(--color-panel-solid);
+  max-width: 100%;
+}
+
+.ns-diagram-toolbar {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--gray-4);
+}
+
+.ns-diagram {
+  padding: var(--space-3);
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.ns-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.ns-diagram-actions {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 1;
+}
+
+.ns-diagram-frame:hover .ns-diagram-actions,
+.ns-diagram-frame:focus-within .ns-diagram-actions {
+  opacity: 1;
+}
+
+.ns-diagram-loading .ns-codeblock {
+  opacity: 0.6;
+}
+
+.ns-diagram-error {
+  border-color: var(--red-6);
+}
+
+.ns-diagram-error-detail {
+  padding: 6px 10px;
+  border-top: 1px solid var(--gray-4);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ns-diagram-source {
+  margin: 0;
+  padding: 12px;
+  max-width: 100%;
+  overflow-x: auto;
+  background: transparent;
+  color: var(--gray-12);
+  white-space: pre;
+  font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ns-diagram-source > code {
+  display: block;
+  background: transparent;
+  padding: 0;
+}

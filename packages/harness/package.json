@@ -1,0 +1,44 @@
+{
+  "name": "@workspace/harness",
+  "version": "0.1.0",
+  "description": "Shared type definitions for the Vibestudio agentic harness messaging system",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent-references": "./src/tools/agent-pagination.ts",
+    "./merge-driver": "./src/merge-driver.ts",
+    "./resource-loader": "./src/resource-loader.ts",
+    "./semantic-file-resolution": "./src/semantic-file-resolution.ts",
+    "./standard-tools": "./src/standard-tools.ts",
+    "./system-prompt": "./src/system-prompt.ts",
+    "./tools/eval": "./src/tools/eval.ts",
+    "./types": "./src/types.ts",
+    "./web": "./src/web/index.ts",
+    "./web-extract": "./src/web-extract.ts"
+  },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "@mozilla/readability": "^0.6.0",
+    "@vibestudio/extension": "workspace:*",
+    "@vibestudio/rpc": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@sinclair/typebox": "^0.27.12",
+    "@workspace/pi-core": "workspace:*",
+    "@workspace/pi-ai": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/pubsub": "workspace:*",
+    "diff": "^8.0.4",
+    "linkedom": "^0.18.13",
+    "ignore": "^7.0.5",
+    "unpdf": "^1.8.0",
+    "yaml": "^2.8.0"
+  },
+  "optionalDependencies": {
+    "re2": "^1.24.1"
+  },
+  "//": "re2 1.24.1 contains the Node >=22 compatibility fix previously carried as a host-root pnpm patch.",
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "name": "@workspace-extensions/pdf-ingest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "PDF Ingest",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "sourcemap": true,
+    "extension": {
+      "activationEvents": [
+        "onInvoke"
+      ],
+      "dependencyMode": "external",
+      "methodAuthority": {
+        "engines": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "probe": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "ingest": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "renderPage": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "readArtifact": {
+          "effect": {
+            "kind": "open"
+          }
+        }
+      }
+    },
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "critical",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.5",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "pdfjs-dist": "^6.2.108",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@vibestudio/extension": "workspace:*"
+  }
+}

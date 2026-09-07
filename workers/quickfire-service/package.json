@@ -1,0 +1,42 @@
+{
+  "name": "@workspace-workers/quickfire-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "title": "Quickfire Sessions",
+    "icon": "✦",
+    "kind": "worker",
+    "entry": "index.ts",
+    "durable": {
+      "classes": [
+        {
+          "className": "QuickfireSessionsDO"
+        }
+      ]
+    },
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "workspace.runtime-state.manage",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@workspace/agentic-core": "workspace:*",
+    "@workspace/quickfire-core": "workspace:*",
+    "@workspace/runtime": "workspace:*",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  }
+}

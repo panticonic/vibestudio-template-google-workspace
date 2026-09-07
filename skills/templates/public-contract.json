@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "service": "@workspace-extensions/templates",
+  "source": "extensions/templates",
+  "methods": {
+    "catalog": { "tier": "read", "arguments": ["optional { refresh: true }"], "returns": "TemplateCatalogSnapshot | null" },
+    "inspect": { "tier": "read", "arguments": ["{ pin } | { url, credential? } | { catalogId, registryCommit, registrySnapshot }"], "returns": "{ pin, presentation?, repositories, files }" },
+    "inspectAuthoring": { "tier": "read", "arguments": ["{ name, description, parts }"], "returns": "TemplateAuthoringInspection" },
+    "authoringParts": { "tier": "read", "arguments": [], "returns": "{ repoPath, packageName? }[]" },
+    "publishAuthoring": { "tier": "write", "arguments": ["{ commandId, intent, expectedFingerprint, version, destination, credentialId?, creation? }"], "returns": "TemplatePublication" },
+    "suggestRegistryEntry": { "tier": "write", "arguments": ["{ commandId, catalog, publication, credential?, entry, revision }"], "returns": "TemplateRegistryContribution" }
+  },
+  "invariants": [
+    "catalog rendering is cache-only; refresh is explicit",
+    "inspect resolves once to an exact pin and verifies a dependency-free self-contained snapshot",
+    "acquired bytes and catalog caches remain in extension-owned workspace storage",
+    "workspace creation consumes the exact inspected pin through the ordinary rootTemplate path",
+    "source integration into an existing workspace uses ordinary VCS comparison and merge",
+    "authoring closes workspace package and runtime dependencies and binds the plan to protected main",
+    "publication does not create installed layers, runtime authority, or registry promotion"
+  ]
+}

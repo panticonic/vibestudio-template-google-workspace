@@ -1,0 +1,76 @@
+{
+  "name": "@workspace-workers/workspace-source",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "title": "Workspace Source",
+    "icon": "./assets/icon.svg",
+    "kind": "worker",
+    "entry": "GadWorkspaceDO.ts",
+    "durable": {
+      "classes": [
+        {
+          "className": "GadWorkspaceDO",
+          "rpcSchema": "vibestudio.gad.workspace.v1"
+        }
+      ]
+    },
+    "authority": {
+      "provides": [
+        {
+          "name": "workspace.graph.delete",
+          "title": "Delete workspace history",
+          "action": "delete semantic workspace history from this workspace",
+          "description": "The exact workspace-source receiver enforces destructive graph operations before its code runs.",
+          "tier": "critical",
+          "sensitivity": "destructive",
+          "resourceType": "workspace-source",
+          "presentation": {
+            "domain": "files",
+            "verb": "manage"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "critical",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:gad.workspace",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "@vibestudio/durable": "workspace:*",
+    "@vibestudio/rpc": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@vibestudio/trajectory-identity": "workspace:*",
+    "@vibestudio/workspace-contracts": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/vcs-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "sql.js": "^1.14.1",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,241 @@
+{
+  "name": "@workspace-panels/chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "title": "Agentic Chat",
+    "icon": "./assets/icon.svg",
+    "entry": "index.tsx",
+    "exposeModules": [
+      "react",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@radix-ui/themes",
+      "@radix-ui/react-icons",
+      "@workspace/runtime",
+      "@workspace/react/responsive",
+      "@workspace/ui"
+    ],
+    "authority": {
+      "provides": [],
+      "serviceRequests": [
+        {
+          "protocol": "vibestudio.channel.v1",
+          "availability": "required"
+        },
+        {
+          "protocol": "vibestudio.missions.v1",
+          "availability": "required"
+        },
+        {
+          "protocol": "vibestudio.models.v1",
+          "availability": "required"
+        }
+      ],
+      "requests": [
+        {
+          "capability": "account-providers.configure",
+          "resource": {
+            "kind": "exact",
+            "key": "account-providers.configure"
+          },
+          "tier": "gated",
+          "evidence": "exact"
+        },
+        {
+          "capability": "account.profile.update",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "accounts.connect",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "approvals.decide",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "channel.members.remove",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "critical",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "context"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "context.clone",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.materialize",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.relationships.record",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "devices.read",
+          "resource": {
+            "kind": "exact",
+            "key": "devices.read"
+          },
+          "tier": "gated",
+          "evidence": "exact"
+        },
+        {
+          "capability": "external.open",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "subagents.create",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:channel",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:gad.workspace",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:missions",
+          "resource": {
+            "kind": "exact",
+            "key": "do:workers/missions:MissionsDO:workspace-missions"
+          },
+          "tier": "gated",
+          "evidence": "exact"
+        },
+        {
+          "capability": "workspace-service:models",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:workspace.state",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.runtime-state.inspect",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.runtime-state.manage",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspaces.read",
+          "resource": {
+            "kind": "exact",
+            "key": "workspaces.read"
+          },
+          "tier": "gated",
+          "evidence": "exact"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shell-core": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/agentic-core": "workspace:*",
+    "@workspace/agentic-chat": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "@workspace/eval": "workspace:*",
+    "@workspace/model-catalog": "workspace:*",
+    "@workspace/pubsub": "workspace:*",
+    "@workspace/react": "workspace:*",
+    "@workspace/runtime": "workspace:*",
+    "@radix-ui/themes": "^3.3.0",
+    "@radix-ui/react-icons": "^1.3.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  }
+}

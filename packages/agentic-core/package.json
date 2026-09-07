@@ -1,0 +1,34 @@
+{
+  "name": "@workspace/agentic-core",
+  "version": "0.1.0",
+  "description": "Headless agentic session management \u2014 shared business logic (no React)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent-launch": "./src/agent-launch.ts",
+    "./channel-chat-merge": "./src/channel-chat-merge.ts",
+    "./provisional-agent-lifecycle": "./src/provisional-agent-lifecycle.ts",
+    "./panel-import-loader": "./src/panel-import-loader.ts",
+    "./subagent-prompt": "./src/subagent-prompt.ts",
+    "./result-images": "./src/result-images.ts"
+  },
+  "dependencies": {
+    "@vibestudio/module-imports": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shell-core": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/eval": "workspace:*",
+    "@workspace/model-catalog": "workspace:*",
+    "@workspace/pubsub": "workspace:*"
+  },
+  "//peerDependencies": "React appears here for one reason: component *types* cross this boundary (custom-message-types.ts names ComponentType). Nothing in this package renders, so it is optional -- a worker that only runs sessions needs the declarations to typecheck, never an instance to bundle. Any React 19 renderer is sufficient.",
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}

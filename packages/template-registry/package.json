@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/template-registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./client.ts",
+    "./file-cache": "./fileCache.ts",
+    "./git": "./git.ts"
+  },
+  "dependencies": {
+    "@vibestudio/git": "workspace:*",
+    "yaml": "^2.8.0"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "name": "@workspace-extensions/templates",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "Templates",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "sourcemap": true,
+    "extension": {
+      "activationEvents": ["onInvoke"],
+      "methodAuthority": {
+        "catalog": { "effect": { "kind": "open" } },
+        "inspect": { "effect": { "kind": "open" } },
+        "inspectAuthoring": { "effect": { "kind": "open" } },
+        "authoringParts": { "effect": { "kind": "open" } },
+        "publishAuthoring": { "effect": { "kind": "userland-capability", "capability": "workspace.templates.publish", "resource": { "kind": "receiver" } } },
+        "suggestRegistryEntry": { "effect": { "kind": "userland-capability", "capability": "workspace.templates.publish", "resource": { "kind": "receiver" } } }
+      }
+    },
+    "authority": {
+      "provides": [{
+        "name": "workspace.templates.publish",
+        "title": "Publish workspace snapshot",
+        "action": "publish this workspace source as an upstream template",
+        "tier": "gated",
+        "sensitivity": "write",
+        "resourceType": "workspace.templates",
+        "presentation": { "domain": "sharing", "verb": "act" },
+        "notability": "headline",
+        "grantScopes": ["once", "task", "session"]
+      }],
+      "requests": [
+        { "capability": "credential.use", "resource": { "kind": "prefix", "prefix": "" }, "tier": "gated", "evidence": "intentional-broad" },
+        { "capability": "network.response.read", "resource": { "kind": "prefix", "prefix": "" }, "tier": "gated", "evidence": "intentional-broad" },
+        { "capability": "git.publish", "resource": { "kind": "prefix", "prefix": "workspace-source-change:" }, "tier": "gated", "evidence": "bounded-dynamic" }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "@vibestudio/credential-client": "workspace:*",
+    "@vibestudio/git": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/workspace": "workspace:*",
+    "@vibestudio/workspace-contracts": "workspace:*",
+    "@workspace/template-registry": "workspace:*",
+    "yaml": "^2.8.0"
+  }
+}

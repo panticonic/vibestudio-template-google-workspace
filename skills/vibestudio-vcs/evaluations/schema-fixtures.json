@@ -1,0 +1,581 @@
+{
+  "schemaVersion": 2,
+  "fixtures": [
+    {
+      "name": "status-current-context",
+      "method": "status",
+      "valid": true,
+      "args": [{ "contextId": "context:task" }]
+    },
+    {
+      "name": "edit-create-file",
+      "method": "edit",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:edit",
+          "contextId": "context:task",
+          "expectedWorkingHead": { "kind": "event", "eventId": "event:base" },
+          "intentSummary": "Create the requested module",
+          "changes": [
+            {
+              "kind": "file-create",
+              "repositoryId": "repository:app",
+              "path": "src/example.ts",
+              "content": {
+                "kind": "text",
+                "text": "export const value = 1;\n"
+              },
+              "mode": 420
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "move-file",
+      "method": "move",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:move",
+          "contextId": "context:task",
+          "expectedWorkingHead": {
+            "kind": "application",
+            "applicationId": "application:edit"
+          },
+          "moves": [
+            {
+              "kind": "file",
+              "repositoryId": "repository:app",
+              "fileId": "file:example",
+              "destinationRepositoryId": "repository:app",
+              "destinationPath": "src/renamed.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "copy-file",
+      "method": "copy",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:copy",
+          "contextId": "context:task",
+          "expectedWorkingHead": {
+            "kind": "application",
+            "applicationId": "application:move"
+          },
+          "copies": [
+            {
+              "source": {
+                "state": {
+                  "kind": "application",
+                  "applicationId": "application:move"
+                },
+                "repositoryId": "repository:app",
+                "fileId": "file:example"
+              },
+              "destination": {
+                "repositoryId": "repository:app",
+                "path": "src/copied.ts"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "merge-declined-coordinate",
+      "method": "merge",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:merge",
+          "contextId": "context:task",
+          "expectedWorkingHead": {
+            "kind": "application",
+            "applicationId": "application:copy"
+          },
+          "source": { "kind": "event", "eventId": "event:source" },
+          "resolutions": [
+            {
+              "coordinate": { "kind": "file", "id": "file:obsolete" },
+              "resolution": "ours",
+              "rationale": "The target already uses the replacement design"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "revert-change",
+      "method": "revert",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:revert",
+          "contextId": "context:task",
+          "expectedWorkingHead": {
+            "kind": "application",
+            "applicationId": "application:copy"
+          },
+          "changeIds": ["change:copy"]
+        }
+      ]
+    },
+    {
+      "name": "commit-whole-chain",
+      "method": "commit",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:commit",
+          "contextId": "context:task",
+          "expectedWorkingHead": {
+            "kind": "application",
+            "applicationId": "application:merge"
+          },
+          "message": "Adopt the compatible source changes"
+        }
+      ]
+    },
+    {
+      "name": "discard-whole-chain",
+      "method": "discard",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:discard",
+          "contextId": "context:scratch",
+          "expectedWorkingHead": {
+            "kind": "application",
+            "applicationId": "application:scratch"
+          }
+        }
+      ]
+    },
+    {
+      "name": "import-exact-snapshot",
+      "method": "importSnapshot",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:import",
+          "contextId": "context:import",
+          "expectedWorkingHead": { "kind": "event", "eventId": "event:base" },
+          "source": {
+            "kind": "git",
+            "url": "https://example.invalid/project.git",
+            "commit": "0123456789abcdef0123456789abcdef01234567",
+            "snapshot": "v1-sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "repositories": [
+            {
+              "repoPath": "projects/imported",
+              "files": [
+                {
+                  "path": "README.md",
+                  "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "mode": 420
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "push-committed-event",
+      "method": "push",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:push",
+          "contextId": "context:task",
+          "expectedCommittedEventId": "event:commit",
+          "expectedMainEventId": "event:base"
+        }
+      ]
+    },
+    {
+      "name": "reject-import-external-evidence-graph",
+      "method": "importSnapshot",
+      "valid": false,
+      "args": [
+        {
+          "commandId": "command:legacy-import",
+          "contextId": "context:import",
+          "expectedWorkingHead": { "kind": "event", "eventId": "event:base" },
+          "source": {
+            "kind": "git",
+            "uri": "https://example.invalid/project.git",
+            "snapshotRevision": "0123456789abcdef",
+            "evidenceQuality": "per-path-last-touch"
+          },
+          "repositories": [
+            {
+              "repoPath": "projects/imported",
+              "files": []
+            }
+          ],
+          "externalPathEvidence": [
+            {
+              "path": "README.md",
+              "revision": "deadbeef",
+              "author": "Legacy Author"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "compare-source-event",
+      "method": "compare",
+      "valid": true,
+      "args": [
+        {
+          "target": {
+            "kind": "application",
+            "applicationId": "application:target"
+          },
+          "source": { "kind": "event", "eventId": "event:source" },
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "name": "inspect-change",
+      "method": "inspect",
+      "valid": true,
+      "args": [
+        {
+          "node": { "kind": "change", "changeId": "change:1" },
+          "edgeLimit": 50
+        }
+      ]
+    },
+    {
+      "name": "page-neighbors",
+      "method": "neighbors",
+      "valid": true,
+      "args": [
+        {
+          "root": { "kind": "application", "applicationId": "application:1" },
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "name": "read-history",
+      "method": "history",
+      "valid": true,
+      "args": [
+        {
+          "root": {
+            "kind": "file",
+            "state": { "kind": "event", "eventId": "event:1" },
+            "repositoryId": "repository:app",
+            "fileId": "file:1"
+          },
+          "direction": "past",
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "name": "blame-file-range",
+      "method": "blame",
+      "valid": true,
+      "args": [
+        {
+          "state": { "kind": "event", "eventId": "event:1" },
+          "repositoryId": "repository:app",
+          "fileId": "file:1",
+          "range": { "start": 0, "end": 20 },
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "name": "read-semantic-file",
+      "method": "readFile",
+      "valid": true,
+      "args": [
+        {
+          "state": { "kind": "application", "applicationId": "application:1" },
+          "repositoryId": "repository:app",
+          "file": { "kind": "id", "fileId": "file:1" }
+        }
+      ]
+    },
+    {
+      "name": "resolve-repository-at-state",
+      "method": "resolveRepository",
+      "valid": true,
+      "args": [
+        {
+          "state": { "kind": "event", "eventId": "event:1" },
+          "repoPath": "projects/app"
+        }
+      ]
+    },
+    {
+      "name": "list-immediate-directory",
+      "method": "listDirectory",
+      "valid": true,
+      "args": [
+        {
+          "state": { "kind": "event", "eventId": "event:1" },
+          "path": "projects/app/src",
+          "limit": 100
+        }
+      ]
+    },
+    {
+      "name": "list-repository-files",
+      "method": "listFiles",
+      "valid": true,
+      "args": [
+        {
+          "state": { "kind": "event", "eventId": "event:1" },
+          "repositoryId": "repository:app",
+          "prefix": "src/",
+          "limit": 100
+        }
+      ]
+    },
+    {
+      "name": "project-exact-read-memory",
+      "method": "readMemory",
+      "valid": true,
+      "args": [
+        {
+          "contextId": "context:task",
+          "path": "projects/app/src/example.ts",
+          "expectedContentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "range": { "start": 12, "end": 44 },
+          "episodeLimit": 4,
+          "historyLimit": 3
+        }
+      ]
+    },
+    {
+      "name": "register-external-delta",
+      "method": "registerExternalDelta",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:register-delta",
+          "contextId": "context:task",
+          "expectedWorkingHead": { "kind": "event", "eventId": "event:base" },
+          "intentSummary": "Register the exact upstream update",
+          "repositoryId": "repository:app",
+          "repoPath": "projects/app",
+          "oldSource": {
+            "kind": "git",
+            "url": "https://example.test/app.git",
+            "commit": "1111111111111111111111111111111111111111",
+            "snapshot": "v1-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "newSource": {
+            "kind": "git",
+            "url": "https://example.test/app.git",
+            "commit": "2222222222222222222222222222222222222222",
+            "snapshot": "v1-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "oldFiles": [
+            {
+              "path": "src/index.ts",
+              "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "mode": 420
+            }
+          ],
+          "newFiles": [
+            {
+              "path": "src/index.ts",
+              "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "mode": 420
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "supersede-external-delta",
+      "method": "supersedeExternalDelta",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:supersede-delta",
+          "contextId": "context:task",
+          "expectedWorkingHead": { "kind": "event", "eventId": "event:base" },
+          "intentSummary": "Supersede the stale upstream update",
+          "deltaId": "delta:old"
+        }
+      ]
+    },
+    {
+      "name": "finalize-external-delta",
+      "method": "finalizeExternalDelta",
+      "valid": true,
+      "args": [
+        {
+          "commandId": "command:finalize-delta",
+          "contextId": "context:task",
+          "expectedWorkingHead": { "kind": "event", "eventId": "event:merged" },
+          "intentSummary": "Finalize the fully reviewed upstream update",
+          "deltaId": "delta:reviewed"
+        }
+      ]
+    },
+    {
+      "name": "reject-frontier-edit-envelope",
+      "method": "edit",
+      "valid": false,
+      "args": [
+        {
+          "commandId": "command:old",
+          "contextId": "context:task",
+          "expectedTargetFrontierId": "frontier:old",
+          "changes": [
+            {
+              "kind": "file-delete",
+              "repositoryId": "repository:app",
+              "fileId": "file:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reject-selective-commit",
+      "method": "commit",
+      "valid": false,
+      "args": [
+        {
+          "commandId": "command:old-commit",
+          "contextId": "context:task",
+          "expectedWorkingHead": {
+            "kind": "application",
+            "applicationId": "application:1"
+          },
+          "selection": { "workUnitIds": ["work-unit:1"] }
+        }
+      ]
+    },
+    {
+      "name": "reject-copy-without-source-state",
+      "method": "copy",
+      "valid": false,
+      "args": [
+        {
+          "commandId": "command:bad-copy",
+          "contextId": "context:task",
+          "expectedWorkingHead": { "kind": "event", "eventId": "event:1" },
+          "copies": [
+            {
+              "source": {
+                "repositoryId": "repository:app",
+                "fileId": "file:1"
+              },
+              "destination": {
+                "repositoryId": "repository:app",
+                "path": "src/copy.ts"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reject-old-read-wrapper",
+      "method": "readFile",
+      "valid": false,
+      "args": [
+        {
+          "source": {
+            "kind": "revision",
+            "revision": { "kind": "frontier", "frontierId": "frontier:1" }
+          },
+          "repositoryId": "repository:app",
+          "path": "src/example.ts"
+        }
+      ]
+    },
+    {
+      "name": "reject-raw-vcs-read",
+      "method": "readFile",
+      "valid": false,
+      "args": [
+        {
+          "kind": "raw",
+          "repoPath": "projects/app",
+          "path": "src/example.ts"
+        }
+      ]
+    },
+    {
+      "name": "walk-cause-from-change",
+      "method": "walk",
+      "valid": true,
+      "args": [
+        {
+          "contextId": "context:task",
+          "walk": "cause",
+          "subject": { "kind": "change", "changeId": "change:one" }
+        }
+      ]
+    },
+    {
+      "name": "walk-cohort-by-turn",
+      "method": "walk",
+      "valid": true,
+      "args": [
+        {
+          "contextId": "context:task",
+          "walk": "cohort",
+          "scope": "turn",
+          "subject": { "kind": "work-unit", "workUnitId": "work-unit:one" }
+        }
+      ]
+    },
+    {
+      "name": "walk-rejects-unknown-kind",
+      "method": "walk",
+      "valid": false,
+      "args": [
+        {
+          "contextId": "context:task",
+          "walk": "drift",
+          "subject": { "kind": "work-unit", "workUnitId": "work-unit:one" }
+        }
+      ]
+    },
+    {
+      "name": "query-work-unit-intents",
+      "method": "query",
+      "valid": true,
+      "args": [
+        {
+          "contextId": "context:task",
+          "query": "SELECT work_unit_id, intent_tier FROM prov_work_units"
+        }
+      ]
+    },
+    {
+      "name": "query-rejects-empty-statement",
+      "method": "query",
+      "valid": false,
+      "args": [{ "contextId": "context:task", "query": "" }]
+    },
+    {
+      "name": "search-by-recorded-prose",
+      "method": "search",
+      "valid": true,
+      "args": [{ "contextId": "context:task", "text": "retry backoff" }]
+    }
+  ]
+}

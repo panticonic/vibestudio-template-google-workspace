@@ -1,0 +1,169 @@
+defaultAgentConfig:
+  model: openai-codex:gpt-5.6-sol
+defaultRepo: projects/default
+extensions:
+  - source: extensions/git-bridge
+  - source: extensions/image-service
+  - source: extensions/pdf-ingest
+  - source: extensions/file-tools
+  - source: extensions/shell
+  - source: extensions/templates
+  - source: extensions/test-runner
+  - source: extensions/claude-code
+initPanels:
+  - source: about/new
+providers:
+  cdpClient:
+    source: "@workspace/cdp-client"
+  claudeCode:
+    extension: extensions/claude-code
+  evalEngine:
+    source: "@workspace/eval"
+  evalRuntime:
+    source: "@workspace/runtime"
+  gitInterop:
+    extension: extensions/git-bridge
+services:
+  - action: manage your workspace files, history, and setup
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+        - session
+        - mission
+    description: Manages your workspace's files, version history, and initial setup.
+    durableObject:
+      className: GadWorkspaceDO
+    name: gad.workspace
+    notability: everyday
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.workspace-source.v1
+      - vibestudio.gad.workspace.v1
+    source: workers/workspace-source
+    title: Workspace source
+  - action: send and receive messages in your conversations
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+        - session
+        - mission
+    description: Access your workspace's conversations, including sending messages and reading replies.
+    durableObject:
+      className: PubSubChannel
+      context: creator
+    name: channel
+    notability: everyday
+    presentation:
+      domain: sharing
+      substanceKind: send
+      verb: act
+    protocols:
+      - vibestudio.channel.v1
+    source: workers/pubsub-channel
+    title: Conversations
+  - action: manage panel titles, search, and launcher usage
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+    description: Manage how panels, search results, and the app launcher are organized.
+    durableObject:
+      className: WorkspacePresentationDO
+    name: workspace.presentation
+    notability: everyday
+    presentation:
+      domain: computer
+      verb: manage
+    protocols:
+      - vibestudio.workspace-presentation.v1
+    source: workers/workspace-presentation
+    title: Workspace presentation
+  - action: read or change which AI models your workspace uses
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+        - session
+        - mission
+    description: Read or change the AI model and provider settings for this workspace.
+    durableObject:
+      className: ModelSettingsDO
+    name: models
+    notability: everyday
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.models.v1
+    source: workers/model-settings
+    title: AI model settings
+  - action: manage panel-bound command conversations
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+    description: Owns durable Quickfire conversations attached to panel slots.
+    durableObject:
+      className: QuickfireSessionsDO
+    name: quickfire
+    notability: everyday
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.quickfire.v1
+    source: workers/quickfire-service
+    title: Command conversations
+  - action: manage automated tasks
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+    description: Launch automated tasks immediately, then inspect and control their running definitions.
+    durableObject:
+      className: MissionsDO
+    name: missions
+    notability: headline
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.missions.v1
+    source: workers/missions
+    title: Automated tasks
+singletonObjects:
+  - className: GadWorkspaceDO
+    key: workspace
+    source: workers/workspace-source
+  - className: WorkspacePresentationDO
+    key: workspace-presentation
+    source: workers/workspace-presentation
+  - className: ModelSettingsDO
+    key: workspace-model-settings
+    source: workers/model-settings
+  - className: QuickfireSessionsDO
+    key: workspace-quickfire
+    source: workers/quickfire-service
+  - className: MissionsDO
+    key: workspace-missions
+    source: workers/missions
+systemEpoch: 0
+templateRegistry:
+  ref: refs/heads/main
+  url: git+https://github.com/panticonic/vibestudio-template-registry.git

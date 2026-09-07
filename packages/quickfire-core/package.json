@@ -1,0 +1,48 @@
+{
+  "name": "@workspace/quickfire-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "//": "Platform-neutral half of the quickfire overlay (quickfire-overlay-spec). The root entry is pure model + card projection + Markdown + palette projection + the built-in slate definitions; ./ui is the shared React component tree (skin-driven, no DOM or React Native in it); ./transcript and ./session are split out so the desktop overlay surface bundle never pulls the channel client in behind a type import.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent": "./src/agent.ts",
+    "./ui": "./src/ui/index.ts",
+    "./transcript": "./src/transcript.ts",
+    "./session": "./src/session.ts",
+    "./service": "./src/service.ts"
+  },
+  "dependencies": {
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/agentic-core": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/omnibox-core": "workspace:*",
+    "@workspace/pubsub": "workspace:*",
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-gfm": "^3.1.0",
+    "micromark-extension-gfm": "^3.0.0"
+  },
+  "vibestudio": {
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "workspace.runtime-state.manage",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "//peerDependencies": "./session uses React hooks but this package owns no instance: the consuming app does. The desktop shell provides 19.2.4 (matched to its react-dom) and apps/mobile provides 19.0.0, forced by the react-native renderer inside the installed APK. The range says exactly that -- any React 19 -- and the build holds each consumer's own version to it.",
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4"
+  }
+}

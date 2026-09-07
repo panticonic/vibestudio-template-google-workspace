@@ -1,0 +1,7 @@
+{
+  "name": "@workspace-skills/sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Guide to using the eval sandbox, inline UI, and all runtime APIs in the chat panel"
+}

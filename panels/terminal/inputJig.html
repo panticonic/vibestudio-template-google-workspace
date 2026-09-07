@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Terminal Input Jig</title>
+    <link rel="stylesheet" href="./inputJig.css" />
+    <style>
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: #111113;
+        color: #eeeeee;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .jig-shell {
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 12px;
+        height: 100%;
+        padding: 12px;
+      }
+
+      .terminal-region,
+      .event-log {
+        min-width: 0;
+        min-height: 0;
+        border: 1px solid #3a3f47;
+        background: #18191b;
+      }
+
+      .terminal-region {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 8px;
+        border-bottom: 1px solid #3a3f47;
+        font-size: 12px;
+      }
+
+      button,
+      input {
+        height: 28px;
+        border: 1px solid #4a5160;
+        border-radius: 4px;
+        background: #22252b;
+        color: #eeeeee;
+      }
+
+      button {
+        padding: 0 10px;
+        cursor: pointer;
+      }
+
+      input {
+        width: 160px;
+        padding: 0 8px;
+      }
+
+      .terminal-host {
+        flex: 1;
+        min-height: 0;
+        padding: 8px;
+        background: #111113;
+      }
+
+      .event-log {
+        overflow: auto;
+        padding: 12px;
+      }
+
+      .event-log h1 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+
+      .event-log h2 {
+        margin: 16px 0 6px;
+        font-size: 13px;
+      }
+
+      .event-log p {
+        margin: 0;
+        color: #b9c0cc;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      pre {
+        overflow: auto;
+        min-height: 72px;
+        margin: 0;
+        padding: 8px;
+        border: 1px solid #343944;
+        background: #0d0e10;
+        color: #d6deeb;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./inputJig.js"></script>
+  </body>
+</html>

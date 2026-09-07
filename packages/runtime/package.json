@@ -1,0 +1,54 @@
+{
+  "name": "@workspace/runtime",
+  "version": "0.1.0-git.dfc926d-dirty.2482fc2becd1",
+  "description": "Unified runtime for Vibestudio panels and workers",
+  "type": "module",
+  "exports": {
+    ".": {
+      "vibestudio-panel": "./src/panel/index.ts",
+      "worker": "./src/worker/index.ts",
+      "workerd": "./src/worker/index.ts",
+      "default": "./src/panel/index.ts"
+    },
+    "./worker": {
+      "worker": "./src/worker/index.ts",
+      "workerd": "./src/worker/index.ts",
+      "default": "./src/worker/index.ts"
+    },
+    "./panel": {
+      "vibestudio-panel": "./src/panel/index.ts",
+      "default": "./src/panel/index.ts"
+    },
+    "./hosted": "./src/shared/hostedRuntime.ts",
+    "./panel-runtime": "./src/shared/panelRuntime.ts",
+    "./portable": "./src/shared/portable.ts",
+    "./credentials": "./src/shared/credentials.ts",
+    "./worker/credentials": "./src/worker/credentials.ts",
+    "./worker/durable-base": "./src/worker/durable-base.ts",
+    "./worker/kernel": "./src/worker/kernel.ts",
+    "./worker/panel-durable-base": "./src/worker/panel-durable-base.ts",
+    "./worker/rpc-fs": "./src/shared/rpcFs.ts",
+    "./worker/sql-table-schema": "./src/worker/sql-table-schema.ts",
+    "./worker/test-utils": "./src/worker/durable-test-utils.ts",
+    "./panel/credentials": "./src/panel/credentials.ts",
+    "./workerd-client": "./src/shared/workerd.ts",
+    "./workspace-presentation": "./src/shared/workspacePresentation.ts",
+    "./internal/diagnostics": "./src/internal/diagnostics.ts"
+  },
+  "dependencies": {
+    "@vibestudio/browser-data": "workspace:*",
+    "@vibestudio/credential-client": "workspace:*",
+    "@vibestudio/durable": "workspace:*",
+    "@vibestudio/extension": "workspace:*",
+    "@vibestudio/git": "workspace:*",
+    "@vibestudio/rpc": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shell-core": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@vibestudio/types": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/cdp-client": "workspace:*",
+    "sql.js": "^1.14.1",
+    "zod": "^3.25.76"
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "name": "@workspace-workers/missions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "title": "Automations",
+    "icon": "🎯",
+    "kind": "worker",
+    "entry": "index.ts",
+    "durable": {
+      "classes": [
+        {
+          "className": "MissionsDO",
+          "rpcSchema": "vibestudio.missions.v1"
+        }
+      ]
+    },
+    "authority": {
+      "provides": [
+        {
+          "name": "missions.edit",
+          "title": "Change an automation",
+          "action": "create or change a running automation",
+          "tier": "gated",
+          "sensitivity": "write",
+          "resourceType": "mission",
+          "presentation": {
+            "domain": "automation",
+            "verb": "manage"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once"
+          ]
+        },
+        {
+          "name": "missions.run",
+          "title": "Run an automation",
+          "action": "run an installed automation",
+          "tier": "gated",
+          "sensitivity": "write",
+          "resourceType": "mission",
+          "presentation": {
+            "domain": "automation",
+            "verb": "act"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once"
+          ]
+        },
+        {
+          "name": "missions.retire",
+          "title": "Remove an automation",
+          "action": "permanently remove an automation",
+          "tier": "critical",
+          "sensitivity": "destructive",
+          "resourceType": "mission",
+          "presentation": {
+            "domain": "automation",
+            "verb": "manage"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once"
+          ]
+        }
+      ],
+      "serviceRequests": [
+        {
+          "protocol": "vibestudio.gad.workspace.v1",
+          "availability": "required"
+        }
+      ],
+      "requests": [
+        {
+          "capability": "workspace-service:gad.workspace",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "bounded-dynamic"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vibestudio/automation": "workspace:*",
+    "@vibestudio/rpc": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@vibestudio/durable": "workspace:*",
+    "vitest": "^3.2.7"
+  }
+}

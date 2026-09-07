@@ -1,0 +1,13 @@
+{
+  "name": "@workspace/channel-policies",
+  "version": "0.1.0",
+  "description": "Named channel policy folds (pure) — agentic concerns extracted from the pub/sub transport",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/agentic-protocol": "workspace:*"
+  }
+}

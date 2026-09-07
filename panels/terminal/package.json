@@ -1,0 +1,176 @@
+{
+  "name": "@workspace-panels/terminal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.tsx",
+    "./testkit-suite": "./testkit-suite.ts"
+  },
+  "vibestudio": {
+    "title": "Terminal",
+    "icon": "./assets/icon.svg",
+    "entry": "index.tsx",
+    "exposeModules": [
+      "react",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@radix-ui/themes",
+      "@radix-ui/react-icons",
+      "@workspace/runtime",
+      "@workspace/react",
+      "@workspace/ui"
+    ],
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "clipboard",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "context"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "context.materialize",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "external.open",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "subagents.create",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "userland:extensions/shell/native.shell.execute#*",
+          "resource": {
+            "kind": "exact",
+            "key": "native.shell:extension:@workspace-extensions/shell"
+          },
+          "tier": "gated",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "workspace-service:channel",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:gad.workspace",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:models",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:workspace.state",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.runtime-state.inspect",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.runtime-state.manage",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "host-terminal.open",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "host-terminal:"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@workspace-extensions/shell": "workspace:*",
+    "@workspace/runtime": "workspace:*",
+    "@workspace/react": "workspace:*",
+    "@workspace/testkit": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@radix-ui/themes": "^3.3.0",
+    "@radix-ui/react-icons": "^1.3.2",
+    "@xterm/xterm": "^6.0.0",
+    "@xterm/addon-clipboard": "^0.2.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-image": "^0.9.0",
+    "@xterm/addon-ligatures": "^0.10.0",
+    "@xterm/addon-progress": "^0.2.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/headless": "^5.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@vibestudio/service-schemas": "workspace:*",
+    "vitest": "^3.2.7"
+  }
+}

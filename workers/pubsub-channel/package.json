@@ -1,0 +1,172 @@
+{
+  "name": "@workspace-workers/pubsub-channel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "durable": {
+      "classes": [
+        {
+          "className": "PubSubChannel"
+        }
+      ]
+    },
+    "authority": {
+      "provides": [
+        {
+          "name": "channel.admin",
+          "title": "Administer conversation",
+          "action": "change this conversation's administration settings",
+          "tier": "gated",
+          "sensitivity": "admin",
+          "resourceType": "channel",
+          "presentation": {
+            "domain": "sharing",
+            "verb": "manage"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once",
+            "task",
+            "session",
+            "version"
+          ]
+        },
+        {
+          "name": "channel.archive",
+          "title": "Archive conversation",
+          "action": "archive this conversation",
+          "tier": "critical",
+          "sensitivity": "destructive",
+          "resourceType": "channel",
+          "presentation": {
+            "domain": "sharing",
+            "verb": "manage"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once"
+          ]
+        },
+        {
+          "name": "channel.members.remove",
+          "title": "Remove conversation member",
+          "action": "remove a member from this conversation",
+          "tier": "critical",
+          "sensitivity": "destructive",
+          "resourceType": "channel",
+          "presentation": {
+            "domain": "sharing",
+            "verb": "manage"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once"
+          ]
+        }
+      ],
+      "serviceRequests": [
+        {
+          "protocol": "vibestudio.channel.v1",
+          "availability": "required"
+        },
+        {
+          "protocol": "vibestudio.gad.workspace.v1",
+          "availability": "required"
+        }
+      ],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "context"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "context.clone",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.materialize",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "credential.use",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "subagents.create",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:channel",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:gad.workspace",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:models",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "@vibestudio/rpc": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/runtime": "workspace:*",
+    "@workspace/pubsub": "workspace:*",
+    "@workspace/channel-policies": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@vibestudio/durable": "workspace:*",
+    "@workspace-workers/workspace-source": "workspace:*",
+    "@panticonic/builtin": "workspace:*",
+    "vitest": "^3.2.7"
+  }
+}

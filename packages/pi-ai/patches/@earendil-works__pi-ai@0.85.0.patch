@@ -1,0 +1,566 @@
+diff --git a/dist/api/openai-codex-responses.d.ts b/dist/api/openai-codex-responses.d.ts
+index 704476d..29e42f8 100644
+--- a/dist/api/openai-codex-responses.d.ts
++++ b/dist/api/openai-codex-responses.d.ts
+@@ -1,6 +1,11 @@
+ import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
+ import type { SimpleStreamOptions, StreamFunction, StreamOptions } from "../types.ts";
+ export interface OpenAICodexResponsesOptions extends StreamOptions {
++    /**
++     * Renewable transport-liveness lease. Every raw WebSocket frame or SSE
++     * body chunk renews the lease; this does not limit total request time.
++     */
++    streamIdleTimeoutMs?: number;
+     reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+     reasoningSummary?: "auto" | "concise" | "detailed" | "off" | "on" | null;
+     serviceTier?: ResponseCreateParamsStreaming["service_tier"];
+@@ -28,4 +33,5 @@ export interface OpenAICodexWebSocketDebugStats {
+ export declare function getOpenAICodexWebSocketDebugStats(sessionId: string): OpenAICodexWebSocketDebugStats | undefined;
+ export declare function resetOpenAICodexWebSocketDebugStats(sessionId?: string): void;
+ export declare function closeOpenAICodexWebSocketSessions(sessionId?: string): void;
+-//# sourceMappingURL=openai-codex-responses.d.ts.map
+\ No newline at end of file
++export declare function releaseOpenAICodexWebSocketSession(sessionId?: string): void;
++//# sourceMappingURL=openai-codex-responses.d.ts.map
+diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-responses.js
+index bf979d4..d82e0ec 100644
+--- a/dist/api/openai-codex-responses.js
++++ b/dist/api/openai-codex-responses.js
+@@ -104,11 +104,11 @@ function sleep(ms, signal) {
+         });
+     });
+ }
+-function normalizeTimeoutMs(value) {
++function normalizeTimeoutMs(value, optionName = "timeoutMs") {
+     if (value === undefined)
+         return undefined;
+     if (!Number.isFinite(value) || value < 0) {
+-        throw new Error(`Invalid timeoutMs: ${String(value)}`);
++        throw new Error(`Invalid ${optionName}: ${String(value)}`);
+     }
+     return Math.floor(value);
+ }
+@@ -173,11 +173,13 @@ export const stream = (model, context, options) => {
+             if (nextBody !== undefined) {
+                 body = nextBody;
+             }
+-            const websocketRequestId = codexSessionId || uuidv7();
+-            const sseHeaders = buildSSEHeaders(model.headers, options?.headers, accountId, apiKey, codexSessionId);
+-            const websocketHeaders = buildWebSocketHeaders(model.headers, options?.headers, accountId, apiKey, websocketRequestId);
++            const requestId = uuidv7();
++            const transportSessionId = codexSessionId || requestId;
++            const sseHeaders = buildSSEHeaders(model.headers, options?.headers, accountId, apiKey, transportSessionId, requestId);
++            const websocketHeaders = buildWebSocketHeaders(model.headers, options?.headers, accountId, apiKey, transportSessionId, requestId);
+             const bodyJson = JSON.stringify(body);
+             const httpTimeoutMs = normalizeTimeoutMs(options?.timeoutMs);
++            const streamIdleTimeoutMs = normalizeTimeoutMs(options?.streamIdleTimeoutMs, "streamIdleTimeoutMs");
+             const websocketConnectTimeoutMs = normalizeTimeoutMs(options?.websocketConnectTimeoutMs);
+             const transport = options?.transport || "auto";
+             let startEmitted = false;
+@@ -198,7 +200,7 @@ export const stream = (model, context, options) => {
+                                 startEmitted = true;
+                                 stream.push({ type: "start", partial: output });
+                             }
+-                        }, httpTimeoutMs, websocketConnectTimeoutMs, cacheSessionId, accountId, grammarToolInputProperties, options);
++                        }, streamIdleTimeoutMs, websocketConnectTimeoutMs, cacheSessionId, accountId, grammarToolInputProperties, options);
+                         if (options?.signal?.aborted) {
+                             throw new Error("Request was aborted");
+                         }
+@@ -288,6 +290,19 @@ export const stream = (model, context, options) => {
+                         const delayMs = retryAfterDelayMs === undefined
+                             ? BASE_DELAY_MS * 2 ** attempt
+                             : validateRetryDelayMs(retryAfterDelayMs, options);
++                        const retryDetails = {
++                            provider: "openai-codex",
++                            transport: "sse",
++                            phase: "sse_response_status",
++                            attempt: attempt + 1,
++                            nextAttempt: attempt + 2,
++                            maxRetries,
++                            delayMs,
++                            status: response.status,
++                            retryAfterDelayMs,
++                        };
++                        appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_retry", new Error(`HTTP ${response.status}`), retryDetails));
++                        console.warn("[pi-ai] Retrying Codex SSE request after retryable response", retryDetails);
+                         await sleep(delayMs, options?.signal);
+                         continue;
+                     }
+@@ -311,6 +326,20 @@ export const stream = (model, context, options) => {
+                         !(lastError instanceof RetryDelayExceededError) &&
+                         !lastError.message.includes("usage limit")) {
+                         const delayMs = BASE_DELAY_MS * 2 ** attempt;
++                        const retryDetails = {
++                            provider: "openai-codex",
++                            transport: "sse",
++                            phase: "sse_fetch",
++                            attempt: attempt + 1,
++                            nextAttempt: attempt + 2,
++                            maxRetries,
++                            delayMs,
++                        };
++                        appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_retry", lastError, retryDetails));
++                        console.warn("[pi-ai] Retrying Codex SSE request after provider error", {
++                            ...retryDetails,
++                            error: formatThrownValue(lastError),
++                        });
+                         await sleep(delayMs, options?.signal);
+                         continue;
+                     }
+@@ -327,7 +356,7 @@ export const stream = (model, context, options) => {
+                 startEmitted = true;
+                 stream.push({ type: "start", partial: output });
+             }
+-            await processStream(response, output, stream, model, grammarToolInputProperties, options);
++            await processStream(response, output, stream, model, grammarToolInputProperties, options, streamIdleTimeoutMs);
+             if (options?.signal?.aborted) {
+                 throw new Error("Request was aborted");
+             }
+@@ -472,8 +501,8 @@ function resolveCodexWebSocketUrl(baseUrl) {
+ // ============================================================================
+ // Response Processing
+ // ============================================================================
+-async function processStream(response, output, stream, model, grammarToolInputProperties, options) {
+-    await processResponsesStream(mapCodexEvents(parseSSE(response, options?.signal), output), output, stream, model, {
++async function processStream(response, output, stream, model, grammarToolInputProperties, options, streamIdleTimeoutMs) {
++    await processResponsesStream(mapCodexEvents(parseSSE(response, options?.signal, streamIdleTimeoutMs), output), output, stream, model, {
+         serviceTier: options?.serviceTier,
+         grammarToolInputProperties,
+         resolveServiceTier: resolveCodexServiceTier,
+@@ -560,7 +589,31 @@ function normalizeCodexStatus(status) {
+ // ============================================================================
+ // SSE Parsing
+ // ============================================================================
+-async function* parseSSE(response, signal) {
++async function readSSEChunk(reader, signal, idleTimeoutMs) {
++    if (idleTimeoutMs === undefined || idleTimeoutMs <= 0) {
++        return reader.read();
++    }
++    let timeout;
++    try {
++        return await Promise.race([
++            reader.read(),
++            new Promise((_, reject) => {
++                timeout = setTimeout(() => {
++                    const error = new Error(`SSE stream idle timeout after ${idleTimeoutMs}ms`);
++                    reject(error);
++                    void reader.cancel(error).catch(() => { });
++                }, idleTimeoutMs);
++            }),
++        ]);
++    }
++    finally {
++        if (timeout)
++            clearTimeout(timeout);
++        if (signal?.aborted)
++            void reader.cancel(signal.reason).catch(() => { });
++    }
++}
++async function* parseSSE(response, signal, idleTimeoutMs) {
+     if (!response.body)
+         return;
+     const reader = response.body.getReader();
+@@ -575,7 +628,7 @@ async function* parseSSE(response, signal) {
+             if (signal?.aborted) {
+                 throw new Error("Request was aborted");
+             }
+-            const { done, value } = await reader.read();
++            const { done, value } = await readSSEChunk(reader, signal, idleTimeoutMs);
+             if (signal?.aborted) {
+                 throw new Error("Request was aborted");
+             }
+@@ -682,7 +735,11 @@ export function closeOpenAICodexWebSocketSessions(sessionId) {
+     }
+     websocketSessionCache.clear();
+ }
+-registerSessionResourceCleanup(closeOpenAICodexWebSocketSessions);
++export function releaseOpenAICodexWebSocketSession(sessionId) {
++    closeOpenAICodexWebSocketSessions(sessionId);
++    resetOpenAICodexWebSocketDebugStats(sessionId);
++}
++registerSessionResourceCleanup(releaseOpenAICodexWebSocketSession);
+ function isWebSocketSseFallbackActive(sessionId) {
+     return sessionId ? websocketSseFallbackSessions.has(sessionId) : false;
+ }
+@@ -762,6 +819,86 @@ function closeWebSocketSilently(socket, code = 1000, reason = "done") {
+     }
+     catch { }
+ }
++function canUseWorkersFetchWebSocketUpgrade() {
++    return typeof fetch === "function" && typeof WebSocketPair === "function";
++}
++function websocketFetchUpgradeUrl(url) {
++    const fetchUrl = new URL(url);
++    if (fetchUrl.protocol === "wss:") {
++        fetchUrl.protocol = "https:";
++    }
++    else if (fetchUrl.protocol === "ws:") {
++        fetchUrl.protocol = "http:";
++    }
++    return fetchUrl.toString();
++}
++function isConsumableWebSocket(socket) {
++    return typeof socket?.send === "function" && typeof socket?.addEventListener === "function";
++}
++function prepareVibestudioModelWebSocket(url, headers) {
++    const hook = globalThis.__vibestudioPrepareModelWebSocket;
++    if (typeof hook !== "function") {
++        return null;
++    }
++    const prepared = hook(url, headers);
++    if (!prepared || typeof prepared.url !== "string") {
++        return null;
++    }
++    return prepared;
++}
++function isWorkerdRuntime() {
++    const userAgent = globalThis.navigator?.userAgent ?? "";
++    return typeof WebSocketPair === "function" || /\b(?:Cloudflare-Workers|workerd)\b/i.test(userAgent);
++}
++function shouldReuseSessionWebSockets() {
++    const hook = globalThis.__vibestudioShouldReuseCodexWebSocket;
++    if (typeof hook === "function") {
++        return hook() !== false;
++    }
++    return !isWorkerdRuntime();
++}
++async function connectWebSocketViaFetchUpgrade(url, headers, signal, connectTimeoutMs = DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS) {
++    if (!canUseWorkersFetchWebSocketUpgrade()) {
++        return null;
++    }
++    const wsHeaders = headersToRecord(headers);
++    wsHeaders["Upgrade"] = "websocket";
++    const controller = new AbortController();
++    let timeout;
++    const abort = () => controller.abort(signal?.reason);
++    if (signal?.aborted) {
++        abort();
++    }
++    else {
++        signal?.addEventListener("abort", abort, { once: true });
++    }
++    try {
++        timeout = setTimeout(() => {
++            controller.abort(new Error(`Codex WebSocket upgrade timed out after ${connectTimeoutMs}ms`));
++        }, connectTimeoutMs);
++        const response = await fetch(websocketFetchUpgradeUrl(url), {
++            method: "GET",
++            headers: wsHeaders,
++            signal: controller.signal,
++        });
++        const socket = response.webSocket;
++        if (!socket) {
++            throw new Error(`Codex WebSocket upgrade failed with HTTP ${response.status}`);
++        }
++        socket.accept?.();
++        if (!isConsumableWebSocket(socket)) {
++            closeWebSocketSilently(socket, 1000, "unsupported_runtime_socket_shape");
++            throw new Error("Codex WebSocket upgrade returned a pass-through WebSocket that cannot be consumed by this runtime");
++        }
++        return socket;
++    }
++    finally {
++        if (timeout) {
++            clearTimeout(timeout);
++        }
++        signal?.removeEventListener("abort", abort);
++    }
++}
+ function scheduleSessionWebSocketExpiry(sessionId, accountId, entry) {
+     if (entry.idleTimer) {
+         clearTimeout(entry.idleTimer);
+@@ -778,18 +915,29 @@ function scheduleSessionWebSocketExpiry(sessionId, accountId, entry) {
+     }, SESSION_WEBSOCKET_CACHE_TTL_MS);
+ }
+ async function connectWebSocket(url, headers, signal, connectTimeoutMs = DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS, env) {
++    // Workers must use fetch-upgrade so service-bound/attributed fetch routes
++    // (including Vibestudio's credential-injecting egress binding) remain in
++    // the transport path. The ambient WebSocket constructor bypasses those
++    // bindings even when it exists.
++    const fetchUpgrade = await connectWebSocketViaFetchUpgrade(url, headers, signal, connectTimeoutMs);
++    if (fetchUpgrade) {
++        return fetchUpgrade;
++    }
+     const WebSocketCtor = await getWebSocketConstructor(env);
+     if (!WebSocketCtor) {
+         throw new Error("WebSocket transport is not available in this runtime");
+     }
+     const wsHeaders = headersToRecord(headers);
+     delete wsHeaders["OpenAI-Beta"];
++    const vibestudioPrepared = prepareVibestudioModelWebSocket(url, headers);
+     return new Promise((resolve, reject) => {
+         let settled = false;
+         let timeout;
+         let socket;
+         try {
+-            socket = new WebSocketCtor(url, { headers: wsHeaders });
++            socket = vibestudioPrepared
++                ? new WebSocketCtor(vibestudioPrepared.url, vibestudioPrepared.protocols)
++                : new WebSocketCtor(url, { headers: wsHeaders });
+         }
+         catch (error) {
+             reject(error instanceof Error ? error : new Error(String(error)));
+@@ -846,7 +994,7 @@ async function connectWebSocket(url, headers, signal, connectTimeoutMs = DEFAULT
+     });
+ }
+ async function acquireWebSocket(url, headers, sessionId, accountId, signal, connectTimeoutMs, env) {
+-    if (!sessionId) {
++    if (!sessionId || !shouldReuseSessionWebSockets()) {
+         const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
+         return {
+             socket,
+@@ -1182,6 +1330,10 @@ async function processWebSocketStream(url, body, headers, output, stream, model,
+         }
+     }
+     try {
++        if (!isConsumableWebSocket(socket)) {
++            closeWebSocketSilently(socket, 1000, "unsupported_runtime_socket_shape");
++            throw new Error("Codex WebSocket upgrade returned a pass-through WebSocket that cannot be consumed by this runtime");
++        }
+         socket.send(JSON.stringify({ type: "response.create", ...requestBody }));
+         await processResponsesStream(startWebSocketOutputOnFirstEvent(mapCodexEvents(parseWebSocket(socket, options?.signal, idleTimeoutMs), output), onStart), output, stream, model, {
+             serviceTier: options?.serviceTier,
+@@ -1275,18 +1427,16 @@ function buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token)
+     headers.set("User-Agent", getPiUserAgent());
+     return headers;
+ }
+-function buildSSEHeaders(initHeaders, additionalHeaders, accountId, token, sessionId) {
++function buildSSEHeaders(initHeaders, additionalHeaders, accountId, token, sessionId, requestId) {
+     const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token);
+     headers.set("OpenAI-Beta", "responses=experimental");
+     headers.set("accept", "text/event-stream");
+     headers.set("content-type", "application/json");
+-    if (sessionId) {
+-        headers.set("session-id", sessionId);
+-        headers.set("x-client-request-id", sessionId);
+-    }
++    headers.set("session-id", sessionId);
++    headers.set("x-client-request-id", requestId);
+     return headers;
+ }
+-function buildWebSocketHeaders(initHeaders, additionalHeaders, accountId, token, requestId) {
++function buildWebSocketHeaders(initHeaders, additionalHeaders, accountId, token, sessionId, requestId) {
+     const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token);
+     headers.delete("accept");
+     headers.delete("content-type");
+@@ -1294,7 +1444,7 @@ function buildWebSocketHeaders(initHeaders, additionalHeaders, accountId, token,
+     headers.delete("openai-beta");
+     headers.set("OpenAI-Beta", OPENAI_BETA_RESPONSES_WEBSOCKETS);
+     headers.set("x-client-request-id", requestId);
+-    headers.set("session-id", requestId);
++    headers.set("session-id", sessionId);
+     return headers;
+ }
+-//# sourceMappingURL=openai-codex-responses.js.map
+\ No newline at end of file
++//# sourceMappingURL=openai-codex-responses.js.map
+diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
+index 2605022..019e4da 100644
+--- a/dist/api/openai-responses.js
++++ b/dist/api/openai-responses.js
+@@ -62,7 +62,18 @@ function getCompat(model) {
+     };
+ }
+ function getPromptCacheRetention(compat, cacheRetention) {
+-    return cacheRetention === "long" && compat.supportsLongCacheRetention ? "24h" : undefined;
++    return cacheRetention === "long" && compat.supportsLongCacheRetention && !compat.supportsExplicitPromptCacheMode
++        ? "24h"
++        : undefined;
++}
++function getPromptCacheOptions(compat, cacheRetention) {
++    if (!compat.supportsExplicitPromptCacheMode)
++        return undefined;
++    if (cacheRetention === "none")
++        return { mode: "explicit" };
++    if (cacheRetention === "long" && compat.supportsLongCacheRetention)
++        return { ttl: "30m" };
++    return undefined;
+ }
+ function formatOpenAIResponsesError(error) {
+     return formatProviderError(normalizeProviderError(error), "OpenAI API error");
+@@ -212,14 +223,13 @@ function buildParams(model, context, options, compat = getCompat(model), grammar
+         },
+     });
+     const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+-    const disableImplicitPromptCache = cacheRetention === "none" && compat.supportsExplicitPromptCacheMode;
+     const params = {
+         model: model.id,
+         input: messages,
+         stream: true,
+         prompt_cache_key: cacheRetention === "none" ? undefined : clampOpenAIPromptCacheKey(options?.sessionId),
+         prompt_cache_retention: getPromptCacheRetention(compat, cacheRetention),
+-        prompt_cache_options: disableImplicitPromptCache ? { mode: "explicit" } : undefined,
++        prompt_cache_options: getPromptCacheOptions(compat, cacheRetention),
+         store: false,
+     };
+     if (options?.maxTokens && compat.supportsMaxOutputTokens) {
+@@ -285,4 +295,4 @@ function applyServiceTierPricing(usage, serviceTier, model) {
+     usage.cost.cacheWrite *= multiplier;
+     usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
+ }
+-//# sourceMappingURL=openai-responses.js.map
+\ No newline at end of file
++//# sourceMappingURL=openai-responses.js.map
+diff --git a/dist/providers/openai-codex.models.d.ts b/dist/providers/openai-codex.models.d.ts
+index 5388ae5..6fdebd5 100644
+--- a/dist/providers/openai-codex.models.d.ts
++++ b/dist/providers/openai-codex.models.d.ts
+@@ -1,4 +1,10 @@
+ import values from "./data/openai-codex.json";
+ import { type ModelCatalog } from "../model-catalog.ts";
+-export declare const OPENAI_CODEX_MODELS: ModelCatalog<typeof values, "openai-codex">;
+-//# sourceMappingURL=openai-codex.models.d.ts.map
+\ No newline at end of file
++import type { Model } from "../types.ts";
++export declare const OPENAI_CODEX_MODELS: ModelCatalog<typeof values, "openai-codex"> & {
++    "gpt-6-astra": Model<"openai-codex-responses"> & {
++        id: "gpt-6-astra";
++        provider: "openai-codex";
++    };
++};
++//# sourceMappingURL=openai-codex.models.d.ts.map
+diff --git a/dist/providers/openai-codex.models.js b/dist/providers/openai-codex.models.js
+index c53dcaa..a802ba6 100644
+--- a/dist/providers/openai-codex.models.js
++++ b/dist/providers/openai-codex.models.js
+@@ -2,5 +2,40 @@
+ // Do not edit manually - run 'npm run generate-models' to update
+ import values from "./data/openai-codex.json" with { type: "json" };
+ import { flattenModelCatalog } from "../model-catalog.js";
+-export const OPENAI_CODEX_MODELS = flattenModelCatalog("openai-codex", values);
+-//# sourceMappingURL=openai-codex.models.js.map
+\ No newline at end of file
++const GPT_6_ASTRA = {
++    id: "gpt-6-astra",
++    name: "GPT-6 Astra",
++    api: "openai-codex-responses",
++    provider: "openai-codex",
++    baseUrl: "https://chatgpt.com/backend-api",
++    reasoning: true,
++    input: ["text", "image"],
++    cost: {
++        input: 10,
++        output: 50,
++        cacheRead: 1,
++        cacheWrite: 12.5,
++        tiers: [{ inputTokensAbove: 272000, input: 20, output: 75, cacheRead: 2, cacheWrite: 25 }],
++    },
++    contextWindow: 272000,
++    maxTokens: 128000,
++    thinkingLevelMap: {
++        off: null,
++        minimal: null,
++        low: "low",
++        medium: "medium",
++        high: "high",
++        xhigh: "xhigh",
++        max: "max",
++    },
++    compat: {
++        supportsOpenAIGrammarTools: true,
++        supportsAdditionalTools: true,
++        supportsToolSearch: true,
++    },
++};
++export const OPENAI_CODEX_MODELS = {
++    ...flattenModelCatalog("openai-codex", values),
++    [GPT_6_ASTRA.id]: GPT_6_ASTRA,
++};
++//# sourceMappingURL=openai-codex.models.js.map
+diff --git a/dist/providers/openai.models.d.ts b/dist/providers/openai.models.d.ts
+index 18b4d26..e89404c 100644
+--- a/dist/providers/openai.models.d.ts
++++ b/dist/providers/openai.models.d.ts
+@@ -1,4 +1,10 @@
+ import values from "./data/openai.json";
+ import { type ModelCatalog } from "../model-catalog.ts";
+-export declare const OPENAI_MODELS: ModelCatalog<typeof values, "openai">;
+-//# sourceMappingURL=openai.models.d.ts.map
+\ No newline at end of file
++import type { Model } from "../types.ts";
++export declare const OPENAI_MODELS: ModelCatalog<typeof values, "openai"> & {
++    "gpt-6-astra": Model<"openai-responses"> & {
++        id: "gpt-6-astra";
++        provider: "openai";
++    };
++};
++//# sourceMappingURL=openai.models.d.ts.map
+diff --git a/dist/providers/openai.models.js b/dist/providers/openai.models.js
+index b64f4cd..44f825c 100644
+--- a/dist/providers/openai.models.js
++++ b/dist/providers/openai.models.js
+@@ -2,5 +2,42 @@
+ // Do not edit manually - run 'npm run generate-models' to update
+ import values from "./data/openai.json" with { type: "json" };
+ import { flattenModelCatalog } from "../model-catalog.js";
+-export const OPENAI_MODELS = flattenModelCatalog("openai", values);
+-//# sourceMappingURL=openai.models.js.map
+\ No newline at end of file
++const GPT_6_ASTRA = {
++    id: "gpt-6-astra",
++    name: "GPT-6 Astra",
++    api: "openai-responses",
++    provider: "openai",
++    baseUrl: "https://api.openai.com/v1",
++    reasoning: true,
++    input: ["text", "image"],
++    cost: {
++        input: 10,
++        output: 50,
++        cacheRead: 1,
++        cacheWrite: 12.5,
++        tiers: [{ inputTokensAbove: 272000, input: 20, output: 75, cacheRead: 2, cacheWrite: 25 }],
++    },
++    contextWindow: 272000,
++    maxTokens: 128000,
++    thinkingLevelMap: {
++        off: null,
++        minimal: null,
++        low: "low",
++        medium: "medium",
++        high: "high",
++        xhigh: "xhigh",
++        max: "max",
++    },
++    compat: {
++        supportsStrictMode: true,
++        supportsOpenAIGrammarTools: true,
++        supportsAdditionalTools: true,
++        supportsToolSearch: true,
++        supportsExplicitPromptCacheMode: true,
++    },
++};
++export const OPENAI_MODELS = {
++    ...flattenModelCatalog("openai", values),
++    [GPT_6_ASTRA.id]: GPT_6_ASTRA,
++};
++//# sourceMappingURL=openai.models.js.map
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+index 85f9521..14c2a8e 100644
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -536,7 +536,7 @@ export interface OpenAIResponsesCompat {
+     supportsDeveloperRole?: boolean;
+     /** Session-affinity header format: `openai` sends `session_id` and `x-client-request-id`; `openai-nosession` sends `x-client-request-id`; `openrouter` sends `x-session-id`. Does not affect the `prompt_cache_key` body param, which is governed by cache retention. Default: auto-detected. */
+     sessionAffinityFormat?: SessionAffinityFormat;
+-    /** Whether the provider supports `prompt_cache_retention: "24h"`. Default: true. */
++    /** Whether the provider supports long prompt cache retention. This uses `prompt_cache_options.ttl: "30m"` on GPT-5.6+ and `prompt_cache_retention: "24h"` on earlier models. Default: true. */
+     supportsLongCacheRetention?: boolean;
+     /** Whether the provider supports strict JSON-schema function tools. Defaults are API-specific; generated OpenAI models enable it explicitly. */
+     supportsStrictMode?: boolean;
+@@ -546,7 +546,7 @@ export interface OpenAIResponsesCompat {
+     supportsAdditionalTools?: boolean;
+     /** Whether the model supports client-executed tool search for deferred tools. Default: false. */
+     supportsToolSearch?: boolean;
+-    /** Whether the model accepts `prompt_cache_options` (OpenAI GPT-5.6+ explicit prompt caching). Older OpenAI models reject the parameter. Default: false. */
++    /** Whether the model accepts `prompt_cache_options` (OpenAI GPT-5.6+ prompt caching). Older OpenAI models reject the parameter. Default: false. */
+     supportsExplicitPromptCacheMode?: boolean;
+     /** Whether the provider accepts the `max_output_tokens` parameter. Some Codex-protocol gateways reject it. Default: true. */
+     supportsMaxOutputTokens?: boolean;
+@@ -740,4 +740,4 @@ export interface ImagesModel<TApi extends ImagesApi> extends Omit<Model<Api>, "a
+     provider: ImagesProviderId;
+     output: ("text" | "image")[];
+ }
+-//# sourceMappingURL=types.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=types.d.ts.map

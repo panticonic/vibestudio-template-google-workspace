@@ -1,0 +1,93 @@
+{
+  "name": "@workspace-extensions/claude-code",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "Claude Code",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "sourcemap": true,
+    "extension": {
+      "activationEvents": [
+        "onInvoke"
+      ],
+      "providerContracts": {
+        "claudeCode": {
+          "methods": [
+            "prepare",
+            "launchSubagent",
+            "inspectLaunch",
+            "release",
+            "resolvePrimaryChannel"
+          ]
+        }
+      },
+      "methodAuthority": {}
+    },
+    "authority": {
+      "provides": [],
+      "serviceRequests": [
+        {
+          "protocol": "vibestudio.channel.v1",
+          "availability": "required"
+        }
+      ],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "context"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "context.materialize",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "subagents.create",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:channel",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:models",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/agentic-core": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@vibestudio/extension": "workspace:*"
+  }
+}

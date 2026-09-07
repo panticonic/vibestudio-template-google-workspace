@@ -1,0 +1,14 @@
+{
+  "name": "@workspace/vcs-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Provenance-native semantic VCS kernel (pure, deterministic, workerd-safe)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "@vibestudio/shared": "workspace:*"
+  }
+}

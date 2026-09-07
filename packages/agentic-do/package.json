@@ -1,0 +1,33 @@
+{
+  "name": "@workspace/agentic-do",
+  "version": "0.1.0",
+  "description": "Composable agent modules for Durable Objects",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent-worker-base": "./src/agent-worker-base.ts"
+  },
+  "dependencies": {
+    "@vibestudio/automation": "workspace:*",
+    "@cfworker/json-schema": "^4.1.1",
+    "@sinclair/typebox": "^0.27.12",
+    "@vibestudio/content-addressing": "workspace:*",
+    "@vibestudio/rpc": "workspace:*",
+    "@vibestudio/trajectory-identity": "workspace:*",
+    "@workspace/agentic-core": "workspace:*",
+    "@workspace/runtime": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*",
+    "@workspace/harness": "workspace:*",
+    "@workspace/model-catalog": "workspace:*",
+    "@workspace/pi-core": "workspace:*",
+    "@workspace/pi-ai": "workspace:*",
+    "@workspace/pubsub": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@workspace/agent-loop": "workspace:*"
+  },
+  "devDependencies": {
+    "@panticonic/builtin": "workspace:*"
+  }
+}

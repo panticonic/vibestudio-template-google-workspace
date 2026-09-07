@@ -1,0 +1,202 @@
+{
+  "name": "@workspace-extensions/shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "Shell",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "sourcemap": true,
+    "extension": {
+      "activationEvents": [
+        "*"
+      ],
+      "streamingMethods": [
+        "attach",
+        "watchSessionInfo",
+        "watchAllSessionInfo"
+      ],
+      "methodAuthority": {
+        "createContext": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "exec": {
+          "effect": {
+            "kind": "userland-capability",
+            "capability": "native.shell.execute",
+            "resource": {
+              "kind": "receiver"
+            }
+          }
+        },
+        "open": {
+          "effect": {
+            "kind": "userland-capability",
+            "capability": "native.shell.execute",
+            "resource": {
+              "kind": "receiver"
+            }
+          }
+        },
+        "dispose": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "restart": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "write": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "acknowledgeDataEvent": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "resize": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "kill": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "list": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "get": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "getSessionInfo": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "watchSessionInfo": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "watchAllSessionInfo": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "attach": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "awaitExit": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "getScrollback": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "setScrollbackLimit": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "clearScrollback": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "stashScratch": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "setMeta": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "getMeta": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "deleteMeta": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "setLabel": {
+          "effect": {
+            "kind": "open"
+          }
+        }
+      }
+    },
+    "authority": {
+      "provides": [
+        {
+          "name": "native.shell.execute",
+          "title": "Run a command",
+          "action": "run a command or open a terminal",
+          "tier": "gated",
+          "sensitivity": "write",
+          "resourceType": "native.shell",
+          "presentation": {
+            "domain": "computer",
+            "verb": "act"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once",
+            "task",
+            "session",
+            "version"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "context"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "context.materialize",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@vibestudio/extension": "workspace:*"
+  }
+}

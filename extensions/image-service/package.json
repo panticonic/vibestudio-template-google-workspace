@@ -1,0 +1,51 @@
+{
+  "name": "@workspace-extensions/image-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "Image Service",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "sourcemap": true,
+    "extension": {
+      "activationEvents": [
+        "onInvoke"
+      ],
+      "methodAuthority": {
+        "resize": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "convert": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "detectMimeType": {
+          "effect": {
+            "kind": "open"
+          }
+        }
+      }
+    },
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "critical",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@silvia-odwyer/photon-node": "^0.3.4"
+  }
+}

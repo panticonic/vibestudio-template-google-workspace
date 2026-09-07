@@ -1,0 +1,17 @@
+{
+  "name": "@workspace-skills/web-research",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@workspace/runtime": "workspace:*",
+    "@radix-ui/react-icons": "^1.3.2"
+  },
+  "//peerDependencies": "This skill's components are rendered inside a panel's realm, which already holds React and the Radix theme. Declared as peers, they resolve to those live instances instead of being bundled again -- a second React means the host's hooks and the guest's are different hooks, and a second Theme means the guest renders outside the host's context.",
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "@radix-ui/themes": "^3.3.0"
+  }
+}

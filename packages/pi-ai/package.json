@@ -1,0 +1,40 @@
+{
+  "name": "@workspace/pi-ai",
+  "version": "0.1.0",
+  "description": "Workspace-owned patched integration surface for pi-ai",
+  "type": "module",
+  "private": true,
+  "vibestudio": {
+    "dependencyResolution": {
+      "overrides": {
+        "@anthropic-ai/sdk": "0.97.1",
+        "@aws-sdk/client-bedrock-runtime": "3.1039.0",
+        "@mistralai/mistralai": "2.2.1",
+        "protobufjs": "^7.5.5",
+        "ws@6": "6.2.4",
+        "ws@7": "7.5.11",
+        "ws@8": "8.21.1"
+      },
+      "patches": {
+        "@earendil-works/pi-ai@0.85.0": {
+          "path": "patches/@earendil-works__pi-ai@0.85.0.patch",
+          "roots": [
+            "@earendil-works/pi-ai"
+          ]
+        }
+      }
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./compat": "./src/compat.ts",
+    "./providers/all": "./src/providers-all.ts",
+    "./api/mistral-conversations": "./src/api/mistral-conversations.ts",
+    "./api/openai-codex-responses": "./src/api/openai-codex-responses.ts",
+    "./api/simple-options": "./src/api/simple-options.ts",
+    "./api/transform-messages": "./src/api/transform-messages.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.85.0"
+  }
+}

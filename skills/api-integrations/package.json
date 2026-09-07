@@ -1,0 +1,7 @@
+{
+  "name": "@workspace-skills/api-integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Guide for connecting to third-party APIs (Gmail, Notion, Slack, GitHub, etc.) via OAuth + npm SDKs"
+}

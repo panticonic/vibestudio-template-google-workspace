@@ -1,0 +1,79 @@
+/** Vibestudio product skin. Load after foundation.css. */
+
+.radix-themes,
+:root {
+  --brand-ink: var(--gray-12);
+  --brand-ink-contrast: var(--gray-1);
+  --brand-violet: var(--violet-9);
+  --brand-magenta: var(--pink-9);
+  --brand-spark: var(--pink-9);
+  --brand-spark-soft: var(--pink-a4);
+  --brand-glow: var(--violet-a5);
+  --brand-gradient: linear-gradient(
+    135deg,
+    var(--brand-violet) 0%,
+    var(--purple-9) 52%,
+    var(--brand-magenta) 100%
+  );
+}
+
+.radix-themes:where(.dark, .dark-theme),
+:root {
+  --brand-tile-border: var(--violet-a6);
+  --brand-tile-shadow: 0 8px 24px var(--violet-a4), 0 2px 8px var(--black-a4);
+}
+
+.radix-themes:where(.light, .light-theme) {
+  --brand-tile-border: var(--violet-a6);
+  --brand-tile-shadow: 0 8px 24px var(--violet-a4), 0 2px 8px var(--pink-a3);
+}
+
+.vibestudio-logo {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.vibestudio-logo-tile {
+  border: 1px solid var(--brand-tile-border);
+  border-radius: 22%;
+  background: var(--surface-raised);
+  box-shadow: var(--brand-tile-shadow);
+}
+
+.vibestudio-logo-symbol,
+.vibestudio-logo-logo {
+  background: transparent;
+}
+
+.vibestudio-logo-img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.vibestudio-logo-tile .vibestudio-logo-img {
+  object-fit: cover;
+}
+
+.radix-themes:where(.light, .light-theme) .vibestudio-logo-img-dark,
+.radix-themes:where(.dark, .dark-theme) .vibestudio-logo-img-light {
+  display: none;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.dark):not(.dark-theme) .vibestudio-logo-img-dark {
+    display: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not(.light-theme) .vibestudio-logo-img-light {
+    display: none;
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@workspace/cdp-client",
+  "version": "0.1.0-git.67fa4b3-dirty.41ae7e46b385",
+  "type": "module",
+  "description": "Workerd-native Playwright-style CDP client for Vibestudio panel targets",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@vibestudio/rpc": "workspace:*"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "vibestudio-panel": "./src/browser.ts",
+      "worker": "./src/worker.ts",
+      "workerd": "./src/worker.ts",
+      "default": "./src/index.ts"
+    }
+  }
+}

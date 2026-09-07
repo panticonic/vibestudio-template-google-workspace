@@ -1,0 +1,193 @@
+{
+  "name": "@workspace-extensions/git-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "Git Bridge",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "sourcemap": true,
+    "extension": {
+      "activationEvents": [
+        "*"
+      ],
+      "providerContracts": {
+        "gitInterop": {
+          "methods": [
+            "setSharedRemote",
+            "removeSharedRemote",
+            "setUpstream",
+            "removeUpstream",
+            "detachUpstream",
+            "setAutoPush",
+            "upstreamStatus",
+            "pushUpstream",
+            "pullUpstream",
+            "publishRepo",
+            "commitMapping",
+            "importProject",
+            "cloneRepo",
+            "remoteDefaultBranch",
+            "reconcileUpstreams"
+          ]
+        }
+      },
+      "methodAuthority": {
+        "retryUpstreamPush": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "pauseAutoPush": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "openGitTab": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "suggestTemplateContribution": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "suggestRegistryEntry": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "publishTemplate": {
+          "effect": {
+            "kind": "open"
+          }
+        }
+      }
+    },
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "context"
+          },
+          "tier": "critical",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "context.clone",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "context.relationships.record",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "credential.use",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "network.response.read",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "subagents.create",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:channel",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:gad.workspace",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace-service:models",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.config.apply",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.storage.delete",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "workspace.storage.materialize",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "@vibestudio/credential-client": "workspace:*",
+    "@vibestudio/git": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "@vibestudio/workspace": "workspace:*",
+    "@vibestudio/workspace-contracts": "workspace:*",
+    "@workspace/integrations": "workspace:*"
+  }
+}

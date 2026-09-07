@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 2,
+  "generatedBy": "scripts/generate-vcs-skill-release.mjs",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "cecd02e72e45045ad986accb64d19c38c23dc0877936a0b829c86152fe600e7a"
+    },
+    {
+      "path": "agents/openai.yaml",
+      "sha256": "5a939a11ed40ec60dc571638c15af3bb2018a06780c8ce8afc5212ee800b881f"
+    },
+    {
+      "path": "evaluations/schema-fixtures.json",
+      "sha256": "527be6176dc6fd26bed5f58f14cc6460b6c61cf6d40fe93ace4d3bc4636b2ae4"
+    },
+    {
+      "path": "package.json",
+      "sha256": "bf8b90f00a21da2310903dc38dcd832721c470794044bd97e85a0558b835aa03"
+    },
+    {
+      "path": "references/authoring-basics.md",
+      "sha256": "517c6b9f7f1d777fc90b73aa0c0d6f5813f6f0542605b1a2eda4e25a5000467d"
+    },
+    {
+      "path": "references/checks-and-publication.md",
+      "sha256": "f67cd60d377a7e4e74985ddcbd6e42fe56300922a1e967b0b2908a57bbd4ed0e"
+    },
+    {
+      "path": "references/compare-and-merge.md",
+      "sha256": "a9474d067c69f9edab1b9909c605503877f4622164f4616aea126f5192474799"
+    },
+    {
+      "path": "references/contexts-and-state.md",
+      "sha256": "3dd4b25e58eaf6102fcf4a4dec6b47a863db5060e7cd6a5079894923884a491f"
+    },
+    {
+      "path": "references/external-snapshot-import.md",
+      "sha256": "4792e7623d38b951e4dea177f0a3ab76bba16dde890c3f9d5c503ac25d8ed47b"
+    },
+    {
+      "path": "references/file-move-copy.md",
+      "sha256": "e9c907179cfff579c11ea68b4c0eb12d4ef29617309ace5107473507c8e6ec57"
+    },
+    {
+      "path": "references/provenance-and-blame.md",
+      "sha256": "085061c4011a6c6ae517cf61812209bbf79b2560cf5b5967ae7eead7eddc7429"
+    },
+    {
+      "path": "references/public-contract.json",
+      "sha256": "6150524500524d339ac1508035c9ab019272ec172119423d7a7b8cc93c667a41"
+    },
+    {
+      "path": "references/public-contract.md",
+      "sha256": "5b5957a5eb7529f3845fbe40e634fd94af7e0c161790ed5b34edb9c2a1a41b68"
+    },
+    {
+      "path": "references/querying-provenance.md",
+      "sha256": "50e51faa404d8f079215161a46579753889777e4cac162f33e3a2863de35a498"
+    },
+    {
+      "path": "references/revert-counteractions.md",
+      "sha256": "cb0cce8fb272f2c06cbe32a612b425c4294c32186467a1763820abed663d70ca"
+    },
+    {
+      "path": "references/scenarios.md",
+      "sha256": "36883cbff3d020e38907ca98c34d9cdabeb17805108acc26b269afd0981c4012"
+    },
+    {
+      "path": "references/semantic-commit.md",
+      "sha256": "0f2ea1526c131872381509e3ffa53f45dcacb0f8b6aca61ef9d970860a259a88"
+    },
+    {
+      "path": "references/typed-recovery.md",
+      "sha256": "1b8a8b5b185b47039733272129292f2d6442205bb02d4b07e328790795eb77cb"
+    }
+  ],
+  "packageDigest": "c0283c9e81a820e7b302bb79ab343008afd44f7aee8d01f06ce772075debcb4f"
+}

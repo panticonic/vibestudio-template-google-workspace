@@ -1,0 +1,352 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "rootDir": "..",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "bundler",
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@vibestudio/automation/*": ["../packages/automation/src/*"],
+      "@vibestudio/browser-contracts": [
+        "../packages/browser-contracts/src/index.ts"
+      ],
+      "@vibestudio/browser-contracts/*": [
+        "../packages/browser-contracts/src/*"
+      ],
+      "@vibestudio/browser-data": ["../packages/browser-data/src/index.ts"],
+      "@vibestudio/browser-data/client": [
+        "../packages/browser-data/src/client.ts"
+      ],
+      "@vibestudio/browser-data/form-fill-types": [
+        "../packages/browser-data/src/formFillTypes.ts"
+      ],
+      "@vibestudio/browser-data/source-reader-internals": [
+        "../packages/browser-data/src/sourceReaderInternals.ts"
+      ],
+      "@vibestudio/browser-import-archive": [
+        "../packages/browser-import-archive/src/index.ts"
+      ],
+      "@vibestudio/content-addressing": [
+        "../packages/content-addressing/src/index.ts"
+      ],
+      "@vibestudio/credential-client": [
+        "../packages/credential-client/src/index.ts"
+      ],
+      "@vibestudio/credential-client/*": [
+        "../packages/credential-client/src/*"
+      ],
+      "@vibestudio/dev-log": ["../packages/dev-log/src/index.ts"],
+      "@vibestudio/durable": ["../packages/durable/src/index.ts"],
+      "@vibestudio/durable/schema": ["../packages/durable/src/schema.ts"],
+      "@vibestudio/durable/test-utils": [
+        "../packages/durable/src/test-utils.ts"
+      ],
+      "@vibestudio/env-paths": ["../packages/env-paths/src/index.ts"],
+      "@vibestudio/extension": ["../packages/extension/src/index.ts"],
+      "@vibestudio/extension-host": ["../packages/extension-host/src/index.ts"],
+      "@vibestudio/extension-host/child-runtime": [
+        "../packages/extension-host/src/childRuntime.ts"
+      ],
+      "@vibestudio/git": ["../packages/git/src/index.ts"],
+      "@vibestudio/git/formatting": ["../packages/git/src/formatting.ts"],
+      "@vibestudio/module-imports": ["../packages/module-imports/src/index.ts"],
+      "@vibestudio/identity/*": ["../packages/identity/src/*"],
+      "@vibestudio/trajectory-identity": [
+        "../packages/trajectory-identity/src/index.ts"
+      ],
+      "@workspace/*": ["./packages/*/src/index.ts"],
+      "@workspace/*/entry": ["./packages/*/src/entry.ts"],
+      "@workspace/*/types": ["./packages/*/src/types.ts"],
+      "@vibestudio/process-adapter": [
+        "../packages/process-adapter/src/index.ts"
+      ],
+      "@vibestudio/rpc": ["../packages/rpc/src/index.ts"],
+      "@vibestudio/rpc/*": ["../packages/rpc/src/*"],
+      "@vibestudio/service-schemas/bindings/*": [
+        "../packages/service-schemas/src/bindings/*"
+      ],
+      "@vibestudio/service-schemas/clients/*": [
+        "../packages/service-schemas/src/clients/*"
+      ],
+      "@vibestudio/service-schemas/runtime/*": [
+        "../packages/service-schemas/src/runtime/*"
+      ],
+      "@vibestudio/service-schemas/*": ["../packages/service-schemas/src/*"],
+      "@vibestudio/shell-core/*": ["../packages/shell-core/src/*"],
+      "@vibestudio/shared/*": ["../packages/shared/src/*"],
+      "@vibestudio/sqlite": ["../packages/sqlite/src/index.ts"],
+      "@vibestudio/typecheck": ["../packages/typecheck/src/index.ts"],
+      "@vibestudio/typecheck/workspace": [
+        "../packages/typecheck/src/lib/workspace-packages.ts"
+      ],
+      "@vibestudio/unit-host": ["../packages/unit-host/src/index.ts"],
+      "@vibestudio/types": ["../packages/types/src/index.ts"],
+      "@vibestudio/mobile-iroh": ["../packages/mobile-iroh/src/index.ts"],
+      "@vibestudio/workspace/*": ["../packages/workspace/src/*"],
+      "@vibestudio/workspace-contracts/*": [
+        "../packages/workspace-contracts/src/*"
+      ],
+      "@workspace-about/about": ["./about/about/index.tsx"],
+      "@workspace-about/browser-import-inspector": [
+        "./about/browser-import-inspector/index.tsx"
+      ],
+      "@workspace-about/adblock": ["./about/adblock/index.tsx"],
+      "@workspace-about/server-logs": ["./about/server-logs/index.tsx"],
+      "@workspace-about/help": ["./about/help/index.tsx"],
+      "@workspace-about/keyboard-shortcuts": [
+        "./about/keyboard-shortcuts/index.tsx"
+      ],
+      "@workspace-about/credentials": ["./about/credentials/index.tsx"],
+      "@workspace-about/model-provider-config": [
+        "./about/model-provider-config/index.tsx"
+      ],
+      "@workspace-about/new": ["./about/new/index.tsx"],
+      "@workspace-panels/chat": ["./panels/chat/index.tsx"],
+      "@workspace-panels/terminal": ["./panels/terminal/index.tsx"],
+      "@workspace-extensions/shell": ["./extensions/shell/index.ts"],
+      "@workspace-extensions/claude-code": [
+        "./extensions/claude-code/index.ts"
+      ],
+      "@workspace-extensions/file-tools": ["./extensions/file-tools/index.ts"],
+      "@workspace-extensions/image-service": [
+        "./extensions/image-service/index.ts"
+      ],
+      "@workspace-extensions/local-models": [
+        "./extensions/local-models/index.ts"
+      ],
+      "@workspace-extensions/pdf-ingest": ["./extensions/pdf-ingest/index.ts"],
+      "@workspace-extensions/react-native": [
+        "./extensions/react-native/index.ts"
+      ],
+      "@workspace-extensions/browser-data": [
+        "./extensions/browser-data/index.ts"
+      ],
+      "@workspace-extensions/mobile-debug": [
+        "./extensions/mobile-debug/index.ts"
+      ],
+      "@workspace-extensions/typecheck-service": [
+        "./extensions/typecheck-service/index.ts"
+      ],
+      "@workspace-extensions/test-runner": [
+        "./extensions/test-runner/index.ts"
+      ],
+      "@workspace-extensions/git-bridge": ["./extensions/git-bridge/index.ts"],
+      "@workspace-panels/email": ["./panels/email/index.tsx"],
+      "@workspace-panels/email/contract": ["./panels/email/contract.ts"],
+      "@workspace-skills/agents": ["./skills/agents/index.ts"],
+      "@workspace-skills/workspace-dev": ["./skills/workspace-dev/index.ts"],
+      "@workspace-skills/github": ["./skills/github/index.ts"],
+      "@workspace-skills/onboarding": ["./skills/onboarding/index.ts"],
+      "@workspace-skills/web-research": ["./skills/web-research/index.ts"],
+      "@workspace-skills/system-testing": ["./skills/system-testing/index.ts"],
+      "@workspace-skills/system-testing/scenario-validation": [
+        "./skills/system-testing/scenario-validation.ts"
+      ],
+      "@workspace-workers/agent-worker": ["./workers/agent-worker/index.ts"],
+      "@workspace-workers/email-sync": ["./workers/email-sync/index.ts"],
+      "@workspace-workers/test-agent": ["./workers/test-agent/index.ts"],
+      "@workspace-workers/workspace-source": [
+        "./workers/workspace-source/index.ts"
+      ],
+      "@workspace/about-shared/types": ["./packages/about-shared/types.ts"],
+      "@workspace/about-shared/ui": ["./packages/about-shared/ui.tsx"],
+      "@workspace/about-shared/templates": [
+        "./packages/about-shared/templates.ts"
+      ],
+      "@workspace/about-shared/template-review": [
+        "./packages/about-shared/templateReview.tsx"
+      ],
+      "@workspace/template-management/react": [
+        "./packages/template-management/src/react.ts"
+      ],
+      "@workspace/agentic-chat": ["./packages/agentic-chat/index.ts"],
+      "@workspace/agentic-chat/features": [
+        "./packages/agentic-chat/features.ts"
+      ],
+      "@workspace/agentic-chat/chat": [
+        "./packages/agentic-chat/components/AgenticChat.tsx"
+      ],
+      "@workspace/agentic-chat/error-boundary": [
+        "./packages/agentic-chat/components/ErrorBoundary.tsx"
+      ],
+      "@workspace/agentic-core": ["./packages/agentic-core/src/index.ts"],
+      "@workspace/agentic-core/panel-import-loader": [
+        "./packages/agentic-core/src/panel-import-loader.ts"
+      ],
+      "@workspace/agentic-core/agent-launch": [
+        "./packages/agentic-core/src/agent-launch.ts"
+      ],
+      "@workspace/agentic-core/provisional-agent-lifecycle": [
+        "./packages/agentic-core/src/provisional-agent-lifecycle.ts"
+      ],
+      "@workspace/agentic-core/subagent-prompt": [
+        "./packages/agentic-core/src/subagent-prompt.ts"
+      ],
+      "@workspace/agentic-session": ["./packages/agentic-session/src/index.ts"],
+      "@workspace/agentic-chat/styles.css": [
+        "./packages/agentic-chat/styles.css"
+      ],
+      "@workspace/agentic-chat/types": ["./packages/agentic-chat/types.ts"],
+      "@workspace/ui": ["./packages/ui/src/index.ts"],
+      "@workspace/ui/brand": ["./packages/ui/src/brand.tsx"],
+      "@workspace/ui/command": ["./packages/ui/src/command.ts"],
+      "@workspace/ui/diff": ["./packages/ui/src/diff.ts"],
+      "@workspace/ui/feedback": ["./packages/ui/src/kit/feedback.tsx"],
+      "@workspace/ui/icons": ["./packages/ui/src/icons.ts"],
+      "@workspace/ui/foundation.css": ["./packages/ui/src/foundation.css"],
+      "@workspace/ui/layout": ["./packages/ui/src/kit/layout.tsx"],
+      "@workspace/ui/overlay": ["./packages/ui/src/kit/overlay.tsx"],
+      "@workspace/ui/theme": ["./packages/ui/src/theme.config.ts"],
+      "@workspace/ui/themes/vibestudio.css": [
+        "./packages/ui/src/themes/vibestudio.css"
+      ],
+      "@workspace/agentic-do": ["./packages/agentic-do/src/index.ts"],
+      "@workspace/agentic-do/agent-worker-base": [
+        "./packages/agentic-do/src/agent-worker-base.ts"
+      ],
+      "@workspace/agentic-protocol": [
+        "./packages/agentic-protocol/src/index.ts"
+      ],
+      "@workspace/agentic-protocol/*": ["./packages/agentic-protocol/src/*"],
+      "@workspace/eval": ["./packages/eval/src/index.ts"],
+      "@workspace/eval/sandbox": ["./packages/eval/src/sandbox.ts"],
+      "@workspace/eval/scope": ["./packages/eval/src/scope.ts"],
+      "@workspace/integrations": ["./packages/integrations/src/index.ts"],
+      "@workspace/integrations/github": [
+        "./packages/integrations/src/github.ts"
+      ],
+      "@workspace/integrations/providers": [
+        "./packages/integrations/src/providers.ts"
+      ],
+      "@workspace/integrations/remoteProviders": [
+        "./packages/integrations/src/remoteProviders.ts"
+      ],
+      "@workspace/model-catalog/*": ["./packages/model-catalog/src/*.ts"],
+      "@workspace/pi-ai": ["./packages/pi-ai/src/index.ts"],
+      "@workspace/pi-ai/compat": ["./packages/pi-ai/src/compat.ts"],
+      "@workspace/pi-ai/providers/all": [
+        "./packages/pi-ai/src/providers-all.ts"
+      ],
+      "@workspace/pi-ai/api/mistral-conversations": [
+        "./packages/pi-ai/src/api/mistral-conversations.ts"
+      ],
+      "@workspace/pi-ai/api/openai-codex-responses": [
+        "./packages/pi-ai/src/api/openai-codex-responses.ts"
+      ],
+      "@workspace/pi-ai/api/simple-options": [
+        "./packages/pi-ai/src/api/simple-options.ts"
+      ],
+      "@workspace/pi-ai/api/transform-messages": [
+        "./packages/pi-ai/src/api/transform-messages.ts"
+      ],
+      "@workspace/channel-fork": ["./packages/channel-fork/src/index.ts"],
+      "@workspace/pubsub": ["./packages/pubsub/src/index.ts"],
+      "@workspace/react": ["./packages/react/src/index.ts"],
+      "@workspace/react/hooks": ["./packages/react/src/hooks.ts"],
+      "@workspace/react/theme": ["./packages/react/src/theme.ts"],
+      "@workspace/react/responsive": ["./packages/react/src/responsive.ts"],
+      "@workspace/runtime": ["./packages/runtime/src/panel/index.ts"],
+      "@workspace/runtime/panel-runtime": [
+        "./packages/runtime/src/shared/panelRuntime.ts"
+      ],
+      "@workspace/runtime/internal/diagnostics": [
+        "./packages/runtime/src/internal/diagnostics.ts"
+      ],
+      "@workspace/testkit/suites": ["./packages/testkit/src/suites/index.ts"],
+      "@workspace/testkit/profiling": [
+        "./packages/testkit/src/profile-core.ts"
+      ],
+      "@workspace/runtime/hosted": [
+        "./packages/runtime/src/shared/hostedRuntime.ts"
+      ],
+      "@workspace/runtime/portable": [
+        "./packages/runtime/src/shared/portable.ts"
+      ],
+      "@workspace/runtime/credentials": [
+        "./packages/runtime/src/shared/credentials.ts"
+      ],
+      "@workspace/runtime/worker": ["./packages/runtime/src/worker/index.ts"],
+      "@workspace/runtime/worker/durable-base": [
+        "./packages/runtime/src/worker/durable-base.ts"
+      ],
+      "@workspace/runtime/worker/kernel": [
+        "./packages/runtime/src/worker/kernel.ts"
+      ],
+      "@workspace/runtime/worker/panel-durable-base": [
+        "./packages/runtime/src/worker/panel-durable-base.ts"
+      ],
+      "@workspace/runtime/worker/rpc-fs": [
+        "./packages/runtime/src/shared/rpcFs.ts"
+      ],
+      "@workspace/runtime/worker/sql-table-schema": [
+        "./packages/runtime/src/worker/sql-table-schema.ts"
+      ],
+      "@workspace/runtime/worker/credentials": [
+        "./packages/runtime/src/worker/credentials.ts"
+      ],
+      "@workspace/runtime/panel/credentials": [
+        "./packages/runtime/src/panel/credentials.ts"
+      ],
+      "@workspace/runtime/worker/test-utils": [
+        "./packages/runtime/src/worker/durable-test-utils.ts"
+      ],
+      "@workspace/runtime/workerd-client": [
+        "./packages/runtime/src/shared/workerd.ts"
+      ],
+      "@workspace/harness/resource-loader": [
+        "./packages/harness/src/resource-loader.ts"
+      ],
+      "@workspace/harness/agent-references": [
+        "./packages/harness/src/tools/agent-pagination.ts"
+      ],
+      "@workspace/harness/standard-tools": [
+        "./packages/harness/src/standard-tools.ts"
+      ],
+      "@workspace/harness/merge-driver": [
+        "./packages/harness/src/merge-driver.ts"
+      ],
+      "@workspace/harness/semantic-file-resolution": [
+        "./packages/harness/src/semantic-file-resolution.ts"
+      ],
+      "@workspace/harness/system-prompt": [
+        "./packages/harness/src/system-prompt.ts"
+      ],
+      "@workspace/harness/tools/eval": ["./packages/harness/src/tools/eval.ts"],
+      "@workspace/harness/types": ["./packages/harness/src/types.ts"],
+      "@workspace/vcs-engine": ["./packages/vcs-engine/src/index.ts"],
+      "@workspace/cdp-client": ["./packages/cdp-client/index.d.ts"],
+      "@workspace/svelte": ["./packages/svelte/src/index.ts"],
+      "@workspace/tool-ui": ["./packages/tool-ui/src/index.ts"],
+      "@workspace/tool-ui/*": ["./packages/tool-ui/src/*"]
+    }
+  },
+  "include": ["**/*"],
+  "exclude": [
+    "node_modules",
+    "../node_modules",
+    "**/dist",
+    "**/node_modules",
+    "apps/mobile/**/*",
+    "packages/mobile-navigation/**/*",
+    "apps/mobile/jest.setup.ts",
+    "apps/mobile/**/*.test.ts",
+    "apps/mobile/**/*.test.tsx",
+    "panels/terminal/vscode-upstream"
+  ]
+}

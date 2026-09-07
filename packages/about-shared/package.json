@@ -1,0 +1,21 @@
+{
+  "name": "@workspace/about-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./types": "./types.ts",
+    "./ui": "./ui.tsx",
+    "./templates": "./templates.ts"
+  },
+  "dependencies": {
+    "@radix-ui/themes": "^3.3.0",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "@workspace/react": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

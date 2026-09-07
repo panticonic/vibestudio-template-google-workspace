@@ -1,0 +1,52 @@
+{
+  "name": "@workspace-extensions/file-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "File Tools",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "sourcemap": true,
+    "extension": {
+      "activationEvents": [
+        "onInvoke"
+      ],
+      "dependencyMode": "external",
+      "methodAuthority": {
+        "grep": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "find": {
+          "effect": {
+            "kind": "open"
+          }
+        },
+        "read": {
+          "effect": {
+            "kind": "open"
+          }
+        }
+      }
+    },
+    "authority": {
+      "provides": [],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "critical",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vscode/ripgrep": "^1.18.0"
+  }
+}

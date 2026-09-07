@@ -1,0 +1,591 @@
+/**
+ * Launcher chrome for the New Panel page.
+ *
+ * Every box here is border-box: rows and the field are full-width with padding
+ * and a border, and content-box sizing pushes them past the column, which is
+ * what produced the stray horizontal scrollbar in the first cut.
+ *
+ * Everything keys off Radix scales and the shared token layer, so light and
+ * dark both read correctly without a per-rule branch.
+ */
+
+.launcher-search,
+.launcher-search *,
+.launcher-results,
+.launcher-results *,
+.launcher-empty,
+.launcher-skeleton {
+  box-sizing: border-box;
+}
+
+/* ---- Search block -------------------------------------------------------- */
+
+.launcher-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-block: 8px;
+  background: var(--color-background);
+}
+
+.launcher-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--gray-a6);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--elevation-1);
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.launcher-field:focus-within {
+  border-color: var(--accent-8);
+  box-shadow: 0 0 0 3px var(--accent-a4);
+}
+
+.launcher-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.launcher-entry-icon {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--gray-9);
+}
+
+.launcher-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.launcher-input,
+.launcher-ghost {
+  font-family: inherit;
+  font-size: var(--font-size-3);
+  line-height: var(--line-height-3);
+  letter-spacing: var(--letter-spacing-3);
+}
+
+.launcher-input {
+  display: block;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: var(--line-height-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  overflow-y: auto;
+  resize: none;
+  background: transparent;
+  color: var(--gray-12);
+}
+
+.launcher-input::placeholder {
+  color: var(--gray-9);
+}
+
+/* Sits directly behind the caret line and mirrors the typed text so only the
+   completion suffix is visible. Same font metrics as the input, no offsets. */
+.launcher-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.launcher-ghost-typed {
+  visibility: hidden;
+}
+
+.launcher-ghost-suffix {
+  color: var(--gray-8);
+}
+
+.launcher-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.launcher-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.launcher-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--gray-a5);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gray-11);
+  font-family: inherit;
+  font-size: var(--font-size-1);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.launcher-mode:hover {
+  background: var(--gray-a3);
+}
+
+.launcher-mode[aria-pressed="true"] {
+  border-color: var(--accent-a7);
+  background: var(--accent-a3);
+  color: var(--accent-11);
+}
+
+.launcher-key {
+  font-family: var(--code-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.launcher-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 8px 4px 0;
+  color: var(--gray-11);
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-1);
+}
+
+.launcher-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.launcher-hint-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--gray-a3);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--gray-12);
+}
+
+/* ---- Results ------------------------------------------------------------- */
+
+.launcher-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.launcher-group-label {
+  margin: 0 0 4px 2px;
+  color: var(--gray-10);
+  font-size: var(--font-size-1);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.launcher-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.launcher-row-shell {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.launcher-row-shell[data-expanded] {
+  border-color: var(--accent-a7);
+  background: linear-gradient(135deg, var(--accent-a3), transparent 72%), var(--color-surface);
+  box-shadow: var(--elevation-1);
+}
+
+.launcher-row-primary {
+  display: flex;
+  align-items: stretch;
+}
+
+.launcher-row-primary > .launcher-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.launcher-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gray-12);
+  font-family: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.launcher-row:hover {
+  background: var(--gray-a3);
+}
+
+.launcher-row[aria-selected="true"] {
+  border-color: var(--accent-a8);
+  background: var(--accent-a4);
+}
+
+.launcher-row-shell[data-expanded] .launcher-row[aria-selected="true"] {
+  border-color: transparent;
+  border-radius: 11px 8px 8px 8px;
+  background: transparent;
+}
+
+.launcher-row:focus-visible {
+  outline: 2px solid var(--accent-9);
+  outline-offset: -2px;
+}
+
+.launcher-row:disabled {
+  cursor: default;
+}
+
+.launcher-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.launcher-title,
+.launcher-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.launcher-title {
+  font-size: var(--font-size-2);
+  line-height: var(--line-height-2);
+  font-weight: 500;
+}
+
+.launcher-meta {
+  color: var(--gray-10);
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-1);
+}
+
+.launcher-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.launcher-enter {
+  color: var(--accent-11);
+  font-size: var(--font-size-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.launcher-open-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--grass-a3);
+  color: var(--grass-11);
+  font-size: var(--font-size-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.launcher-open-disclosure {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-right: 9px;
+  padding: 4px 7px 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--grass-a3);
+  color: var(--grass-11);
+  font: inherit;
+  font-size: var(--font-size-1);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.launcher-open-disclosure:hover,
+.launcher-open-disclosure:focus-visible,
+.launcher-open-disclosure[aria-expanded="true"] {
+  border-color: var(--grass-a7);
+  background: var(--grass-a4);
+}
+
+.launcher-open-disclosure:focus-visible {
+  outline: 2px solid var(--grass-a5);
+  outline-offset: 1px;
+}
+
+.launcher-open-disclosure-chevron {
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* ---- Existing instances ------------------------------------------------- */
+
+.launcher-open-instances {
+  margin: 0 10px 10px 50px;
+  padding-top: 9px;
+  border-top: 1px solid var(--accent-a5);
+  animation: launcher-instances-enter var(--motion-fast) var(--ease-standard) both;
+}
+
+.launcher-open-instances-heading {
+  padding: 0 2px 8px;
+}
+
+.launcher-open-instances-heading > span {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.launcher-open-instances-heading strong {
+  color: var(--accent-11);
+  font-size: var(--font-size-1);
+  letter-spacing: 0.01em;
+}
+
+.launcher-open-instances-heading span span {
+  overflow: hidden;
+  color: var(--gray-10);
+  font-size: var(--font-size-1);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.launcher-open-instance-list {
+  display: grid;
+  gap: 4px;
+  max-height: 210px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.launcher-open-instance {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--gray-a2);
+  color: var(--gray-12);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+.launcher-open-instance:hover {
+  border-color: var(--accent-a6);
+  background: var(--accent-a3);
+  transform: translateX(2px);
+}
+
+.launcher-open-instance:focus-visible {
+  border-color: var(--accent-9);
+  outline: 2px solid var(--accent-a5);
+  outline-offset: 1px;
+}
+
+.launcher-open-instance:disabled {
+  cursor: default;
+  transform: none;
+}
+
+.launcher-open-instance-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--accent-a4);
+  color: var(--accent-11);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.launcher-open-instance-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.launcher-open-instance-title,
+.launcher-open-instance-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.launcher-open-instance-title {
+  font-size: var(--font-size-2);
+  font-weight: 500;
+}
+
+.launcher-open-instance-meta {
+  color: var(--gray-10);
+  font-size: var(--font-size-1);
+}
+
+.launcher-open-instance-action {
+  color: var(--accent-11);
+  font-size: var(--font-size-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@keyframes launcher-instances-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 520px) {
+  .launcher-open-instances {
+    margin-left: 10px;
+  }
+
+  .launcher-open-instances-heading > span {
+    display: block;
+  }
+
+  .launcher-open-instances-heading span span {
+    display: block;
+    margin-top: 2px;
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-open-instances {
+    animation: none;
+  }
+}
+
+/* ---- Icons --------------------------------------------------------------- */
+
+.launcher-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--gray-a3);
+  color: var(--gray-11);
+  overflow: hidden;
+}
+
+.launcher-icon img {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.launcher-icon-chat {
+  background: var(--accent-a3);
+  color: var(--accent-11);
+}
+
+.launcher-semantic-icon {
+  font-size: 20px;
+  line-height: 1;
+  font-family:
+    Apple Color Emoji,
+    Segoe UI Emoji,
+    Noto Color Emoji,
+    sans-serif;
+}
+
+.launcher-image-icon {
+  display: block;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+/* ---- Placeholder state --------------------------------------------------- */
+
+.launcher-skeleton {
+  height: 46px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--gray-a2) 20%, var(--gray-a4) 50%, var(--gray-a2) 80%);
+  background-size: 220% 100%;
+  animation: ambient-shimmer 1.4s linear infinite;
+}
+
+.launcher-empty {
+  padding: 22px 16px;
+  border: 1px dashed var(--gray-a6);
+  border-radius: 12px;
+  color: var(--gray-11);
+  text-align: center;
+}

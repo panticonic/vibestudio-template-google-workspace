@@ -1,0 +1,1914 @@
+/* Presentation-neutral motion, intent, surface, and accessibility foundation. */
+@import "@workspace/ui/foundation.css";
+
+/* Cursor blink animation for streaming messages */
+@keyframes cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.cursor {
+  animation: cursor-blink 1s infinite;
+  margin-left: 2px;
+}
+
+/* Three-dot typing indicator animation */
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(-8px);
+  }
+}
+
+.typing-indicator {
+  display: inline-flex;
+  gap: 1px;
+  margin-left: 2px;
+}
+
+.typing-dot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Spinner for roster status */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+/* Pulse animation for roster activity indicator */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* New content indicator animation */
+@keyframes slide-up-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.new-content-indicator {
+  animation: slide-up-fade-in 0.2s ease-out;
+}
+
+/* Copy button — visible at baseline opacity on touch, hover-reveal on mouse */
+.message-card .copy-button {
+  opacity: 0.6;
+  transition: opacity 0.15s ease-in-out;
+}
+@media (hover: hover) {
+  .message-card .copy-button {
+    opacity: 0.25;
+  }
+  .message-card .copy-button:hover {
+    opacity: 1;
+  }
+}
+@media (pointer: coarse) {
+  .message-card .copy-button {
+    padding: 8px;
+    min-inline-size: 40px;
+    min-block-size: 40px;
+  }
+}
+
+.agentic-chat-root {
+  --cursor-button: pointer;
+  --agentic-root-gap: 2px;
+  --agentic-root-padding: 2px;
+  --agentic-panel-padding: 0;
+  --agentic-message-list-padding: 2px;
+  --agentic-surface: var(--gray-1);
+  --agentic-surface-card: var(--surface-card);
+  --agentic-surface-raised: var(--surface-raised);
+  --agentic-border: var(--surface-border);
+  --agentic-text: var(--gray-12);
+  --agentic-text-muted: var(--gray-11);
+  --agentic-player-accent: var(--accent-9);
+  --agentic-player-rail: var(--accent-a7);
+  --agentic-player-surface: var(--accent-a2);
+  --agentic-player-surface-strong: var(--accent-a3);
+  --agentic-agent-message-surface: var(--color-panel);
+  --agentic-player-message-surface: var(--color-panel);
+  container-type: inline-size;
+  min-inline-size: 0;
+  inline-size: 100%;
+  overflow: hidden;
+  color: var(--agentic-text);
+  background: var(--agentic-surface);
+}
+
+.radix-themes:where(.light, .light-theme) > .agentic-chat-root {
+  --agentic-agent-message-surface: var(--gray-3);
+  --agentic-player-message-surface: var(--accent-a3);
+}
+
+.agentic-chat-root,
+.agentic-chat-root * {
+  box-sizing: border-box;
+}
+
+.agentic-chat-root
+  :where(
+    button:not(:disabled):not([data-disabled]):not([aria-disabled="true"]),
+    [role="button"]:not([aria-disabled="true"]):not([data-disabled])
+  ) {
+  cursor: pointer;
+}
+
+.message-list-card,
+.message-list-content,
+.message-list-stack,
+.message-item,
+.chat-surface-card {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.message-scroll-area,
+.message-scroll-area [data-radix-scroll-area-viewport],
+.message-scroll-area [data-radix-scroll-area-content] {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-x: hidden;
+}
+
+.message-scroll-area [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  inline-size: 0 !important;
+  min-inline-size: 100% !important;
+  max-inline-size: 100% !important;
+}
+
+/*
+ * The transcript's scroll position is managed entirely in JS (useScrollAnchor
+ * preserves the anchored item; useStickToBottom pins to the bottom). Leave the
+ * browser's own scroll-anchoring off so the two systems don't fight over
+ * scrollTop when content above the viewport grows during streaming.
+ */
+.message-scroll-area [data-radix-scroll-area-viewport] {
+  overflow-anchor: none;
+}
+
+.message-list-card,
+.message-list-content,
+.message-item,
+.chat-surface-card {
+  overflow-x: hidden;
+}
+
+/*
+ * The @-mention popover is rendered from inside the input card and opens
+ * upward over the transcript. Radix Card inherits the generic chat-surface
+ * overflow clipping above; if the x-axis is hidden, browsers compute the
+ * visible y-axis to auto, which clips the absolutely positioned popover at
+ * the card edge. Let the input card overflow and put it in a higher stacking
+ * layer so the popup can cover conversation history.
+ */
+.chat-input-card {
+  position: relative;
+  z-index: 30;
+  overflow: visible;
+}
+
+.message-list-card {
+  border-radius: 0;
+  background: transparent;
+}
+
+.chat-surface-card {
+  --card-padding: var(--agentic-panel-padding);
+  --card-border-radius: var(--radius-2);
+  --card-border-width: 0;
+}
+
+.chat-header-card {
+  --base-card-padding-top: var(--space-1);
+  --base-card-padding-right: var(--agentic-panel-padding);
+  --base-card-padding-bottom: var(--space-1);
+  --base-card-padding-left: var(--agentic-panel-padding);
+}
+
+.chat-header-menu-button {
+  min-inline-size: 32px;
+  min-block-size: 32px;
+}
+
+.chat-native-actions-dialog {
+  max-block-size: min(86dvh, 760px);
+  overflow-y: auto;
+}
+
+.chat-native-actions-dialog button {
+  min-block-size: 44px;
+}
+
+@media (pointer: coarse) {
+  .chat-header-menu-button {
+    min-inline-size: 40px;
+    min-block-size: 40px;
+  }
+}
+
+.chat-surface-card::before {
+  background-color: var(--gray-2);
+  backdrop-filter: none;
+}
+
+.chat-surface-card::after {
+  box-shadow: none;
+}
+
+/* Geometry of the default composer + its docked send control. The composer
+   defaults to two lines; the dock is a bottom-anchored band the height of that
+   default with the button centered in it — so the button sits vertically
+   centered (equal right/bottom gap) in the default view and then STAYS pinned
+   to the bottom band (no drift) as the textarea grows past two lines. */
+.chat-input-card {
+  --composer-min-h: 3.5rem; /* the default two-line composer height */
+  --send-dock-gap: 0.75rem; /* right gap, matched to the centered bottom gap */
+}
+
+.chat-input-send-dock {
+  position: absolute;
+  inset-inline-end: var(--send-dock-gap);
+  inset-block-end: 0;
+  block-size: var(--composer-min-h);
+  display: flex;
+  align-items: center; /* vertically center the button in the default band */
+  z-index: 1;
+}
+
+/* Reserve room so text never runs under the docked send control. Generous
+   slack over the measured group width (~64px primary+chevron + 12px gap) so a
+   long unbroken token never tucks under the button on a narrow split panel. */
+.chat-input-card textarea {
+  padding-inline-end: 5.5rem;
+}
+
+/* No-zoom text entry on touch + a taller default band + a real (≥44px) touch
+   target for the chevron (it's slimmed to 24px on pointer:fine, which is a
+   mis-tap hazard on touch — a missed "options" tap would hit primary send). */
+@media (pointer: coarse) {
+  .chat-input-card {
+    --composer-min-h: 4rem;
+  }
+  .chat-input-card textarea {
+    font-size: 16px;
+    padding-inline-end: 6.75rem;
+  }
+  .send-button-chevron {
+    inline-size: 2.75rem;
+    min-inline-size: 2.75rem;
+  }
+}
+
+/* Container-width responsive utilities — keyed on .agentic-chat-root,
+   which is a `container-type: inline-size` container. Narrow panels (not
+   just narrow viewports) get the compact header. */
+.chat-narrow-only {
+  display: none !important;
+}
+
+@container (max-width: 520px) {
+  .chat-wide-only {
+    display: none !important;
+  }
+
+  .chat-narrow-only {
+    display: flex !important;
+  }
+}
+
+.chat-action-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+  border: 1px solid var(--gray-a4);
+  border-radius: var(--radius-2);
+  background: var(--color-surface);
+}
+
+.chat-action-bar-content {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: auto;
+  padding: var(--space-2);
+}
+
+.chat-action-bar-resize {
+  flex: 0 0 8px;
+  cursor: ns-resize;
+  position: relative;
+  border-block-start: 1px solid var(--gray-a3);
+  background: var(--gray-a1);
+  touch-action: none;
+}
+
+.chat-action-bar-resize::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 50%;
+  inline-size: 40px;
+  block-size: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--gray-a7);
+}
+
+.chat-action-bar-resize:hover,
+.chat-action-bar-resize:focus-visible {
+  background: var(--accent-a2);
+  outline: none;
+}
+
+.chat-action-bar-resize:hover::before,
+.chat-action-bar-resize:focus-visible::before {
+  background: var(--accent-a9);
+}
+
+.message-list-content {
+  inline-size: 0;
+  min-inline-size: 100%;
+  contain: inline-size layout paint;
+}
+
+.message-row {
+  display: flex;
+  inline-size: fit-content;
+  min-inline-size: 0;
+  max-inline-size: min(100%, 85rem);
+  overflow-x: hidden;
+}
+
+.message-row-inline-ui,
+.inline-ui-frame,
+.inline-ui-content {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+/*
+ * Compiled UIs live inside panels, so their useful breakpoint is the
+ * transcript width rather than the browser viewport. Give every inline UI its
+ * own query container and make common Radix layout primitives intrinsically
+ * shrinkable. This is also a safety net for user-authored components with long
+ * labels or data.
+ */
+.inline-ui-content {
+  container-type: inline-size;
+  overflow-wrap: anywhere;
+}
+
+.inline-ui-content > *,
+.inline-ui-content
+  :where(.rt-Box, .rt-Card, .rt-Flex, .rt-Grid, .rt-TextFieldRoot) {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.inline-ui-content :where(.rt-Heading, .rt-Text) {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Radix ghost buttons pull their hit area outside their layout box with
+ * negative margins. That is useful on an unconstrained page edge, but creates
+ * horizontal scroll when an inline UI places one at the edge of a panel.
+ */
+.inline-ui-content .rt-Button.rt-variant-ghost {
+  --margin-top-override: var(--margin-top);
+  --margin-right-override: var(--margin-right);
+  --margin-bottom-override: var(--margin-bottom);
+  --margin-left-override: var(--margin-left);
+}
+
+@container (max-width: 520px) {
+  /*
+   * Radix responsive object props use viewport media queries. A two- or
+   * three-column Grid must still collapse when its panel is narrow inside a
+   * wide desktop window.
+   */
+  .inline-ui-content .rt-Grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .inline-ui-content .rt-Button {
+    block-size: auto;
+    max-inline-size: 100%;
+    white-space: normal;
+  }
+
+  .inline-ui-content .rt-Button :where(.rt-Text) {
+    white-space: normal;
+  }
+}
+
+@media (pointer: coarse) {
+  .inline-ui-content .rt-Button {
+    min-block-size: 44px;
+  }
+}
+
+.message-row-client {
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.message-row-agent {
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+
+/* A message another surface asked us to land on (notification open, cross-
+   channel link). Transient — the class is removed after a beat. */
+.message-row-focused > .message-card {
+  outline: 2px solid var(--accent-a8);
+  outline-offset: 2px;
+  transition: outline-color 1.2s ease-out;
+}
+
+/* Escalation footer (messaging plan §4.10.5): metadata on the message, muted. */
+.message-escalation-footer {
+  opacity: 0.8;
+}
+
+.message-row-system {
+  align-self: center;
+  justify-content: center;
+}
+
+.message-card {
+  position: relative;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  color: var(--gray-12);
+  --card-background-color: var(--agentic-agent-message-surface);
+  background-color: var(--agentic-agent-message-surface);
+  --card-padding: 8px;
+}
+
+@media (min-width: 720px) {
+  .agentic-chat-root {
+    --agentic-panel-padding: var(--space-2);
+    --agentic-message-list-padding: var(--space-1);
+    background: var(--gray-2);
+  }
+
+  .chat-surface-card {
+    --card-border-radius: var(--radius-3);
+    --card-border-width: 1px;
+  }
+
+  .chat-surface-card::before {
+    background-color: var(--card-background-color);
+    -webkit-backdrop-filter: var(--backdrop-filter-panel);
+    backdrop-filter: var(--backdrop-filter-panel);
+  }
+
+  .chat-surface-card::after {
+    box-shadow: var(--base-card-surface-box-shadow);
+  }
+}
+
+@media (min-width: 1040px) {
+  .agentic-chat-root {
+    --agentic-panel-padding: var(--space-2);
+    --agentic-message-list-padding: var(--space-2);
+  }
+}
+
+.message-card-client {
+  --card-background-color: var(--agentic-player-message-surface);
+  background-color: var(--agentic-player-message-surface);
+}
+
+/*
+ * Tier 2 (secondary salience): supporting content — intermediate agent steps,
+ * system-injected prompts, and messages produced by UI interactions. Rendered
+ * with no card fill (just the outline border) as quiet, smaller text that
+ * recedes into the transcript, while keeping comfortable padding and the chrome
+ * (sender header + copy/reply). Applies on both the agent (left) and client
+ * (right) sides; tier 1 keeps the full default card presentation.
+ */
+.message-card-tier2 {
+  --card-background-color: transparent;
+  background-color: transparent;
+  color: var(--gray-a11);
+}
+
+/* The Radix Card surface paints a translucent panel fill on ::before (and may
+   blur behind it). Clear it so tier 2 truly matches the transcript background;
+   the border lives on ::after and is intentionally kept. */
+.message-card-tier2::before {
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Smaller text *and* a proportionally tighter line-height — otherwise the line
+   spacing stays sized for tier-1 text and the block looks loose. */
+.message-card-tier2 .message-content,
+.message-card-tier2 .message-content :where(.rt-Text),
+.message-card-tier2 .message-prose,
+.message-card-tier2 .message-prose :where(p, li, blockquote) {
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-1);
+}
+
+/* Quiet the sender header (name + @handle) so it recedes with the body. */
+.message-card-tier2 .message-card-body > .rt-Flex:first-child .rt-Text {
+  color: var(--gray-a10);
+}
+
+.message-card-error {
+  --card-background-color: var(--red-3);
+  background-color: var(--red-3);
+}
+
+.message-card-lifecycle {
+  --card-background-color: var(--gray-2);
+  background-color: var(--gray-2);
+  border-color: var(--gray-a6);
+}
+
+/* Ordinary task events are structured transcript records, never chat prose.
+   Keep their result inspectable without exposing the projection's JSON
+   compatibility encoding as the visible message body. */
+.message-row:has(> .message-card-task) {
+  inline-size: 100%;
+}
+
+.message-card-task {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--gray-a5);
+  border-inline-start: 3px solid var(--gray-a7);
+  border-radius: 8px;
+  background: var(--gray-2);
+  box-shadow: var(--elevation-1);
+}
+
+.message-card-task.task-status-running {
+  border-inline-start-color: var(--blue-9);
+}
+
+.message-card-task.task-status-complete {
+  border-inline-start-color: var(--green-9);
+}
+
+.message-card-task.task-status-error {
+  border-inline-start-color: var(--red-9);
+}
+
+.message-card-task.task-status-cancelled,
+.message-card-task.task-status-abandoned {
+  border-inline-start-color: var(--amber-9);
+}
+
+.task-card-header {
+  min-inline-size: 0;
+}
+
+.task-card-title {
+  min-inline-size: 0;
+}
+
+.task-card-status {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  border-radius: 4px;
+}
+
+.task-card-description,
+.task-card-empty {
+  display: block;
+  margin-block-start: 6px;
+  color: var(--gray-11);
+  overflow-wrap: anywhere;
+}
+
+.task-card-description .message-prose,
+.task-card-description .message-prose :where(p, li, blockquote) {
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-1);
+}
+
+.task-card-description .message-prose > :first-child {
+  margin-block-start: 0;
+}
+
+.task-card-description .message-prose > :last-child {
+  margin-block-end: 0;
+}
+
+.task-card-result {
+  margin-block-start: 7px;
+  padding-block-start: 7px;
+  border-block-start: 1px solid var(--gray-a4);
+}
+
+/* A run card holds transcript-shaped content (pills, prose, an embedded
+   transcript), not a chat bubble, so it claims the full column rather than
+   sizing to its longest line — nested content gets real room to wrap. */
+.message-row:has(> .message-card-subagent) {
+  inline-size: 100%;
+}
+
+.message-card-subagent {
+  position: relative;
+  inline-size: 100%;
+  min-inline-size: 0;
+  border: 1px solid var(--gray-a5);
+  border-inline-start: 3px solid var(--gray-a7);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent-a2) 55%, transparent),
+      transparent 42px
+    ),
+    var(--gray-2);
+  box-shadow: var(--elevation-1);
+  overflow: hidden;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.message-card-subagent:hover {
+  border-color: var(--gray-a7);
+  box-shadow: var(--elevation-2);
+}
+
+.message-card-subagent.subagent-card-open {
+  box-shadow: var(--elevation-2);
+}
+
+/* Status is echoed on the accent edge so a wall of cards scans at a glance.
+   Pending (queued, no child activity yet) stays gray; running is blue. */
+.message-card-subagent.subagent-status-running {
+  border-inline-start-color: var(--blue-9);
+}
+
+.message-card-subagent.subagent-status-complete {
+  border-inline-start-color: var(--green-9);
+}
+
+.message-card-subagent.subagent-status-error {
+  border-inline-start-color: var(--red-9);
+}
+
+.message-card-subagent.subagent-status-cancelled,
+.message-card-subagent.subagent-status-abandoned {
+  border-inline-start-color: var(--amber-9);
+}
+
+.subagent-summary {
+  padding: 7px 9px 6px;
+}
+
+/* The disclosure is a real button spanning the title block; action icons are
+   siblings, never nested inside it. */
+.subagent-summary-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.subagent-summary-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-a8);
+}
+
+.subagent-card-header,
+.subagent-update-preview {
+  min-inline-size: 0;
+}
+
+.subagent-card-header {
+  inline-size: 100%;
+  min-block-size: 22px;
+}
+
+.subagent-card-actions {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.subagent-card-actions .rt-IconButton {
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
+.message-card-subagent:hover .subagent-card-actions .rt-IconButton,
+.message-card-subagent:focus-within .subagent-card-actions .rt-IconButton {
+  opacity: 1;
+}
+
+.subagent-stat {
+  color: var(--gray-a10);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subagent-expand-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--gray-a9);
+  transition: transform 160ms ease;
+}
+
+.subagent-expand-chevron-open {
+  transform: rotate(180deg);
+}
+
+.subagent-time {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  color: var(--gray-a9);
+  font-variant-numeric: tabular-nums;
+}
+
+.subagent-status-dot {
+  flex: 0 0 auto;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 999px;
+  background: var(--gray-8);
+}
+
+.subagent-status-dot-pending {
+  background: var(--gray-8);
+  box-shadow: 0 0 0 3px var(--gray-a3);
+}
+
+.subagent-status-dot-running {
+  background: var(--blue-9);
+  box-shadow: 0 0 0 3px var(--blue-a3);
+  animation: subagent-pulse 1.4s ease-in-out infinite;
+}
+
+.subagent-status-dot-complete {
+  background: var(--green-9);
+  box-shadow: 0 0 0 3px var(--green-a3);
+}
+
+.subagent-status-dot-error {
+  background: var(--red-9);
+  box-shadow: 0 0 0 3px var(--red-a3);
+}
+
+.subagent-status-dot-cancelled,
+.subagent-status-dot-abandoned {
+  background: var(--amber-9);
+}
+
+@keyframes subagent-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.28);
+  }
+}
+
+.subagent-title {
+  min-inline-size: 0;
+  letter-spacing: 0.01em;
+}
+
+.subagent-mode-badge,
+.subagent-status-badge {
+  border-radius: 4px;
+  text-transform: none;
+}
+
+.subagent-update-preview {
+  inline-size: 100%;
+  display: block;
+  padding-inline-start: 15px;
+  border: none;
+  background: none;
+  margin: 0;
+  font: inherit;
+  text-align: start;
+  color: var(--gray-a10);
+  min-block-size: 18px;
+  border-radius: 5px;
+}
+
+.subagent-update-preview:hover,
+.subagent-update-preview:focus-visible {
+  color: var(--gray-12);
+  background: var(--gray-a3);
+  outline: none;
+}
+
+.subagent-activity-text {
+  display: block;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gray-a10);
+}
+
+.subagent-activity-prefix {
+  margin-inline-end: 4px;
+  color: var(--gray-a9);
+}
+
+.subagent-activity-history {
+  display: block;
+  overflow: hidden;
+  color: var(--gray-a9);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-activity-history-item {
+  white-space: nowrap;
+}
+
+.markdown-preview,
+.markdown-preview
+  :where(
+    p,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    blockquote,
+    ul,
+    ol,
+    li,
+    table,
+    thead,
+    tbody,
+    tr,
+    th,
+    td,
+    pre
+  ) {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  white-space: inherit;
+}
+
+.markdown-preview-strong,
+.markdown-preview-heading {
+  color: var(--gray-12);
+  font-weight: 600;
+}
+
+.markdown-preview-link {
+  color: var(--accent-a11);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-preview-code,
+.markdown-preview-codeblock {
+  font-family: var(
+    --code-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace
+  );
+  font-size: 0.95em;
+  border-radius: 3px;
+  background: var(--gray-a3);
+}
+
+.markdown-preview-code {
+  padding-inline: 2px;
+}
+
+.markdown-preview-list-item::before {
+  content: "• ";
+  color: var(--gray-a9);
+}
+
+.markdown-preview-table-cell:not(:last-child)::after {
+  content: "·";
+  margin-inline: 4px;
+  color: var(--gray-a8);
+}
+
+.markdown-preview-quote::before {
+  content: "“";
+  color: var(--gray-a9);
+}
+
+/* ----- expanded details ----- */
+
+.subagent-details {
+  padding: 10px 12px 12px 14px;
+  border-block-start: 1px solid var(--gray-a4);
+  background: var(--gray-a2);
+  cursor: default;
+}
+
+.subagent-description {
+  display: block;
+  margin-block-end: 8px;
+  color: var(--gray-11);
+  overflow-wrap: anywhere;
+}
+
+.subagent-description .message-prose,
+.subagent-description .message-prose :where(p, li, blockquote) {
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-1);
+}
+
+.subagent-description .message-prose > :first-child {
+  margin-block-start: 0;
+}
+
+.subagent-description .message-prose > :last-child {
+  margin-block-end: 0;
+}
+
+.subagent-empty-feed {
+  display: block;
+}
+
+.subagent-preview-notice {
+  padding: 6px 8px;
+  border: 1px solid var(--amber-a6);
+  border-radius: var(--radius-2);
+  background: var(--amber-a2);
+}
+
+.subagent-preview-transcript-button {
+  flex: none;
+  padding: 0;
+  border: 0;
+  color: var(--amber-11);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-size-1);
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ----- consolidated activity -----
+   No inner scroller: the run flows at full column width and the transcript
+   scrolls once. The old card nested a 260px overflow region inside the
+   already-scrolling chat, which is what made it feel cramped. */
+.subagent-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.subagent-activity-calls {
+  min-inline-size: 0;
+}
+
+/* Child calls reuse the parent chat's pill metrics verbatim so a nested call
+   is visibly the same object as a top-level one, just one level in. */
+.subagent-activity .inline-group {
+  margin: 0;
+}
+
+/* A turn boundary is structure, not an event — a hairline, not a row. */
+.subagent-turn-rule {
+  block-size: 1px;
+  margin-block: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--gray-a5),
+    var(--gray-a3) 40%,
+    transparent
+  );
+}
+
+/* ----- child messages ----- */
+
+.subagent-say {
+  position: relative;
+  padding-inline-start: 10px;
+  border-inline-start: 2px solid var(--gray-a5);
+  color: var(--gray-11);
+  overflow-wrap: anywhere;
+}
+
+/* Something the child chose to surface reads louder than routine turn chatter. */
+.subagent-say-salient {
+  border-inline-start-color: var(--accent-a7);
+}
+
+.subagent-say-meta {
+  min-block-size: 16px;
+}
+
+.subagent-say-label {
+  color: var(--gray-a9);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9.5px;
+}
+
+.subagent-say-salient .subagent-say-label {
+  color: var(--accent-a11);
+}
+
+.subagent-say-body .message-prose,
+.subagent-say-body .message-prose :where(p, li, blockquote) {
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-2);
+}
+
+.subagent-say-body .message-prose > :first-child {
+  margin-block-start: 0;
+}
+
+.subagent-say-body .message-prose > :last-child {
+  margin-block-end: 0;
+}
+
+/* ----- activity / transcript switch ----- */
+
+.subagent-view-switch {
+  margin-block-end: 8px;
+}
+
+.subagent-view-tab {
+  border: 1px solid transparent;
+  background: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--font-size-1);
+  color: var(--gray-a10);
+  cursor: pointer;
+}
+
+.subagent-view-tab:hover {
+  color: var(--gray-12);
+  background: var(--gray-a3);
+}
+
+.subagent-view-tab-active {
+  color: var(--gray-12);
+  border-color: var(--gray-a6);
+  background: var(--gray-a4);
+}
+
+/* ----- embedded child transcript ----- */
+
+.subagent-transcript {
+  min-inline-size: 0;
+  margin-inline-start: -4px;
+}
+
+.subagent-transcript-loading,
+.subagent-transcript-empty,
+.subagent-transcript-error {
+  padding-block: 4px;
+}
+
+/* ----- identifiers popover ----- */
+
+.subagent-ids-popover {
+  max-inline-size: 320px;
+}
+
+.subagent-ids-heading {
+  display: block;
+  margin-block-end: 6px;
+  color: var(--gray-a11);
+}
+
+.subagent-detail-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  margin-block-start: 5px;
+  padding-inline-start: 4px;
+}
+
+.subagent-detail-row {
+  display: contents;
+}
+
+.subagent-detail-name {
+  color: var(--gray-a10);
+}
+
+.subagent-detail-value-wrap {
+  min-inline-size: 0;
+}
+
+.subagent-detail-value {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(
+    --code-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace
+  );
+  color: var(--gray-12);
+}
+
+.subagent-copy-button {
+  opacity: 0.5;
+}
+
+.subagent-detail-row:hover .subagent-copy-button,
+.subagent-copy-button:focus-visible {
+  opacity: 1;
+}
+
+.supervision-action-summary {
+  display: grid;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid var(--blue-a5);
+  border-radius: 6px;
+  background: var(--blue-a2);
+}
+
+.supervision-action-warning {
+  border-color: var(--red-a7);
+  background: var(--red-a3);
+}
+
+.supervision-warning-text,
+.supervision-action-result {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.supervision-action-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.supervision-action-key {
+  color: var(--gray-a10);
+}
+
+.supervision-action-value {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  color: var(--gray-12);
+}
+
+.message-lifecycle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: var(--gray-11);
+}
+
+.message-card-body,
+.message-content,
+.message-prose {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  color: inherit;
+}
+
+.message-prose {
+  overflow-wrap: break-word;
+}
+
+.message-prose :where(p, li, blockquote, h1, h2, h3, h4, h5, h6, a, code) {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.message-prose :where(img, video, canvas, iframe) {
+  max-inline-size: 100%;
+  height: auto;
+}
+
+.message-prose :where(table) {
+  max-inline-size: 100%;
+}
+
+.message-prose :where(.rt-Flex) {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  flex-wrap: wrap;
+}
+
+.message-prose :where(.rt-Button) {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.message-prose :where(.rt-Button .rt-Text) {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inline-group,
+.inline-group-body,
+.inline-pill-row,
+.inline-expanded-item {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+/* Expanded detail hoisted in place between the pill rows of its group. */
+.inline-expanded-item {
+  inline-size: 100%;
+  overflow: hidden;
+}
+
+.inline-group {
+  display: flex;
+  align-self: flex-start;
+  inline-size: 100%;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.inline-group-body {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.inline-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  inline-size: 100%;
+  overflow-x: hidden;
+}
+
+.inline-action-pill,
+.inline-status-pill {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.inline-action-pill {
+  flex: 0 1 auto;
+  inline-size: auto;
+  max-inline-size: min(100%, 34rem);
+  display: inline-flex !important;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.inline-status-pill {
+  flex: 0 1 auto;
+  inline-size: auto;
+  max-inline-size: min(100%, 34rem);
+}
+
+.inline-pill-label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-action-pill .inline-pill-label {
+  flex: 0 0 auto;
+  min-inline-size: max-content;
+  max-inline-size: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.inline-pill-summary,
+.inline-pill-description {
+  display: block;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.inline-pill-markdown-preview .message-prose,
+.inline-pill-markdown-preview .message-prose > * {
+  display: inline;
+  margin: 0;
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-1);
+  color: var(--gray-11);
+}
+
+.inline-pill-markdown-preview p,
+.inline-pill-markdown-preview ul,
+.inline-pill-markdown-preview ol {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.inline-pill-markdown-preview li {
+  display: inline;
+}
+
+.inline-pill-markdown-preview li + li::before {
+  content: ", ";
+}
+
+/* Markdown code blocks (rehype-highlight / highlight.js) */
+.ns-codeblock-frame {
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  background: var(--gray-2);
+  max-width: 100%;
+}
+
+.ns-codeblock-toolbar {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--gray-5);
+}
+
+.ns-codeblock {
+  padding: 12px;
+  overflow-x: auto;
+  max-width: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--gray-12);
+  white-space: pre;
+  font-family: var(
+    --code-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace
+  );
+  font-size: var(--font-size-2);
+  line-height: var(--line-height-2);
+}
+
+:is(.dark, .dark-theme) .ns-codeblock-frame {
+  background: var(--gray-3);
+  border-color: var(--gray-6);
+}
+
+/* Reset Radix <Code> inside code blocks — handles single-line no-language fences
+   where the code handler renders <Code> (inline) but pre wraps it in .ns-codeblock */
+.ns-codeblock .rt-Code {
+  display: block;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  border-radius: 0;
+  letter-spacing: inherit;
+  white-space: inherit;
+}
+
+.ns-codeblock code.hljs {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.ns-codeblock .hljs-comment,
+.ns-codeblock .hljs-quote {
+  color: var(--gray-10);
+  font-style: italic;
+}
+
+.ns-codeblock .hljs-keyword,
+.ns-codeblock .hljs-selector-tag,
+.ns-codeblock .hljs-literal,
+.ns-codeblock .hljs-symbol,
+.ns-codeblock .hljs-name {
+  color: var(--purple-11);
+}
+
+.ns-codeblock .hljs-string,
+.ns-codeblock .hljs-title,
+.ns-codeblock .hljs-section,
+.ns-codeblock .hljs-attribute,
+.ns-codeblock .hljs-template-tag,
+.ns-codeblock .hljs-template-variable,
+.ns-codeblock .hljs-type {
+  color: var(--green-11);
+}
+
+.ns-codeblock .hljs-number,
+.ns-codeblock .hljs-bullet,
+.ns-codeblock .hljs-meta,
+.ns-codeblock .hljs-link {
+  color: var(--blue-11);
+}
+
+.ns-codeblock .hljs-built_in,
+.ns-codeblock .hljs-builtin-name {
+  color: var(--orange-11);
+}
+
+.ns-codeblock .hljs-emphasis {
+  font-style: italic;
+}
+
+.ns-codeblock .hljs-strong {
+  font-weight: 600;
+}
+
+/* ===========================================================================
+   Delivery model: ack badges, outbox, send button, narration, undo snackbar.
+   Built on the presentation-neutral foundation layer. No hard-coded hex; the
+   Player-side emphasis flows through the documented --agentic-player-* roles.
+   Reduced motion is centralized in the foundation stylesheet.
+   =========================================================================== */
+
+/* --- Ack badge --------------------------------------------------------------*/
+.ack-icon {
+  display: inline-flex;
+  align-items: center;
+}
+/* State-change cross-fade via the centralized ack-pop keyframe. */
+.ack-pop-read .ack-icon,
+.ack-pop-received .ack-icon,
+.ack-pop-pending .ack-icon,
+.ack-aggregate-overlay {
+  animation: ack-pop var(--motion-base) var(--ease-emphasized);
+}
+.ack-badge-compact,
+.ack-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Single-recipient badge is icon-only (e.g. a green check) — collapse the gap
+   and trim padding so it reads as just the glyph, not a wordy chip. */
+.ack-badge-icon-only {
+  gap: 0;
+  padding-inline: 3px;
+}
+.ack-avatar-stack {
+  display: inline-flex;
+  align-items: center;
+}
+.ack-avatar-stack-item {
+  border-radius: 9999px;
+  box-shadow: 0 0 0 2px var(--color-panel-solid, var(--gray-1));
+}
+.ack-badge-trigger {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-2);
+}
+.ack-badge-trigger:focus-visible {
+  outline: 2px solid var(--focus-8);
+  outline-offset: 2px;
+}
+.ack-detail-surface {
+  z-index: var(--z-popover);
+}
+
+/* --- Outbox -----------------------------------------------------------------*/
+.outbox-root {
+  position: relative;
+  min-width: 0;
+}
+/* Quiet tether between the typing indicator and the outbox. */
+.outbox-tether {
+  height: 8px;
+  width: 2px;
+  margin: 0 auto;
+  background: linear-gradient(var(--agentic-player-rail), transparent);
+  border-radius: 2px;
+}
+.outbox-tethered .outbox-panel {
+  box-shadow: inset 0 1px 0 var(--agentic-player-surface-strong);
+}
+.outbox-panel {
+  border: 1px solid var(--agentic-border);
+  border-radius: var(--radius-3);
+  background: var(--agentic-surface-card);
+  padding: var(--space-2);
+}
+.outbox-panel-header {
+  padding-bottom: var(--space-1);
+}
+/* Radix ScrollArea (polished thin scrollbar, matching the transcript). Cap the
+   viewport height so the queue scrolls internally and the composer stays put. */
+.outbox-scroll,
+.outbox-scroll [data-radix-scroll-area-viewport] {
+  max-height: 38vh;
+}
+.outbox-scroll [data-radix-scroll-area-viewport],
+.outbox-scroll [data-radix-scroll-area-content] {
+  overflow-x: hidden;
+}
+.outbox-list {
+  min-width: 0;
+}
+.outbox-summary-bar {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--agentic-border);
+  border-left: 2px solid var(--agentic-player-rail);
+  border-radius: var(--radius-3);
+  background: var(--agentic-player-surface);
+  padding: var(--space-2);
+  cursor: pointer;
+  color: inherit;
+}
+
+/* --- Outbox item ------------------------------------------------------------*/
+.outbox-item {
+  border: 1px solid var(--agentic-border);
+  border-left: 2px solid var(--agentic-player-rail);
+  border-radius: var(--radius-3);
+  background: var(--agentic-player-surface);
+  padding: var(--space-2);
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
+}
+.outbox-item-after-turn {
+  background: var(--agentic-surface-card);
+  border-left-color: var(--gray-a7);
+  opacity: 0.92;
+}
+.outbox-item-failed {
+  border-color: var(--intent-error-border);
+}
+.outbox-item-dragging {
+  opacity: 0.6;
+}
+.outbox-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  color: var(--gray-a9);
+  cursor: grab;
+}
+.outbox-drag-handle:active {
+  cursor: grabbing;
+}
+.outbox-item-clamp {
+  white-space: pre-wrap;
+}
+.outbox-editable-glyph {
+  display: inline-flex;
+  align-items: center;
+  color: var(--gray-11);
+  transition: color var(--motion-base) var(--ease-standard);
+}
+.outbox-editable-read,
+.outbox-editable-partial {
+  color: var(--grass-11);
+  animation: ack-pop var(--motion-base) var(--ease-emphasized);
+}
+.outbox-item-failed-banner {
+  color: var(--intent-error);
+}
+
+/* --- Send button ------------------------------------------------------------*/
+.send-button-group {
+  position: relative;
+}
+.send-button-primary {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.send-button-chevron {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid var(--gray-a6);
+  /* Slimmer than the square primary half — it's just the disclosure affordance. */
+  inline-size: 1.5rem;
+  min-inline-size: 1.5rem;
+  padding-inline: 0;
+}
+.send-button-morph {
+  animation: ack-pop var(--motion-fast) var(--ease-standard);
+}
+.send-button-accent-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--accent-9);
+}
+.send-button-menu {
+  z-index: var(--z-popover);
+}
+.send-menu-row {
+  height: auto;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* --- Composer narration pill, undo snackbar, sending ghost -----------------*/
+.chat-sending-ghost {
+  flex-shrink: 0;
+}
+.chat-narration-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 9999px;
+  background: var(--agentic-player-surface-strong);
+  color: var(--agentic-text);
+  border: 1px solid var(--agentic-player-rail);
+  animation: pill-in var(--motion-base) var(--ease-emphasized);
+}
+.chat-undo-snackbar {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-3);
+  background: var(--agentic-surface-raised);
+  border: 1px solid var(--agentic-border);
+  box-shadow: var(--elevation-2);
+  animation: pill-in var(--motion-base) var(--ease-emphasized);
+}
+
+/* --- Transcript markers / tombstone ----------------------------------------*/
+.message-card-tombstone {
+  opacity: 0.7;
+  --card-background-color: var(--gray-a2);
+  background: var(--gray-a2);
+}
+.message-tombstone-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--gray-a9);
+}
+.message-edited-marker {
+  font-style: italic;
+}
+
+/* Ambient turn rhythm: a soft shimmer on the typing row. */
+.typing-indicator-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--gray-a4) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: ambient-shimmer 2.4s linear infinite;
+}
+
+/* Lifecycle rise: an outbox card landing in the transcript. */
+.message-row-lifecycle-rise {
+  animation: lifecycle-rise var(--motion-emphasized) var(--ease-decelerate);
+}
+
+/* Lightweight initials avatar used by the ack badge avatar stack. */
+.ack-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--gray-a4);
+  color: var(--gray-12);
+  flex-shrink: 0;
+}
+.ack-avatar-stack-item .ack-avatar {
+  box-shadow: 0 0 0 2px var(--color-panel-solid, var(--gray-1));
+}
+
+/* --- First-agent setup + pre-send delivery queue ---------------------------*/
+/* Inline armed-config card shown in the message canvas before the first agent
+   exists. The accent glyph signals "this is going to do something on send". */
+.agent-setup-card {
+  border: 1px solid var(--agentic-border);
+}
+.agent-setup-heading-icon {
+  align-items: center;
+  background: var(--accent-a3);
+  border-radius: 9999px;
+  color: var(--accent-11);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+.first-agent-setup-status-icon {
+  align-items: center;
+  background: var(--accent-a4);
+  border-radius: 8px;
+  color: var(--accent-11);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+.first-agent-ready-status {
+  background: var(--green-a2);
+  border: 1px solid var(--green-a5);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.agent-setup-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto var(--space-1);
+  border-radius: 9999px;
+  color: var(--accent-11);
+  background: var(--accent-a3);
+}
+
+.chat-startup-status-root {
+  min-block-size: clamp(180px, 34vh, 320px);
+  padding: var(--space-4) var(--space-3);
+}
+.chat-startup-status-card {
+  inline-size: min(100%, 360px);
+  padding: var(--space-5);
+  border: 1px solid var(--gray-a5);
+  border-radius: var(--radius-4);
+  background:
+    radial-gradient(circle at 50% 0%, var(--accent-a3), transparent 58%),
+    var(--gray-a2);
+  box-shadow: 0 12px 36px var(--black-a4);
+}
+.chat-startup-status-glyph {
+  inline-size: 42px;
+  block-size: 42px;
+  margin-block-end: var(--space-3);
+  border: 1px solid var(--accent-a6);
+  border-radius: 9999px;
+  color: var(--accent-11);
+  background: var(--accent-a3);
+}
+.chat-startup-status-title {
+  letter-spacing: -0.01em;
+}
+.chat-startup-status-detail {
+  max-inline-size: 28ch;
+  margin-block-start: var(--space-1);
+  line-height: 1.45;
+}
+.chat-startup-status-steps {
+  inline-size: 100%;
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--gray-a4);
+}
+.chat-startup-status-step {
+  min-inline-size: 0;
+}
+.chat-startup-status-dot {
+  inline-size: 6px;
+  block-size: 6px;
+  flex: 0 0 auto;
+  border-radius: 9999px;
+  background: var(--gray-a6);
+}
+.chat-startup-status-dot.is-complete {
+  background: var(--accent-a8);
+}
+.chat-startup-status-dot.is-active {
+  background: var(--accent-9);
+  box-shadow: 0 0 0 4px var(--accent-a4);
+}
+
+/* Pre-send queue: messages held until the spawned agent joins. Left-railed like
+   the outbox (it's "your" pending content), with an amber "launching" header. */
+.pending-delivery-root {
+  min-width: 0;
+}
+.pending-delivery-card {
+  border: 1px solid var(--gray-a5);
+  border-left: 2px solid var(--accent-8);
+  border-radius: var(--radius-3);
+  background: var(--gray-a2);
+}
+.pending-delivery-card-failed {
+  border-left-color: var(--red-7);
+}
+.pending-delivery-header {
+  color: var(--gray-11);
+}
+.pending-delivery-list {
+  min-width: 0;
+}
+.pending-delivery-item {
+  border-radius: var(--radius-2);
+  background: var(--agentic-player-surface);
+  padding: var(--space-1) var(--space-2);
+}
+.pending-delivery-text {
+  min-width: 0;
+}

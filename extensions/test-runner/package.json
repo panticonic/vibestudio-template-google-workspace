@@ -1,0 +1,74 @@
+{
+  "name": "@workspace-extensions/test-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "vibestudio": {
+    "displayName": "Workspace Test Runner",
+    "icon": "./assets/icon.svg",
+    "entry": "index.ts",
+    "tests": [
+      {
+        "name": "native",
+        "runtime": "native",
+        "include": [
+          "**/*.test.ts"
+        ]
+      }
+    ],
+    "sourcemap": true,
+    "extension": {
+      "dependencyMode": "external",
+      "activationEvents": [
+        "onInvoke"
+      ],
+      "methodAuthority": {
+        "runNative": {
+          "effect": {
+            "kind": "userland-capability",
+            "capability": "native.code.execute-tests",
+            "resource": {
+              "kind": "receiver"
+            }
+          }
+        }
+      }
+    },
+    "authority": {
+      "provides": [
+        {
+          "name": "native.code.execute-tests",
+          "title": "Run native workspace tests",
+          "action": "execute a declared native test suite",
+          "tier": "gated",
+          "sensitivity": "write",
+          "resourceType": "native.code.tests",
+          "presentation": {
+            "domain": "automation",
+            "verb": "act"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once",
+            "task",
+            "session"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "capability": "context.boundary",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "critical",
+          "evidence": "intentional-broad"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@workspace/eval",
+  "version": "0.1.0-git.0fec5b5",
+  "description": "TypeScript/JSX code transformation and execution for Vibestudio",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./sandbox": "./src/sandbox.ts",
+    "./scope": "./src/scope.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vibestudio/module-imports": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
+    "acorn": "^8.18.0",
+    "sucrase": "^3.35.1"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  }
+}

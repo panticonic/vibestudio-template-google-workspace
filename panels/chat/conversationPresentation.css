@@ -1,0 +1,160 @@
+.agentic-chat-root.immersive-conversation {
+  --agentic-root-gap: 0;
+  --agentic-root-padding: 0;
+  --agentic-panel-padding: clamp(10px, 2vw, 20px);
+  --agentic-message-list-padding: clamp(10px, 2vw, 20px);
+  /* The reusable chat surface still contains Radix primitives. Rebind their
+     neutral/accent scales inside the product-owned subtree so menus, pills,
+     tool rows, focus rings, and the composer cannot leak the host purple. */
+  --gray-1: var(--agentic-surface);
+  --gray-2: var(--agentic-surface-card);
+  --gray-3: var(--agentic-surface-raised);
+  --gray-4: color-mix(in srgb, var(--agentic-surface-raised) 86%, var(--agentic-text));
+  --gray-5: var(--agentic-border);
+  --gray-6: var(--agentic-border);
+  --gray-8: var(--agentic-text-muted);
+  --gray-9: var(--agentic-text-muted);
+  --gray-10: var(--agentic-text-muted);
+  --gray-11: var(--agentic-text-muted);
+  --gray-12: var(--agentic-text);
+  --gray-a1: color-mix(in srgb, var(--agentic-surface-card) 35%, transparent);
+  --gray-a2: color-mix(in srgb, var(--agentic-surface-card) 62%, transparent);
+  --gray-a3: color-mix(in srgb, var(--agentic-surface-raised) 68%, transparent);
+  --gray-a4: color-mix(in srgb, var(--agentic-border) 52%, transparent);
+  --gray-a5: color-mix(in srgb, var(--agentic-border) 72%, transparent);
+  --gray-a6: var(--agentic-border);
+  --gray-a7: color-mix(in srgb, var(--agentic-text-muted) 55%, transparent);
+  --gray-a8: color-mix(in srgb, var(--agentic-text-muted) 72%, transparent);
+  --gray-a9: var(--agentic-text-muted);
+  --gray-a10: var(--agentic-text-muted);
+  --gray-a11: var(--agentic-text-muted);
+  --accent-8: var(--agentic-player-rail);
+  --accent-9: var(--agentic-player-accent);
+  --accent-11: var(--agentic-player-accent);
+  --accent-a2: var(--agentic-player-surface);
+  --accent-a3: var(--agentic-player-surface);
+  --accent-a4: var(--agentic-player-surface-strong);
+  --accent-a6: var(--agentic-border);
+  --accent-a7: var(--agentic-player-rail);
+  --accent-a8: var(--agentic-player-accent);
+  --accent-a9: var(--agentic-player-accent);
+  --color-panel: var(--agentic-surface-card);
+  --color-panel-solid: var(--agentic-surface-card);
+  --surface-card: var(--agentic-surface-card);
+  --surface-raised: var(--agentic-surface-raised);
+  --surface-border: var(--agentic-border);
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--agentic-player-accent) 10%, transparent), transparent 38%),
+    linear-gradient(150deg, var(--agentic-surface), color-mix(in srgb, var(--agentic-surface) 88%, black));
+}
+
+.immersive-conversation-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px clamp(14px, 2.6vw, 24px);
+  color: var(--agentic-text);
+  border-bottom: 1px solid var(--agentic-border);
+  background: color-mix(in srgb, var(--agentic-surface-card) 88%, transparent);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 12%);
+}
+
+.immersive-conversation-header > div {
+  min-width: 0;
+}
+
+.immersive-conversation-header small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--agentic-player-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.immersive-conversation-header strong {
+  display: block;
+  font-size: 17px;
+  letter-spacing: .01em;
+}
+
+.immersive-conversation-header p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--agentic-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.immersive-conversation-sigil {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: var(--agentic-player-accent);
+  border: 1px solid var(--agentic-border);
+  border-radius: 50%;
+  background: var(--agentic-player-surface);
+  box-shadow: inset 0 0 18px var(--agentic-player-surface-strong);
+  font-size: 20px;
+}
+
+.immersive-conversation-empty {
+  width: min(520px, calc(100% - 32px));
+  margin: auto;
+  padding: clamp(24px, 6vw, 48px);
+  color: var(--agentic-text);
+  border: 1px solid var(--agentic-border);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--agentic-surface-card) 88%, transparent);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 20%);
+  text-align: center;
+}
+
+.immersive-conversation-empty > span {
+  display: block;
+  color: var(--agentic-player-accent);
+  font-size: 30px;
+}
+
+.immersive-conversation-empty small {
+  display: block;
+  margin-top: 14px;
+  color: var(--agentic-player-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.immersive-conversation-empty h2 {
+  margin: 8px 0 10px;
+  font-size: clamp(22px, 4vw, 34px);
+  font-weight: 500;
+}
+
+.immersive-conversation-empty p {
+  max-width: 42ch;
+  margin: 0 auto;
+  color: var(--agentic-text-muted);
+  line-height: 1.65;
+}
+
+.agentic-chat-root.immersive-conversation [data-part="chat-composer"] {
+  margin: 0 clamp(8px, 2vw, 18px) clamp(8px, 2vw, 18px);
+  border-color: var(--agentic-border);
+  background: color-mix(in srgb, var(--agentic-surface-card) 92%, transparent);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 18%);
+}
+
+@media (max-width: 540px) {
+  .immersive-conversation-header {
+    padding: 10px 12px;
+  }
+  .immersive-conversation-header p {
+    white-space: normal;
+  }
+}

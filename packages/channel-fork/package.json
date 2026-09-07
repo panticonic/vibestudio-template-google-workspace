@@ -1,0 +1,17 @@
+{
+  "name": "@workspace/channel-fork",
+  "version": "0.1.0",
+  "description": "Channel fork orchestration: clone a pubsub channel and its DO participants at a fork point",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@vibestudio/rpc": "workspace:*",
+    "@workspace/agentic-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  }
+}
