@@ -211,7 +211,7 @@ export class GitBridge {
 
   async exportProtectedRepository(
     repoPath: string,
-    opts: { authorName?: string; authorEmail?: string } = {}
+    opts: { authorName?: string; authorEmail?: string; expectedMainEventId?: string } = {}
   ): Promise<ExportResult> {
     return withRepoLock(repoPath, (repo) => this.exportLockedInner(repo, opts));
   }
@@ -322,7 +322,7 @@ export class GitBridge {
 
   async exportLockedInner(
     repoPath: string,
-    opts: { authorName?: string; authorEmail?: string }
+    opts: { authorName?: string; authorEmail?: string; expectedMainEventId?: string }
   ): Promise<ExportResult> {
     const repo = normalizeWorkspaceRepoPath(repoPath);
     const pending = await this.pendingImportCandidate(repo);
@@ -333,7 +333,7 @@ export class GitBridge {
 
   async withProtectedExportPreviewLocked<T>(
     repoPath: string,
-    opts: { authorName?: string; authorEmail?: string },
+    opts: { authorName?: string; authorEmail?: string; expectedMainEventId?: string },
     inspect: (preview: { dir: string; exported: ExportResult }) => Promise<T>
   ): Promise<T> {
     const repo = normalizeWorkspaceRepoPath(repoPath);
@@ -361,7 +361,7 @@ export class GitBridge {
   private async exportProtectedStateToDirectory(
     repo: string,
     gitDir: string,
-    opts: { authorName?: string; authorEmail?: string },
+    opts: { authorName?: string; authorEmail?: string; expectedMainEventId?: string },
     detectLocalEdits: boolean
   ): Promise<ExportResult> {
     try {
@@ -384,6 +384,29 @@ export class GitBridge {
     }
     const event = inspected.node.value;
     const targetFiles = await this.listRepositoryFiles(state, repository.repositoryId);
+    if (opts.expectedMainEventId !== undefined && opts.expectedMainEventId !== state.eventId) {
+      const reviewedState = { kind: "event" as const, eventId: opts.expectedMainEventId };
+      const reviewedRepository = await this.findRepository(reviewedState, repo);
+      const reviewedFiles =
+        reviewedRepository?.repositoryId === repository.repositoryId
+          ? await this.listRepositoryFiles(reviewedState, reviewedRepository.repositoryId)
+          : null;
+      const reviewedByPath = new Map(reviewedFiles?.map((file) => [file.path, file]));
+      if (
+        !reviewedFiles ||
+        reviewedFiles.length !== targetFiles.length ||
+        targetFiles.some((file) => {
+          const reviewed = reviewedByPath.get(file.path);
+          return (
+            !reviewed || reviewed.contentHash !== file.contentHash || reviewed.mode !== file.mode
+          );
+        })
+      ) {
+        throw new Error(
+          `Repository ${repo} changed since reviewed event ${opts.expectedMainEventId}; review the new source before publishing`
+        );
+      }
+    }
     const checkout = await this.checkoutHead(gitDir);
     const tracked = checkout.files;
     const clobberedLocalEdits = detectLocalEdits

@@ -706,25 +706,6 @@
   box-shadow: var(--elevation-2);
 }
 
-/* Status is echoed on the accent edge so a wall of cards scans at a glance.
-   Pending (queued, no child activity yet) stays gray; running is blue. */
-.message-card-subagent.subagent-status-running {
-  border-inline-start-color: var(--blue-9);
-}
-
-.message-card-subagent.subagent-status-complete {
-  border-inline-start-color: var(--green-9);
-}
-
-.message-card-subagent.subagent-status-error {
-  border-inline-start-color: var(--red-9);
-}
-
-.message-card-subagent.subagent-status-cancelled,
-.message-card-subagent.subagent-status-abandoned {
-  border-inline-start-color: var(--amber-9);
-}
-
 .subagent-summary {
   padding: 7px 9px 6px;
 }
@@ -800,52 +781,6 @@
   flex: 0 0 auto;
   color: var(--gray-a9);
   font-variant-numeric: tabular-nums;
-}
-
-.subagent-status-dot {
-  flex: 0 0 auto;
-  inline-size: 7px;
-  block-size: 7px;
-  border-radius: 999px;
-  background: var(--gray-8);
-}
-
-.subagent-status-dot-pending {
-  background: var(--gray-8);
-  box-shadow: 0 0 0 3px var(--gray-a3);
-}
-
-.subagent-status-dot-running {
-  background: var(--blue-9);
-  box-shadow: 0 0 0 3px var(--blue-a3);
-  animation: subagent-pulse 1.4s ease-in-out infinite;
-}
-
-.subagent-status-dot-complete {
-  background: var(--green-9);
-  box-shadow: 0 0 0 3px var(--green-a3);
-}
-
-.subagent-status-dot-error {
-  background: var(--red-9);
-  box-shadow: 0 0 0 3px var(--red-a3);
-}
-
-.subagent-status-dot-cancelled,
-.subagent-status-dot-abandoned {
-  background: var(--amber-9);
-}
-
-@keyframes subagent-pulse {
-  0%,
-  100% {
-    opacity: 0.72;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.28);
-  }
 }
 
 .subagent-title {

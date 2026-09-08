@@ -124,20 +124,17 @@ Never place credentials, tokens, or sensitive topology in the cache.
 
 ```tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Callout, Flex, Text } from "@radix-ui/themes";
-import { readServiceHealth, discoverOptionalTemplates } from "./dashboard-data";
+import { Button, Flex, Text } from "@radix-ui/themes";
+import { readServiceHealth } from "./dashboard-data";
 
 const CACHE_KEY = "serviceHealthDashboard";
 
 export default function ServiceHealth({ scope, scopes, inlineUi }) {
   const cached = scope?.[CACHE_KEY];
   const [health, setHealth] = useState(cached?.health ?? []);
-  const [templates, setTemplates] = useState(cached?.templates ?? []);
   const [loading, setLoading] = useState(false);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [error, setError] = useState(null);
   const refreshRequest = useRef(0);
-  const templateRequest = useRef(0);
 
   const saveCache = useCallback(
     async (update) => {
@@ -170,23 +167,7 @@ export default function ServiceHealth({ scope, scopes, inlineUi }) {
     void refresh();
   }, [inlineUi?.renderedAt, refresh]);
 
-  async function loadTemplates() {
-    const request = ++templateRequest.current;
-    setLoadingTemplates(true);
-    setError(null);
-    try {
-      const next = await discoverOptionalTemplates();
-      if (request !== templateRequest.current) return;
-      setTemplates(next);
-      await saveCache({ templates: next });
-    } catch (cause) {
-      if (request === templateRequest.current) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      }
-    } finally {
-      if (request === templateRequest.current) setLoadingTemplates(false);
-    }
-  }
+
 
   return (
     <Flex direction="column" gap="3" p="2" style={{ width: "100%", minWidth: 0 }}>
@@ -198,16 +179,6 @@ export default function ServiceHealth({ scope, scopes, inlineUi }) {
       </Flex>
       {/* Render health here; cached data remains visible while it refreshes. */}
       <Text size="2">{health.length} services checked</Text>
-      <Callout.Root>
-        <Callout.Text>
-          Templates are optional reviewed starting points. Loading them contacts
-          the template registry; nothing is requested until you click.
-        </Callout.Text>
-      </Callout.Root>
-      <Button disabled={loadingTemplates} onClick={loadTemplates}>
-        {loadingTemplates ? "Loading…" : "Load optional templates"}
-      </Button>
-      {templates.length > 0 && <Text size="2">{templates.length} templates available</Text>}
       {error && <Text color="red">{error} — retry when ready.</Text>}
     </Flex>
   );

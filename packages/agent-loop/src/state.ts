@@ -146,6 +146,8 @@ export interface AgentLoopConfig {
    *  nothing. Read it through `isNotifyOnlyPolicy`; only ever write
    *  "notify-only". */
   publishPolicy?: "all" | "turn-final" | "notify-only" | "say-only";
+  /** Participant audience for this agent's primary end-of-turn response. */
+  finalResponseParticipantId?: string;
   /** Max subagent nesting depth (enforced at spawn by the vessel). Absent ⇒
    *  the vessel's implementation default. */
   maxSubagentDepth?: number;
@@ -210,10 +212,10 @@ export interface AgentTurnMetadata {
    *  deferred post-turn queue and promoted (one per turn) after close, instead
    *  of steering the open turn. */
   deliverAfterTurn?: boolean;
-  /** Exact retained child run whose terminal report this deferred prompt
-   * carries. Runtime-owned: it lets a same-turn suspend release the report
-   * without treating every completed-but-unintegrated child as pending input. */
-  supervisedTerminalRunId?: string;
+  /** Exact retained child run whose deferred report this prompt carries.
+   * Runtime-owned: it lets a same-turn suspend release the report once the
+   * child's current turn closes without retiring the collaborator. */
+  supervisedRunId?: string;
   /**
    * A machine-stable user-interface selection carried by the same message as
    * its readable text. The context builder exposes this bounded structure to
@@ -308,11 +310,11 @@ export interface OpenTurn {
    */
   waitingAtSeq?: number;
   metadata?: AgentTurnMetadata;
-  /** A soft "flush queued steers" interrupt is in flight: the in-flight model
-   *  call is being aborted, but the turn must CONTINUE (re-run the model with
-   *  the queued steers) rather than close. Distinct from `interrupted` (a hard
-   *  interrupt that closes the turn). Cleared when the next model call starts. */
-  pendingFlush?: "steers";
+  /** An explicit flush is in flight. `steers` keeps this turn open for a model
+   *  continuation; `queued` closes it and permits the close cascade to promote
+   *  queued after-turn work. A plain user interrupt has neither marker and
+   *  therefore parks queued work. Cleared when the next model call starts. */
+  pendingFlush?: "steers" | "queued";
   /** True once this turn has auto-switched to the local fallback. */
   failedOverToFallback?: boolean;
   /** Most recently journaled model route for this turn. Once failover occurs,
@@ -519,6 +521,8 @@ export interface AgentState {
   pendingPromptPreparations: Record<string, PendingPromptPreparation>;
   /** "Send after turn" messages, drained one per turn after each turn closes. */
   deferredPostTurnQueue: DeferredPrompt[];
+  /** A plain user Stop parks background deliveries until explicit input. */
+  pausedByUser: boolean;
 }
 
 export const MODEL_CONTEXT_VERSION = 2;
@@ -595,6 +599,7 @@ export function initialAgentState(input: InitialStateInput): AgentState {
     pendingPrompt: null,
     pendingPromptPreparations: {},
     deferredPostTurnQueue: [],
+    pausedByUser: false,
   };
 }
 

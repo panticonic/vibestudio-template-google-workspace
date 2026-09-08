@@ -165,7 +165,15 @@ export function applyEvent(
       if (foreignAuthor) return state;
       if (state.openTurn && turnId && state.openTurn.turnId !== turnId)
         return state;
-      return { ...state, openTurn: null, inFlightModelCall: null };
+      return {
+        ...state,
+        openTurn: null,
+        inFlightModelCall: null,
+        pausedByUser:
+          payload["reason"] === "user_interrupted"
+            ? payload["resumeQueuedAfterClose"] !== true
+            : state.pausedByUser,
+      };
     }
 
     case kind === "turn.waiting": {
@@ -292,8 +300,8 @@ export function applyEvent(
       // contextThroughSeq).
       if (
         metadata?.deliverAfterTurn &&
-        state.openTurn &&
-        state.openTurn.waitingAtSeq === undefined
+        (state.pausedByUser ||
+          (state.openTurn && state.openTurn.waitingAtSeq === undefined))
       ) {
         const deferred: DeferredPrompt = {
           sourceMessageId: sourceMessageId ?? String(envelope.envelopeId),
@@ -351,6 +359,7 @@ export function applyEvent(
       }
       return {
         ...state,
+        pausedByUser: false,
         deferredPostTurnQueue,
         entries: [...state.entries, entry],
         pendingPrompt: {
@@ -808,7 +817,17 @@ export function applyEvent(
       }
       if (detailKind === "interrupt") {
         return state.openTurn
-          ? { ...state, openTurn: { ...state.openTurn, interrupted: true } }
+          ? {
+              ...state,
+              openTurn: {
+                ...state.openTurn,
+                interrupted: true,
+                pendingFlush:
+                  details["resumeQueuedAfterClose"] === true
+                    ? ("queued" as const)
+                    : undefined,
+              },
+            }
           : state;
       }
       if (detailKind === "flush_steers") {

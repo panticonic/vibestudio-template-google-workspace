@@ -19,13 +19,28 @@ export const manifest = {
       { url: "https://api.github.com/user/repos", methods: ["GET", "POST"] },
       { url: "https://api.github.com/orgs/*/repos", methods: ["POST"] },
       { url: "https://api.github.com/repos/*", methods: ["GET"] },
-      { url: "https://api.github.com/repos/*/issues", methods: ["GET", "POST"] },
-      { url: "https://api.github.com/repos/*/issues/*", methods: ["GET", "PATCH"] },
+      {
+        url: "https://api.github.com/repos/*/issues",
+        methods: ["GET", "POST"],
+      },
+      {
+        url: "https://api.github.com/repos/*/issues/*",
+        methods: ["GET", "PATCH"],
+      },
       { url: "https://api.github.com/repos/*/pulls", methods: ["GET"] },
       { url: "https://api.github.com/repos/*/pulls/*", methods: ["GET"] },
-      { url: "https://api.github.com/repos/*/pages", methods: ["GET", "POST", "PUT"] },
-      { url: "https://api.github.com/repos/*/pages/builds", methods: ["GET", "POST"] },
-      { url: "https://api.github.com/repos/*/pages/builds/*", methods: ["GET"] },
+      {
+        url: "https://api.github.com/repos/*/pages",
+        methods: ["GET", "POST", "PUT"],
+      },
+      {
+        url: "https://api.github.com/repos/*/pages/builds",
+        methods: ["GET", "POST"],
+      },
+      {
+        url: "https://api.github.com/repos/*/pages/builds/*",
+        methods: ["GET"],
+      },
     ],
   },
   webhooks: {
@@ -152,7 +167,10 @@ export interface ResolveOrCreateRepoResult extends CreateRepoResult {
   created: boolean;
 }
 
-export type GitHubPublishOwnerSource = "explicit" | "credential-target" | "authenticated-user";
+export type GitHubPublishOwnerSource =
+  | "explicit"
+  | "credential-target"
+  | "authenticated-user";
 
 export interface GitHubPublishOperationResolution {
   credentialId: string;
@@ -162,19 +180,32 @@ export interface GitHubPublishOperationResolution {
   ownerSource: GitHubPublishOwnerSource;
   targetName?: string;
   organization?: string;
-  requiredCapabilities: readonly ["github-api", "github-repository-create", "github-git-push"];
+  requiredCapabilities:
+    | readonly ["github-api", "github-repository-create", "github-git-push"]
+    | readonly [
+        "github-api",
+        "github-repository-create",
+        "github-git-push",
+        "github-pages-publish",
+      ];
 }
 
-function isClassicGitHubCredential(credential: StoredCredentialSummary): boolean {
+function isClassicGitHubCredential(
+  credential: StoredCredentialSummary,
+): boolean {
   return credential.metadata?.["providerKind"] === "classic-pat";
 }
 
-function targetNameForCredential(credential: StoredCredentialSummary): string | undefined {
+function targetNameForCredential(
+  credential: StoredCredentialSummary,
+): string | undefined {
   const targetName = credential.metadata?.["targetName"]?.trim();
   return targetName || undefined;
 }
 
-function isGitHubStoredCredential(credential: StoredCredentialSummary): boolean {
+function isGitHubStoredCredential(
+  credential: StoredCredentialSummary,
+): boolean {
   if (credential.metadata?.["providerId"] === "github") return true;
   return credential.audience.some((audience) => {
     try {
@@ -185,33 +216,62 @@ function isGitHubStoredCredential(credential: StoredCredentialSummary): boolean 
   });
 }
 
-export function validateGitHubPublishCredential(credential: StoredCredentialSummary): void {
+export class GitHubCredentialSetupError extends Error {
+  constructor(
+    message: string,
+    readonly repair: {
+      provider: "github";
+      accessLevel: "publish" | "publish-pages";
+      credentialId: string;
+    },
+  ) {
+    super(message);
+    this.name = "GitHubCredentialSetupError";
+  }
+}
+
+export function validateGitHubPublishCredential(
+  credential: StoredCredentialSummary,
+  publication: "repository" | "pages" = "repository",
+): void {
+  const fail = (message: string): Error =>
+    new GitHubCredentialSetupError(message, {
+      provider: "github",
+      accessLevel: publication === "pages" ? "publish-pages" : "publish",
+      credentialId: credential.id,
+    });
+  const accessLabel =
+    publication === "pages" ? "Publish websites" : "Publish repositories";
   if (credential.lifecycle.state !== "active") {
-    throw new Error(
+    throw fail(
       `GitHub publish preflight failed for credential "${credential.label}": ` +
-        `the credential is ${credential.lifecycle.state}. Reconnect GitHub and retry.`
+        `the credential is ${credential.lifecycle.state}. Reconnect GitHub and retry.`,
     );
   }
-  const bindingIds = new Set((credential.bindings ?? []).map((binding) => binding.id));
+  const bindingIds = new Set(
+    (credential.bindings ?? []).map((binding) => binding.id),
+  );
   const missingBindings = ["github-user", "github-git-http"].filter(
-    (bindingId) => credential.bindings && !bindingIds.has(bindingId)
+    (bindingId) => credential.bindings && !bindingIds.has(bindingId),
   );
   if (missingBindings.length) {
-    throw new Error(
+    throw fail(
       `GitHub publish preflight failed for credential "${credential.label}": ` +
-        `it is missing ${missingBindings.join(" and ")} access. Reconnect with "Publish repositories" access.`
+        `it is missing ${missingBindings.join(" and ")} access. Reconnect with "${accessLabel}" access.`,
     );
   }
   if (!isClassicGitHubCredential(credential)) {
     const scopes = new Set(credential.scopes);
-    const missingScopes = ["contents:write", "administration:write"].filter(
-      (scope) => !scopes.has(scope)
-    );
+    const missingScopes = [
+      "contents:write",
+      "administration:write",
+      ...(publication === "pages" ? ["pages:write"] : []),
+    ].filter((scope) => !scopes.has(scope));
     if (missingScopes.length) {
-      throw new Error(
+      throw fail(
         `GitHub publish preflight failed for credential "${credential.label}": ` +
           `missing ${missingScopes.join(" and ")} permission${missingScopes.length === 1 ? "" : "s"}. ` +
-          `Reconnect with "Publish repositories" access.`
+          `Reconnect with "${accessLabel}" access.`,
       );
     }
   }
@@ -219,14 +279,24 @@ export function validateGitHubPublishCredential(credential: StoredCredentialSumm
 
 export async function resolveGitHubPublishOperation(
   credentials: CredentialClient,
-  opts: { credentialId?: string; organization?: string; owner?: string } = {}
+  opts: {
+    credentialId?: string;
+    organization?: string;
+    owner?: string;
+    publication?: "repository" | "pages";
+  } = {},
 ): Promise<GitHubPublishOperationResolution> {
   if (opts.organization && opts.owner) {
     throw new Error("Choose one explicit GitHub owner field");
   }
-  const requestedOwner = opts.owner?.trim() || opts.organization?.trim() || undefined;
-  const candidates = (await credentials.listStoredCredentials()).filter(isGitHubStoredCredential);
-  const activeCandidates = candidates.filter((candidate) => candidate.lifecycle.state === "active");
+  const requestedOwner =
+    opts.owner?.trim() || opts.organization?.trim() || undefined;
+  const candidates = (await credentials.listStoredCredentials()).filter(
+    isGitHubStoredCredential,
+  );
+  const activeCandidates = candidates.filter(
+    (candidate) => candidate.lifecycle.state === "active",
+  );
   const credential = opts.credentialId
     ? candidates.find((candidate) => candidate.id === opts.credentialId)
     : activeCandidates.length === 1
@@ -243,19 +313,21 @@ export async function resolveGitHubPublishOperation(
         : activeCandidates.length > 1
           ? `Multiple active GitHub credentials are available (${available}). ` +
             "Pass credentialId explicitly; Vibestudio will not guess."
-          : "No active GitHub credential is available. Connect GitHub with Publish repositories access."
+          : `No active GitHub credential is available. Connect GitHub with ${opts.publication === "pages" ? "Publish websites" : "Publish repositories"} access.`,
     );
   }
-  validateGitHubPublishCredential(credential);
+  validateGitHubPublishCredential(credential, opts.publication);
   const targetName = targetNameForCredential(credential);
   if (requestedOwner && targetName && requestedOwner !== targetName) {
     throw new Error(
       `GitHub owner "${requestedOwner}" does not match the connected token owner ` +
         `"${targetName}" for credential "${credential.label}". ` +
-        "Use the matching owner or reconnect with a token targeted to it."
+        "Use the matching owner or reconnect with a token targeted to it.",
     );
   }
-  const github = createGitHubClient(credentials, { credentialId: credential.id });
+  const github = createGitHubClient(credentials, {
+    credentialId: credential.id,
+  });
   let user: GitHubUser;
   try {
     user = await github.getUser();
@@ -264,13 +336,13 @@ export async function resolveGitHubPublishOperation(
     throw new Error(
       `GitHub credential "${credential.label}" failed live verification: ${message}. ` +
         "Reconnect GitHub or choose a different credential.",
-      { cause: error }
+      { cause: error },
     );
   }
   if (!user.login?.trim()) {
     throw new Error(
       `GitHub credential "${credential.label}" passed the API check but returned no account login. ` +
-        "Reconnect GitHub and retry."
+        "Reconnect GitHub and retry.",
     );
   }
   const ownerSource: GitHubPublishOwnerSource = requestedOwner
@@ -289,7 +361,15 @@ export async function resolveGitHubPublishOperation(
     ...(destinationOwner.toLowerCase() !== user.login.toLowerCase()
       ? { organization: destinationOwner }
       : {}),
-    requiredCapabilities: ["github-api", "github-repository-create", "github-git-push"],
+    requiredCapabilities:
+      opts.publication === "pages"
+        ? [
+            "github-api",
+            "github-repository-create",
+            "github-git-push",
+            "github-pages-publish",
+          ]
+        : ["github-api", "github-repository-create", "github-git-push"],
   };
 }
 
@@ -322,7 +402,9 @@ function toQueryParams(params?: object): string {
   }
 
   const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(
+    params as Record<string, unknown>,
+  )) {
     if (typeof value === "undefined" || value === null) {
       continue;
     }
@@ -381,24 +463,44 @@ export interface GitHubPagesRepair {
 export interface GitHubClient {
   getPages(owner: string, repo: string): Promise<GitHubPagesSite | null>;
   /** Create branch publication, or verify that its existing owner and source match. */
-  ensurePagesSource(owner: string, repo: string, source: GitHubPagesSource): Promise<GitHubPagesSite>;
-  getLatestPagesBuild(owner: string, repo: string): Promise<GitHubPagesBuild | null>;
-  requestPagesBuild(owner: string, repo: string): Promise<{ url: string; status: string }>;
+  ensurePagesSource(
+    owner: string,
+    repo: string,
+    source: GitHubPagesSource,
+  ): Promise<GitHubPagesSite>;
+  getLatestPagesBuild(
+    owner: string,
+    repo: string,
+  ): Promise<GitHubPagesBuild | null>;
+  requestPagesBuild(
+    owner: string,
+    repo: string,
+  ): Promise<{ url: string; status: string }>;
   /** The underlying URL-credential handle (exposed for `credentialId` access in push correlation). */
   handle(): Promise<UrlCredentialHandle>;
   getUser(): Promise<GitHubUser>;
   listRepos(opts?: ListReposOptions): Promise<GitHubRepo[]>;
   createRepo(params: CreateRepoParams): Promise<CreateRepoResult>;
-  resolveOrCreateRepo(params: ResolveOrCreateRepoParams): Promise<ResolveOrCreateRepoResult>;
+  resolveOrCreateRepo(
+    params: ResolveOrCreateRepoParams,
+  ): Promise<ResolveOrCreateRepoResult>;
   getRepo(owner: string, repo: string): Promise<GitHubRepo>;
-  listIssues(owner: string, repo: string, opts?: ListIssuesOptions): Promise<GitHubIssue[]>;
-  createIssue(owner: string, repo: string, params: CreateIssueParams): Promise<GitHubIssue>;
+  listIssues(
+    owner: string,
+    repo: string,
+    opts?: ListIssuesOptions,
+  ): Promise<GitHubIssue[]>;
+  createIssue(
+    owner: string,
+    repo: string,
+    params: CreateIssueParams,
+  ): Promise<GitHubIssue>;
   getIssue(owner: string, repo: string, number: number): Promise<GitHubIssue>;
   updateIssue(
     owner: string,
     repo: string,
     number: number,
-    params: UpdateIssueParams
+    params: UpdateIssueParams,
   ): Promise<GitHubIssue>;
 }
 
@@ -409,10 +511,12 @@ export class GitHubApiError extends Error {
     readonly status: number,
     readonly statusText: string,
     readonly responseBody: string,
-    readonly repair?: GitHubPagesRepair
+    readonly repair?: GitHubPagesRepair,
   ) {
     const detail = githubApiErrorDetail(responseBody);
-    super(`GitHub API request failed: ${status} ${statusText}${detail ? ` - ${detail}` : ""}`);
+    super(
+      `GitHub API request failed: ${status} ${statusText}${detail ? ` - ${detail}` : ""}`,
+    );
     this.name = "GitHubApiError";
     this.detail = detail;
   }
@@ -425,9 +529,12 @@ function githubApiErrorDetail(responseBody: string): string {
       message?: unknown;
       documentation_url?: unknown;
     };
-    const message = typeof payload.message === "string" ? payload.message.trim() : "";
+    const message =
+      typeof payload.message === "string" ? payload.message.trim() : "";
     const documentationUrl =
-      typeof payload.documentation_url === "string" ? payload.documentation_url.trim() : "";
+      typeof payload.documentation_url === "string"
+        ? payload.documentation_url.trim()
+        : "";
     return [message, documentationUrl].filter(Boolean).join(" — ");
   } catch {
     return responseBody.trim();
@@ -442,10 +549,10 @@ function githubApiErrorDetail(responseBody: string): string {
  */
 export function createGitHubClient(
   credentials: CredentialClient,
-  opts: { credentialId?: string } = {}
+  opts: { credentialId?: string } = {},
 ): GitHubClient {
   const memoizeHandle = (
-    resolveDescriptor: () => Parameters<CredentialClient["forAudience"]>[0]
+    resolveDescriptor: () => Parameters<CredentialClient["forAudience"]>[0],
   ) => {
     let handlePromise: Promise<UrlCredentialHandle> | null = null;
     return (): Promise<UrlCredentialHandle> => {
@@ -467,12 +574,14 @@ export function createGitHubClient(
     label: githubCredential.displayName,
     ...(opts.credentialId ? { credentialId: opts.credentialId } : {}),
   }));
-  const userHandle = memoizeHandle(() => bindingAudience(githubCredential, "github-user", opts));
+  const userHandle = memoizeHandle(() =>
+    bindingAudience(githubCredential, "github-user", opts),
+  );
 
   const apiFetch = async <T>(
     path: string,
     init?: RequestInit,
-    credentialHandle: () => Promise<UrlCredentialHandle> = handle
+    credentialHandle: () => Promise<UrlCredentialHandle> = handle,
   ): Promise<T> => {
     const auth = await credentialHandle();
     const headers = new Headers(init?.headers);
@@ -480,7 +589,10 @@ export function createGitHubClient(
     if (init?.body && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
-    const response = await auth.fetch(`${GITHUB_API_BASE}${path}`, { ...init, headers });
+    const response = await auth.fetch(`${GITHUB_API_BASE}${path}`, {
+      ...init,
+      headers,
+    });
     if (!response.ok) {
       const bodyText = await response.text();
       throw new GitHubApiError(response.status, response.statusText, bodyText);
@@ -490,44 +602,92 @@ export function createGitHubClient(
 
   // Separate handles for each exact repository, never the broad account API handle.
   const pagesHandles = new Map<string, () => Promise<UrlCredentialHandle>>();
-  const pagesFetch = async <T>(owner: string, repo: string, suffix = "", init?: RequestInit): Promise<T> => {
-    if (!/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo) || repo === "." || repo === "..")
-      throw new Error("Pages requires an exact GitHub owner and repository name");
+  const pagesFetch = async <T>(
+    owner: string,
+    repo: string,
+    suffix = "",
+    init?: RequestInit,
+  ): Promise<T> => {
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(owner) ||
+      !/^[A-Za-z0-9_.-]+$/.test(repo) ||
+      repo === "." ||
+      repo === ".."
+    )
+      throw new Error(
+        "Pages requires an exact GitHub owner and repository name",
+      );
     const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pages`;
     let selected = pagesHandles.get(path);
     if (!selected) {
       selected = memoizeHandle(() => ({
-        audiences: [{ url: GITHUB_API_BASE + path, match: "exact" }, { url: GITHUB_API_BASE + path + "/", match: "path-prefix" }],
+        audiences: [
+          { url: GITHUB_API_BASE + path, match: "exact" },
+          { url: GITHUB_API_BASE + path + "/", match: "path-prefix" },
+        ],
         label: `GitHub Pages: ${owner}/${repo}`,
         ...(opts.credentialId ? { credentialId: opts.credentialId } : {}),
       }));
       pagesHandles.set(path, selected);
     }
     try {
-      return await apiFetch<T>(path + suffix, {
-        ...init, headers: { "X-GitHub-Api-Version": "2026-03-10", ...Object.fromEntries(new Headers(init?.headers)) },
-      }, selected);
+      return await apiFetch<T>(
+        path + suffix,
+        {
+          ...init,
+          headers: {
+            "X-GitHub-Api-Version": "2026-03-10",
+            ...Object.fromEntries(new Headers(init?.headers)),
+          },
+        },
+        selected,
+      );
     } catch (error) {
       if (error instanceof GitHubApiError && error.status === 403)
-        throw new GitHubApiError(error.status, error.statusText, error.responseBody,
-          { provider: "github", accessLevel: "publish-pages", owner, repository: repo });
+        throw new GitHubApiError(
+          error.status,
+          error.statusText,
+          error.responseBody,
+          {
+            provider: "github",
+            accessLevel: "publish-pages",
+            owner,
+            repository: repo,
+          },
+        );
       throw error;
     }
   };
-  const getPages = async (owner: string, repo: string): Promise<GitHubPagesSite | null> => {
-    try { return await pagesFetch<GitHubPagesSite>(owner, repo); }
-    catch (error) { if (error instanceof GitHubApiError && error.status === 404) return null; throw error; }
+  const getPages = async (
+    owner: string,
+    repo: string,
+  ): Promise<GitHubPagesSite | null> => {
+    try {
+      return await pagesFetch<GitHubPagesSite>(owner, repo);
+    } catch (error) {
+      if (error instanceof GitHubApiError && error.status === 404) return null;
+      throw error;
+    }
   };
-  const assertPagesSource = (site: GitHubPagesSite, source: GitHubPagesSource): GitHubPagesSite => {
-    if (site.build_type === "workflow" || site.source?.branch !== source.branch || site.source.path !== source.path)
-      throw new Error("This repository already has a different Pages publication owner or source. Review that integration before changing it.");
+  const assertPagesSource = (
+    site: GitHubPagesSite,
+    source: GitHubPagesSource,
+  ): GitHubPagesSite => {
+    if (
+      site.build_type === "workflow" ||
+      site.source?.branch !== source.branch ||
+      site.source.path !== source.path
+    )
+      throw new Error(
+        "This repository already has a different Pages publication owner or source. Review that integration before changing it.",
+      );
     return site;
   };
   const enc = encodeURIComponent;
   const resolvedRepository = (
     repo: GitHubRepo,
     expected: { owner: string; name: string },
-    created: boolean
+    created: boolean,
   ): ResolveOrCreateRepoResult => {
     const owner = repo.owner.login?.trim();
     const name = repo.name?.trim();
@@ -539,11 +699,13 @@ export function createGitHubClient(
     ) {
       throw new Error(
         `GitHub resolved ${repo.full_name || "<unknown repository>"} while ` +
-          `${expected.owner}/${expected.name} was requested`
+          `${expected.owner}/${expected.name} was requested`,
       );
     }
     if (!repo.clone_url || !repo.html_url) {
-      throw new Error(`GitHub repository ${owner}/${name} has no canonical HTTPS URLs`);
+      throw new Error(
+        `GitHub repository ${owner}/${name} has no canonical HTTPS URLs`,
+      );
     }
     return {
       cloneUrl: repo.clone_url,
@@ -557,36 +719,58 @@ export function createGitHubClient(
   return {
     getPages,
     async ensurePagesSource(owner, repo, source) {
-      if (!source.branch.trim() || source.path !== "/docs") throw new Error("Pages publication requires an exact branch and /docs output");
+      if (!source.branch.trim() || source.path !== "/docs")
+        throw new Error(
+          "Pages publication requires an exact branch and /docs output",
+        );
       const existing = await getPages(owner, repo);
       if (existing) return assertPagesSource(existing, source);
       try {
         const site = await pagesFetch<GitHubPagesSite>(owner, repo, "", {
-          method: "POST", body: JSON.stringify({ build_type: "legacy", source }),
+          method: "POST",
+          body: JSON.stringify({ build_type: "legacy", source }),
         });
         return assertPagesSource(site, source);
       } catch (error) {
         // A concurrent or uncertain successful creation is reconciled with the provider.
-        if (!(error instanceof GitHubApiError) || error.status !== 409) throw error;
+        if (!(error instanceof GitHubApiError) || error.status !== 409)
+          throw error;
         const site = await getPages(owner, repo);
         if (!site) throw error;
         return assertPagesSource(site, source);
       }
     },
     async getLatestPagesBuild(owner, repo) {
-      try { return await pagesFetch<GitHubPagesBuild>(owner, repo, "/builds/latest"); }
-      catch (error) { if (error instanceof GitHubApiError && error.status === 404) return null; throw error; }
+      try {
+        return await pagesFetch<GitHubPagesBuild>(
+          owner,
+          repo,
+          "/builds/latest",
+        );
+      } catch (error) {
+        if (error instanceof GitHubApiError && error.status === 404)
+          return null;
+        throw error;
+      }
     },
-    requestPagesBuild: (owner, repo) => pagesFetch(owner, repo, "/builds", { method: "POST" }),
+    requestPagesBuild: (owner, repo) =>
+      pagesFetch(owner, repo, "/builds", { method: "POST" }),
     handle,
     getUser: () => apiFetch<GitHubUser>("/user", undefined, userHandle),
     listRepos: (opts) =>
-      apiFetch<GitHubRepo[]>(`/user/repos${toQueryParams(opts)}`, undefined, userHandle),
-    getRepo: (owner, repo) => apiFetch<GitHubRepo>(`/repos/${enc(owner)}/${enc(repo)}`),
+      apiFetch<GitHubRepo[]>(
+        `/user/repos${toQueryParams(opts)}`,
+        undefined,
+        userHandle,
+      ),
+    getRepo: (owner, repo) =>
+      apiFetch<GitHubRepo>(`/repos/${enc(owner)}/${enc(repo)}`),
     listIssues: (owner, repo, opts) => {
-      const labels = Array.isArray(opts?.labels) ? opts.labels.join(",") : opts?.labels;
+      const labels = Array.isArray(opts?.labels)
+        ? opts.labels.join(",")
+        : opts?.labels;
       return apiFetch<GitHubIssue[]>(
-        `/repos/${enc(owner)}/${enc(repo)}/issues${toQueryParams({ ...opts, labels })}`
+        `/repos/${enc(owner)}/${enc(repo)}/issues${toQueryParams({ ...opts, labels })}`,
       );
     },
     createIssue: (owner, repo, params) =>
@@ -597,7 +781,9 @@ export function createGitHubClient(
     createRepo: async (params) => {
       let repo: GitHubCreatedRepo;
       const { organization, ...repositoryParams } = params;
-      const endpoint = organization ? `/orgs/${enc(organization)}/repos` : "/user/repos";
+      const endpoint = organization
+        ? `/orgs/${enc(organization)}/repos`
+        : "/user/repos";
       try {
         repo = await apiFetch<GitHubCreatedRepo>(
           endpoint,
@@ -605,7 +791,7 @@ export function createGitHubClient(
             method: "POST",
             body: JSON.stringify(repositoryParams),
           },
-          userHandle
+          userHandle,
         );
       } catch (error) {
         if (error instanceof GitHubApiError) {
@@ -613,7 +799,7 @@ export function createGitHubClient(
             `GitHub repository creation failed (${error.status} ${error.statusText})` +
               `${error.detail ? `: ${error.detail}` : "."} ` +
               "Review the connected credential and any GitHub account or organization restrictions, then retry.",
-            { cause: error }
+            { cause: error },
           );
         }
         throw error;
@@ -628,13 +814,18 @@ export function createGitHubClient(
       const owner = params.owner.trim();
       const name = params.name.trim();
       if (!owner || !name || owner.includes("/") || name.includes("/")) {
-        throw new Error("GitHub repository owner and name must be single non-empty path segments");
+        throw new Error(
+          "GitHub repository owner and name must be single non-empty path segments",
+        );
       }
       try {
-        const existing = await apiFetch<GitHubRepo>(`/repos/${enc(owner)}/${enc(name)}`);
+        const existing = await apiFetch<GitHubRepo>(
+          `/repos/${enc(owner)}/${enc(name)}`,
+        );
         return resolvedRepository(existing, { owner, name }, false);
       } catch (error) {
-        if (!(error instanceof GitHubApiError) || error.status !== 404) throw error;
+        if (!(error instanceof GitHubApiError) || error.status !== 404)
+          throw error;
       }
 
       const user = await apiFetch<GitHubUser>("/user", undefined, userHandle);
@@ -651,17 +842,21 @@ export function createGitHubClient(
             body: JSON.stringify({
               name,
               private: params.private,
-              ...(params.description === undefined ? {} : { description: params.description }),
+              ...(params.description === undefined
+                ? {}
+                : { description: params.description }),
             }),
           },
-          userHandle
+          userHandle,
         );
       } catch (error) {
         // A concurrent publisher may win the create race. Resolve the identity
         // again; every other creation failure remains visible.
         if (error instanceof GitHubApiError && error.status === 422) {
           try {
-            const existing = await apiFetch<GitHubRepo>(`/repos/${enc(owner)}/${enc(name)}`);
+            const existing = await apiFetch<GitHubRepo>(
+              `/repos/${enc(owner)}/${enc(name)}`,
+            );
             return resolvedRepository(existing, { owner, name }, false);
           } catch {
             // Preserve the original create failure below.
@@ -672,7 +867,7 @@ export function createGitHubClient(
             `GitHub repository creation failed (${error.status} ${error.statusText})` +
               `${error.detail ? `: ${error.detail}` : "."} ` +
               "Review the connected credential and any GitHub account or organization restrictions, then retry.",
-            { cause: error }
+            { cause: error },
           );
         }
         throw error;
@@ -680,12 +875,17 @@ export function createGitHubClient(
       return resolvedRepository(created, { owner, name }, true);
     },
     getIssue: (owner, repo, number) =>
-      apiFetch<GitHubIssue>(`/repos/${enc(owner)}/${enc(repo)}/issues/${number}`),
+      apiFetch<GitHubIssue>(
+        `/repos/${enc(owner)}/${enc(repo)}/issues/${number}`,
+      ),
     updateIssue: (owner, repo, number, params) =>
-      apiFetch<GitHubIssue>(`/repos/${enc(owner)}/${enc(repo)}/issues/${number}`, {
-        method: "PATCH",
-        body: JSON.stringify(params),
-      }),
+      apiFetch<GitHubIssue>(
+        `/repos/${enc(owner)}/${enc(repo)}/issues/${number}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(params),
+        },
+      ),
   };
 }
 
@@ -710,4 +910,218 @@ export function onPullRequest(event: GitHubPullRequestWebhookEvent) {
     sender: event.sender ?? null,
     raw: event,
   };
+}
+
+export type GitHubPagesObservation =
+  | { state: "not-configured" }
+  | { state: "building"; siteUrl: string; observedCommit: string | null }
+  | { state: "failed"; siteUrl: string; reason: string }
+  | { state: "unverified"; siteUrl: string; reason: string }
+  | {
+      state: "deployed";
+      siteUrl: string;
+      commit: string;
+      buildId: string;
+      files: number;
+    };
+
+/** Retain this receipt after Git publication; retries observe the same commit and build. */
+export interface GitHubPagesPublication {
+  owner: string;
+  repository: string;
+  branch: string;
+  commit: string;
+  buildId: string;
+  signal?: AbortSignal;
+}
+
+function assertPagesPublication(input: GitHubPagesPublication): void {
+  if (
+    !/^[a-f0-9]{40}$/.test(input.commit) ||
+    !/^[a-f0-9]{64}$/.test(input.buildId)
+  )
+    throw new Error(
+      "Publication observation requires the exact reviewed commit and build identity",
+    );
+  input.signal?.throwIfAborted();
+}
+
+/** Enable the existing /docs owner, then verify its actual publication. Never creates or pushes a repository. */
+export async function configureGitHubPagesPublication(
+  github: Pick<
+    GitHubClient,
+    "ensurePagesSource" | "getPages" | "getLatestPagesBuild"
+  >,
+  input: GitHubPagesPublication,
+  readPublic: (url: string, signal?: AbortSignal) => Promise<Response>,
+): Promise<GitHubPagesObservation> {
+  assertPagesPublication(input);
+  await github.ensurePagesSource(input.owner, input.repository, {
+    branch: input.branch,
+    path: "/docs",
+  });
+  return observeGitHubPagesPublication(github, input, readPublic);
+}
+
+/** Observe an existing publication. Retrying observation never creates a repo, pushes, or changes Pages. */
+export async function observeGitHubPagesPublication(
+  github: Pick<GitHubClient, "getPages" | "getLatestPagesBuild">,
+  input: GitHubPagesPublication,
+  readPublic: (url: string, signal?: AbortSignal) => Promise<Response>,
+): Promise<GitHubPagesObservation> {
+  assertPagesPublication(input);
+  const site = await github.getPages(input.owner, input.repository);
+  if (!site) return { state: "not-configured" };
+  const siteUrl = site.html_url;
+  if (
+    site.build_type === "workflow" ||
+    site.source?.branch !== input.branch ||
+    site.source.path !== "/docs"
+  )
+    return {
+      state: "unverified",
+      siteUrl,
+      reason: "The Pages source differs from the reviewed /docs publication",
+    };
+  const build = await github.getLatestPagesBuild(input.owner, input.repository);
+  if (
+    !build ||
+    build.commit !== input.commit ||
+    build.status === "queued" ||
+    build.status === "building"
+  )
+    return {
+      state: "building",
+      siteUrl,
+      observedCommit: build?.commit ?? null,
+    };
+  if (build.status === "errored")
+    return {
+      state: "failed",
+      siteUrl,
+      reason: build.error?.message ?? "GitHub Pages build failed",
+    };
+  if (build.status !== "built")
+    return {
+      state: "unverified",
+      siteUrl,
+      reason: "GitHub has not confirmed a completed Pages build",
+    };
+  try {
+    const base = new URL(siteUrl);
+    if (
+      !["http:", "https:"].includes(base.protocol) ||
+      base.username ||
+      base.password ||
+      base.search ||
+      base.hash
+    )
+      throw new Error("GitHub returned an unsupported website URL");
+    if (!base.pathname.endsWith("/")) base.pathname += "/";
+    const digest = async (bytes: Uint8Array) =>
+      Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest(
+            "SHA-256",
+            bytes as Uint8Array<ArrayBuffer>,
+          ),
+        ),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      ).join("");
+    const read = async (file: string, limit: number) => {
+      input.signal?.throwIfAborted();
+      if (!/^[A-Za-z0-9_.-]+$/.test(file) || file === "." || file === "..")
+        throw new Error("Invalid published asset path");
+      const response = await readPublic(new URL(file, base).href, input.signal);
+      if (!response.ok || !response.body)
+        throw new Error(
+          `Published ${file} is unavailable (${response.status})`,
+        );
+      if (response.url && new URL(response.url).origin !== base.origin)
+        throw new Error(
+          "Published assets redirect outside the reviewed site origin",
+        );
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      try {
+        for (;;) {
+          input.signal?.throwIfAborted();
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          size += chunk.value.length;
+          if (size > limit)
+            throw new Error(
+              `Published ${file} exceeds the verification budget`,
+            );
+          chunks.push(chunk.value);
+        }
+      } finally {
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return bytes;
+    };
+    const manifest = JSON.parse(
+      new TextDecoder().decode(await read("vibestudio-build.json", 1_048_576)),
+    );
+    if (
+      !manifest ||
+      manifest.version !== 1 ||
+      manifest.buildId !== input.buildId ||
+      !manifest.sdk ||
+      !manifest.source ||
+      !manifest.files ||
+      Array.isArray(manifest.files)
+    )
+      throw new Error(
+        "The served build identity differs from the reviewed build",
+      );
+    const identity = await digest(
+      new TextEncoder().encode(
+        JSON.stringify({
+          version: 1,
+          sdk: manifest.sdk,
+          source: manifest.source,
+          files: manifest.files,
+        }),
+      ),
+    );
+    if (identity !== input.buildId)
+      throw new Error("The served manifest does not match its build identity");
+    const files = Object.entries(manifest.files);
+    if (
+      !files.length ||
+      files.length > 128 ||
+      !Object.hasOwn(manifest.files, "index.html") ||
+      !Object.hasOwn(manifest.files, ".nojekyll")
+    )
+      throw new Error("The served publication inventory is invalid");
+    for (const [file, expected] of files) {
+      if (typeof expected !== "string" || !/^[a-f0-9]{64}$/.test(expected))
+        throw new Error("The published file digest is invalid");
+      if ((await digest(await read(file, 16_777_216))) !== expected)
+        throw new Error(`Published ${file} differs from the reviewed build`);
+    }
+    return {
+      state: "deployed",
+      siteUrl: base.href,
+      commit: input.commit,
+      buildId: identity,
+      files: files.length,
+    };
+  } catch (error) {
+    input.signal?.throwIfAborted();
+    return {
+      state: "unverified",
+      siteUrl,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

@@ -63,13 +63,16 @@ export function createRuntime(deps: RuntimeDeps) {
   if (environment?.boot?.initial) publishBoot(environment.boot.initial);
   const stopBoot = environment?.boot?.subscribe(publishBoot);
   const stateArgs = createStateArgsRuntime({
-    slotId, call: (service, method, args) => base.rpc.call(service, method, args),
-    initial: environment?.stateArgs?.initial, changed: environment?.stateArgs?.changed,
+    slotId,
+    call: (service, method, args) => base.rpc.call(service, method, args),
+    initial: environment?.stateArgs?.initial,
+    changed: environment?.stateArgs?.changed,
   });
   const agentApi = createAgentApi(environment);
   exposeAgentApi(agentApi, base.expose);
   const stopStateArgs = environment?.events?.subscribe((event, payload) => {
-    if (event === "runtime:stateArgsChanged") stateArgs.apply((payload ?? {}) as Record<string, unknown>);
+    if (event === "runtime:stateArgsChanged")
+      stateArgs.apply((payload ?? {}) as Record<string, unknown>);
   });
 
   const parentSlotId = parentRuntimeId
@@ -112,8 +115,12 @@ export function createRuntime(deps: RuntimeDeps) {
 
     onConnectionError: base.onConnectionError,
 
-    getInfo: () => environment?.getInfo?.() ?? Promise.reject(new Error("Host information is unavailable")),
-    focusPanel: (panelId: string) => environment?.focusPanel?.(panelId) ?? Promise.reject(new Error("Panel focus is unavailable")),
+    getInfo: () =>
+      environment?.getInfo?.() ??
+      Promise.reject(new Error("Host information is unavailable")),
+    focusPanel: (panelId: string) =>
+      environment?.focusPanel?.(panelId) ??
+      Promise.reject(new Error("Panel focus is unavailable")),
     stateArgs,
     agentApi,
 

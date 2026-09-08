@@ -121,7 +121,10 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
   // - Electron: via __vibestudioShell.addEventListener
   // - Server WS: via rpc.on (for both Electron and standalone)
   const themeUnsubscribers = [
-    rpc.on("runtime:theme", (event) => onThemeEvent(event.payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."}),
+    rpc.on("runtime:theme", (event) => onThemeEvent(event.payload), {
+      kind: "closed",
+      reason: "This listener consumes host or implementation lifecycle events.",
+    }),
   ];
 
   // Best-effort boot fetch: a late-loaded panel converges to a user-changed
@@ -141,9 +144,16 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
   const focusUnsubscribers: Array<() => void> = [];
 
   // Also listen for focus via RPC (standalone mode, server-sent events)
-  const rpcFocusUnsub = rpc.on("runtime:focus", () => {
-    for (const cb of focusCallbacks) cb();
-  }, {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."});
+  const rpcFocusUnsub = rpc.on(
+    "runtime:focus",
+    () => {
+      for (const cb of focusCallbacks) cb();
+    },
+    {
+      kind: "closed",
+      reason: "This listener consumes host or implementation lifecycle events.",
+    },
+  );
   focusUnsubscribers.push(rpcFocusUnsub);
 
   const onFocus = (callback: () => void) => {
@@ -168,16 +178,24 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
     for (const cb of hostCommandRunCallbacks) cb(commandId);
   };
   const hostCommandUnsubscribers = [
-    rpc.on(HOST_COMMAND_RUN_EVENT, (event) =>
-      onHostCommandRunEvent(event.payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."},
+    rpc.on(
+      HOST_COMMAND_RUN_EVENT,
+      (event) => onHostCommandRunEvent(event.payload),
+      {
+        kind: "closed",
+        reason:
+          "This listener consumes host or implementation lifecycle events.",
+      },
     ),
   ];
 
-  const stopHostEvents = deps.environment?.events?.subscribe((event, payload) => {
-    if (event === "runtime:theme") onThemeEvent(payload);
-    else if (event === "runtime:focus") for (const cb of focusCallbacks) cb();
-    else if (event === HOST_COMMAND_RUN_EVENT) onHostCommandRunEvent(payload);
-  });
+  const stopHostEvents = deps.environment?.events?.subscribe(
+    (event, payload) => {
+      if (event === "runtime:theme") onThemeEvent(payload);
+      else if (event === "runtime:focus") for (const cb of focusCallbacks) cb();
+      else if (event === HOST_COMMAND_RUN_EVENT) onHostCommandRunEvent(payload);
+    },
+  );
 
   const destroy = () => {
     rpcLifetime.abort();
@@ -198,29 +216,37 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
       source?: "electron" | "server";
     }) => void,
   ): (() => void) => {
-    return rpc.on("runtime:connection-error", (event) => {
-      if (event.caller.callerId !== "main") return;
-      const payload = event.payload;
-      const data = payload as {
-        code?: unknown;
-        reason?: unknown;
-        source?: unknown;
-      } | null;
-      if (
-        !data ||
-        typeof data.code !== "number" ||
-        typeof data.reason !== "string"
-      )
-        return;
-      callback({
-        code: data.code,
-        reason: data.reason,
-        source:
-          data.source === "electron" || data.source === "server"
-            ? data.source
-            : undefined,
-      });
-    }, {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."});
+    return rpc.on(
+      "runtime:connection-error",
+      (event) => {
+        if (event.caller.callerId !== "main") return;
+        const payload = event.payload;
+        const data = payload as {
+          code?: unknown;
+          reason?: unknown;
+          source?: unknown;
+        } | null;
+        if (
+          !data ||
+          typeof data.code !== "number" ||
+          typeof data.reason !== "string"
+        )
+          return;
+        callback({
+          code: data.code,
+          reason: data.reason,
+          source:
+            data.source === "electron" || data.source === "server"
+              ? data.source
+              : undefined,
+        });
+      },
+      {
+        kind: "closed",
+        reason:
+          "This listener consumes host or implementation lifecycle events.",
+      },
+    );
   };
 
   return {

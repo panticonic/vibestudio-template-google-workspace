@@ -271,13 +271,23 @@ describe("PanelHandle", () => {
     const { createPanelHandleApi } = await import("./handle.js");
     const firstCall = createRpcCall();
     const secondCall = createRpcCall();
-    const first = createPanelHandleApi({ call: firstCall, on: vi.fn() } as never, { selfId: "panel:tree/first" });
-    const second = createPanelHandleApi({ call: secondCall, on: vi.fn() } as never, { selfId: "panel:tree/second" });
+    const first = createPanelHandleApi(
+      { call: firstCall, on: vi.fn() } as never,
+      { selfId: "panel:tree/first" },
+    );
+    const second = createPanelHandleApi(
+      { call: secondCall, on: vi.fn() } as never,
+      { selfId: "panel:tree/second" },
+    );
 
     expect(first.panelTree.self().id).toBe("panel:tree/first");
     expect(second.panelTree.self().id).toBe("panel:tree/second");
     await first.openExternal("https://example.test/first");
-    expect(firstCall).toHaveBeenCalledWith("main", "externalOpen.openExternal", ["https://example.test/first", undefined]);
+    expect(firstCall).toHaveBeenCalledWith(
+      "main",
+      "externalOpen.openExternal",
+      ["https://example.test/first", undefined],
+    );
     expect(secondCall).not.toHaveBeenCalled();
   });
 
@@ -289,7 +299,10 @@ describe("PanelHandle", () => {
     };
     const { createPanelHandleApi } = await import("./handle.js");
     const rpcUnsubscribe = vi.fn();
-    const runtime = createPanelHandleApi({ call: createRpcCall(), on: vi.fn(() => rpcUnsubscribe) } as never);
+    const runtime = createPanelHandleApi({
+      call: createRpcCall(),
+      on: vi.fn(() => rpcUnsubscribe),
+    } as never);
     const unsubscribe = runtime.onChildCreated(vi.fn());
     runtime.onChildCreationError(vi.fn());
     unsubscribe();
@@ -304,7 +317,10 @@ describe("PanelHandle", () => {
 
   it("returns a workspace handle from openPanel", async () => {
     const { createPanelHandleApi } = await import("./handle.js");
-    const { openPanel } = createPanelHandleApi({ call: createRpcCall(), on: vi.fn() } as never);
+    const { openPanel } = createPanelHandleApi({
+      call: createRpcCall(),
+      on: vi.fn(),
+    } as never);
 
     const handle = await openPanel("panels/example");
 
@@ -326,9 +342,12 @@ describe("PanelHandle", () => {
   it("defaults panel opens under self but treats parentId null as root", async () => {
     const { createPanelHandleApi } = await import("./handle.js");
     const rpcCall = createRpcCall();
-    const { openPanel } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never, {
-      selfId: "panel:tree/panel-self",
-    });
+    const { openPanel } = createPanelHandleApi(
+      { call: rpcCall, on: vi.fn() } as never,
+      {
+        selfId: "panel:tree/panel-self",
+      },
+    );
 
     await openPanel("panels/child");
     await openPanel("panels/root", { parentId: null });
@@ -363,7 +382,10 @@ describe("PanelHandle", () => {
 
   it("hydrates paged browser handles with CDP automation", async () => {
     const { createPanelHandleApi } = await import("./handle.js");
-    const { panelTree } = createPanelHandleApi({ call: createRpcCall(), on: vi.fn() } as never);
+    const { panelTree } = createPanelHandleApi({
+      call: createRpcCall(),
+      on: vi.fn(),
+    } as never);
 
     const page = await panelTree.page({
       group: { kind: "roots", ownerUserId: null },
@@ -414,7 +436,10 @@ describe("PanelHandle", () => {
     await (child!.call as Record<string, () => Promise<unknown>>)["ping"]!();
     await child!.emit("ready", { ok: true });
     const listener = vi.fn();
-    child!.on("status", listener, { kind: "eligible", rationale: "Observe this public child status event." });
+    child!.on("status", listener, {
+      kind: "eligible",
+      rationale: "Observe this public child status event.",
+    });
     eventHandlers[0]?.({
       caller: { callerId: "panel:other-entity" },
       payload: { ignored: true },
@@ -432,7 +457,10 @@ describe("PanelHandle", () => {
     expect(rpcEmit).toHaveBeenCalledWith("panel:nav-child-1-entity", "ready", {
       ok: true,
     });
-    expect(rpcOn).toHaveBeenCalledWith("status", expect.any(Function), { kind: "eligible", rationale: "Observe this public child status event." });
+    expect(rpcOn).toHaveBeenCalledWith("status", expect.any(Function), {
+      kind: "eligible",
+      rationale: "Observe this public child status event.",
+    });
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ ok: true });
   });
@@ -488,12 +516,15 @@ describe("PanelHandle", () => {
   it("exposes bounded panelTree queries plus get and self handles", async () => {
     const { createPanelHandleApi } = await import("./handle.js");
     const rpcCall = createRpcCall();
-    const { panelTree } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never, {
-      selfId: "panel:tree/panel-self",
-      selfRpcTargetId: "panel:self-entity",
-      parentId: "panel:tree/panel-parent",
-      parentRpcTargetId: "panel:parent-entity",
-    });
+    const { panelTree } = createPanelHandleApi(
+      { call: rpcCall, on: vi.fn() } as never,
+      {
+        selfId: "panel:tree/panel-self",
+        selfRpcTargetId: "panel:self-entity",
+        parentId: "panel:tree/panel-parent",
+        parentRpcTargetId: "panel:parent-entity",
+      },
+    );
 
     const owners = await panelTree.rootOwners({ limit: 200 });
     const roots = await panelTree.rootsForOwner(owners.owners[0]!.ownerUserId, {
@@ -616,11 +647,17 @@ describe("PanelHandle", () => {
         return vi.fn();
       },
     );
-    const { panelTree } = createPanelHandleApi({ call: rpcCall, on: rpcOn } as never);
+    const { panelTree } = createPanelHandleApi({
+      call: rpcCall,
+      on: rpcOn,
+    } as never);
 
     const handle = panelTree.get("panel:tree/arbitrary-events");
     const listener = vi.fn();
-    handle.on("status", listener, { kind: "eligible", rationale: "Observe this public child status event." });
+    handle.on("status", listener, {
+      kind: "eligible",
+      rationale: "Observe this public child status event.",
+    });
 
     for (let i = 0; i < 5; i += 1) {
       eventHandlers[0]?.({
@@ -673,12 +710,15 @@ describe("PanelHandle", () => {
   it("targets parent slot, not self, when navigating, reloading, and rebuilding parent handles", async () => {
     const { createPanelHandleApi } = await import("./handle.js");
     const rpcCall = createRpcCall();
-    const { panelTree } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never, {
-      selfId: "panel:tree/panel-self",
-      selfRpcTargetId: "panel:self-entity",
-      parentId: "panel:tree/panel-parent",
-      parentRpcTargetId: "panel:parent-entity",
-    });
+    const { panelTree } = createPanelHandleApi(
+      { call: rpcCall, on: vi.fn() } as never,
+      {
+        selfId: "panel:tree/panel-self",
+        selfRpcTargetId: "panel:self-entity",
+        parentId: "panel:tree/panel-parent",
+        parentRpcTargetId: "panel:parent-entity",
+      },
+    );
 
     const parent = panelTree.self().parent();
     await expect(parent?.rebuild()).resolves.toMatchObject({
@@ -749,10 +789,13 @@ describe("PanelHandle", () => {
 
   it("hydrates arbitrary parent handles from discovered tree metadata", async () => {
     const { createPanelHandleApi } = await import("./handle.js");
-    const { panelTree } = createPanelHandleApi({ call: createRpcCall(), on: vi.fn() } as never, {
-      selfId: "panel:tree/panel-self",
-      parentId: "panel:tree/panel-parent",
-    });
+    const { panelTree } = createPanelHandleApi(
+      { call: createRpcCall(), on: vi.fn() } as never,
+      {
+        selfId: "panel:tree/panel-self",
+        parentId: "panel:tree/panel-parent",
+      },
+    );
 
     const child = (
       await panelTree.page({
@@ -814,7 +857,10 @@ describe("PanelHandle", () => {
       token: "t",
     }));
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { getPanelHandle } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
 
     await expect(
       getPanelHandle("panel-1", "browser").cdp.getCdpEndpoint(),
@@ -831,7 +877,10 @@ describe("PanelHandle", () => {
   it("routes non-Electron CDP drive verbs through panelCdp", async () => {
     const rpcCall = createRpcCall();
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { getPanelHandle } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
 
     await getPanelHandle("panel:tree/panel-1", "browser").cdp.navigate(
       "https://example.com",
@@ -852,7 +901,10 @@ describe("PanelHandle", () => {
   it("routes historical console access through panelCdp", async () => {
     const rpcCall = createRpcCall();
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { getPanelHandle } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
 
     await expect(
       getPanelHandle("panel:tree/panel-1").cdp.consoleHistory({
@@ -873,7 +925,10 @@ describe("PanelHandle", () => {
   it("exposes a unified panel diagnostics bundle", async () => {
     const rpcCall = createRpcCall();
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { getPanelHandle } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
 
     await expect(
       getPanelHandle("panel:tree/panel-1").diagnose(),
@@ -910,7 +965,10 @@ describe("PanelHandle", () => {
       token: "token-1",
     }));
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { getPanelHandle } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
 
     await getPanelHandle("panel-1", "browser").click("button.submit");
 
@@ -935,7 +993,10 @@ describe("PanelHandle", () => {
       token: "token-1",
     }));
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { getPanelHandle } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
 
     await expect(getPanelHandle("panel-1", "browser").cdp.page()).resolves.toBe(
       page,
@@ -948,7 +1009,10 @@ describe("PanelHandle", () => {
     vi.doMock("@workspace/cdp-client", () => ({ BrowserImpl: null }));
     const rpcCall = createRpcCall();
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { getPanelHandle } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
 
     await expect(
       getPanelHandle("panel-1", "browser").cdp.page(),
@@ -958,9 +1022,12 @@ describe("PanelHandle", () => {
   it("routes CDP operations through rpc for workspace and self handles", async () => {
     const rpcCall = createRpcCall();
     const { createPanelHandleApi } = await import("./handle.js");
-    const { getPanelHandle, panelTree } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never, {
-      selfId: "panel:tree/panel-self",
-    });
+    const { getPanelHandle, panelTree } = createPanelHandleApi(
+      { call: rpcCall, on: vi.fn() } as never,
+      {
+        selfId: "panel:tree/panel-self",
+      },
+    );
 
     // CDP automation is available for every panel target, including workspace
     // panels and the panel the agent is running in (panelTree.self()).
@@ -998,7 +1065,10 @@ describe("PanelHandle", () => {
   it("hydrates direct children through bounded pages", async () => {
     const { createPanelHandleApi } = await import("./handle.js");
     const rpcCall = createRpcCall();
-    const { openPanel, panelTree } = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never);
+    const { openPanel, panelTree } = createPanelHandleApi({
+      call: rpcCall,
+      on: vi.fn(),
+    } as never);
     const handle = await openPanel("panels/example");
 
     const children = await panelTree.page({

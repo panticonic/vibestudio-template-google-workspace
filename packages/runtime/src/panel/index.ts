@@ -1,6 +1,10 @@
 export * from "../shared/portable.js";
 export { isRpcConnectionLost } from "@vibestudio/rpc";
-export type { WorkspaceProvider, RuntimeConnectionInfo, WebsiteMethodPolicy } from "@vibestudio/rpc";
+export type {
+  WorkspaceProvider,
+  RuntimeConnectionInfo,
+  WebsiteMethodPolicy,
+} from "@vibestudio/rpc";
 export { FORM_FILL_TYPES } from "@vibestudio/browser-data/form-fill-types";
 export type { FormFillType } from "@vibestudio/browser-data/form-fill-types";
 export type {
@@ -80,7 +84,12 @@ export type { CdpAutomation, CdpEndpoint } from "./cdpAutomation.js";
 export type { AdBlockStats, AdBlockApi } from "./adblock.js";
 export type * from "../shared/images.js";
 export { createPanelRuntime, type PanelApi } from "./createPanelRuntime.js";
-export { connectWorkspace, disconnectWorkspace, workspaceConnection } from "./defaultRuntime.js";
+export { createConversationClient, type ConversationClient } from "../shared/conversation.js";
+export {
+  connectWorkspace,
+  disconnectWorkspace,
+  workspaceConnection,
+} from "./defaultRuntime.js";
 import { defaultMember } from "./defaultRuntime.js";
 export { id } from "./defaultRuntime.js";
 export { contextId } from "./defaultRuntime.js";
@@ -96,6 +105,7 @@ export const gad = defaultMember("gad");
 export const blobstore = defaultMember("blobstore");
 export const images = defaultMember("images");
 export const workspace = defaultMember("workspace");
+export const workspaces = defaultMember("workspaces");
 export const runtime = defaultMember("runtime");
 export const credentials = defaultMember("credentials");
 export const browserData = defaultMember("browserData");
@@ -108,7 +118,9 @@ export const notifications = defaultMember("notifications");
 export const services = defaultMember("services");
 export const hosts = defaultMember("hosts");
 export const doTargetId = defaultMember("doTargetId");
-export const createDurableObjectServiceClient = defaultMember("createDurableObjectServiceClient");
+export const createDurableObjectServiceClient = defaultMember(
+  "createDurableObjectServiceClient",
+);
 export const openExternal = defaultMember("openExternal");
 export const createPanelSlot = defaultMember("createPanelSlot");
 export const openPanel = defaultMember("openPanel");

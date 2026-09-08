@@ -105,15 +105,6 @@ export const ids = {
     return n === undefined ? `sys:${scope}:${detailKind}` : `sys:${scope}:${detailKind}:${n}`;
   },
 
-  /** A hard interruption is identified by both the turn and its semantic
-   *  reason. Different lifecycle intents can race before an in-flight model
-   *  call settles (for example, a user interrupt followed by channel
-   *  retirement); they are distinct journal facts and must not share an id.
-   *  URI encoding keeps arbitrary reason text delimiter-safe and reversible. */
-  interruptEvent(turnId: string, reason: string): string {
-    return `sys:${turnId}:interrupt:${encodeURIComponent(reason)}`;
-  },
-
   compaction(turnId: string, n: number): string {
     return `sys:compaction:${turnId}:${n}`;
   },

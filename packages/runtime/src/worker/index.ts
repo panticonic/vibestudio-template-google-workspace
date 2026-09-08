@@ -30,20 +30,30 @@ import {
 import { createTypedServiceClient } from "@vibestudio/shared/typedServiceClient";
 import { canonicalEntityId } from "@vibestudio/shared/runtime/entitySpec";
 import { workerLogMethods } from "@vibestudio/service-schemas/workerLog";
-import type { OpenExternalOptions, OpenExternalResult } from "@vibestudio/shared/externalOpen";
+import type {
+  OpenExternalOptions,
+  OpenExternalResult,
+} from "@vibestudio/shared/externalOpen";
 import { _initFsWithRpc } from "./fs.js";
 import { createWorkerdClient } from "../shared/workerd.js";
-import { createNonPanelRuntimeHandle, createRuntimeParentHandle } from "../shared/handles.js";
+import {
+  createNonPanelRuntimeHandle,
+  createRuntimeParentHandle,
+} from "../shared/handles.js";
 import { helpfulNamespace } from "../shared/helpfulNamespace.js";
 import { createGatewayFetch } from "../shared/gatewayFetch.js";
 import { createMainCaller } from "../shared/mainRpc.js";
-import { createPanelRuntime, type PanelRuntimeApi } from "../shared/panelRuntime.js";
+import {
+  createPanelRuntime,
+  type PanelRuntimeApi,
+} from "../shared/panelRuntime.js";
 import {
   createHostedRuntime,
   type RuntimeHost,
   type WorkspaceRuntime,
 } from "../shared/hostedRuntime.js";
 import type { WorkerEnv } from "./types.js";
+export { createConversationClient, type ConversationClient } from "../shared/conversation.js";
 export type { WorkerEnv, ExecutionContext } from "./types.js";
 // Portable authoring helpers (z, defineContract, Rpc, path/context helpers,
 // buildPanelLink, createGatewayFetch) — identical on panel · worker · eval.
@@ -85,14 +95,21 @@ export type {
   WebhookVerifierConfig,
 } from "../shared/webhooks.js";
 export type { NotificationClient } from "../shared/notifications.js";
-export { doTargetId, createDurableObjectServiceClient } from "../shared/workerd.js";
+export {
+  doTargetId,
+  createDurableObjectServiceClient,
+} from "../shared/workerd.js";
 export type {
   DurableObjectServiceClient,
   ResolvedWorkspaceService,
   WorkspaceServiceInfo,
   WorkerSourceInfo,
 } from "../shared/workerd.js";
-export type { WorkspaceClient, WorkspaceConfig, WorkspaceEntry } from "../shared/workspace.js";
+export type {
+  WorkspaceClient,
+  WorkspaceConfig,
+  WorkspaceEntry,
+} from "../shared/workspace.js";
 export type {
   Disposable,
   ExtensionName,
@@ -144,20 +161,24 @@ export let gatewayFetch: WorkspaceRuntime["gatewayFetch"] = (() => {
   throw new Error("Worker runtime has not been initialized");
 }) as WorkspaceRuntime["gatewayFetch"];
 
-function runtimeMember<K extends keyof WorkspaceRuntime>(name: K): WorkspaceRuntime[K] {
+function runtimeMember<K extends keyof WorkspaceRuntime>(
+  name: K,
+): WorkspaceRuntime[K] {
   return new Proxy(
     {},
     {
       get(_target, property) {
         const runtime = activeRuntime;
         if (!runtime) {
-          throw new Error(`Worker runtime has not been initialized; cannot read ${String(name)}`);
+          throw new Error(
+            `Worker runtime has not been initialized; cannot read ${String(name)}`,
+          );
         }
         const value = runtime[name] as unknown as Record<PropertyKey, unknown>;
         const member = value[property];
         return typeof member === "function" ? member.bind(value) : member;
       },
-    }
+    },
   ) as WorkspaceRuntime[K];
 }
 
@@ -172,6 +193,7 @@ export const gad = runtimeMember("gad");
 export const blobstore = runtimeMember("blobstore");
 export const images = runtimeMember("images");
 export const workspace = runtimeMember("workspace");
+export const workspaces = runtimeMember("workspaces");
 export const runtime = runtimeMember("runtime");
 export const credentials = runtimeMember("credentials");
 export const browserData = runtimeMember("browserData");
@@ -190,27 +212,34 @@ export const panelTree = runtimeMember("panelTree");
 
 // Preserve the decorator API for DO classes and add the connected client API
 // for code importing the package root under the worker condition.
-export const rpc = new Proxy(rpcDecorator as unknown as (...args: unknown[]) => unknown, {
-  apply(_target, _thisArg, args) {
-    return rpcDecorator(args[0] as Parameters<typeof rpcDecorator>[0]);
+export const rpc = new Proxy(
+  rpcDecorator as unknown as (...args: unknown[]) => unknown,
+  {
+    apply(_target, _thisArg, args) {
+      return rpcDecorator(args[0] as Parameters<typeof rpcDecorator>[0]);
+    },
+    get(_target, property) {
+      const runtime = activeRuntime;
+      if (!runtime) {
+        throw new Error(
+          `Worker runtime has not been initialized; cannot read rpc.${String(property)}`,
+        );
+      }
+      const member = (runtime.rpc as unknown as Record<PropertyKey, unknown>)[
+        property
+      ];
+      return typeof member === "function" ? member.bind(runtime.rpc) : member;
+    },
   },
-  get(_target, property) {
-    const runtime = activeRuntime;
-    if (!runtime) {
-      throw new Error(
-        `Worker runtime has not been initialized; cannot read rpc.${String(property)}`
-      );
-    }
-    const member = (runtime.rpc as unknown as Record<PropertyKey, unknown>)[property];
-    return typeof member === "function" ? member.bind(runtime.rpc) : member;
-  },
-}) as typeof rpcDecorator & WorkspaceRuntime["rpc"];
+) as typeof rpcDecorator & WorkspaceRuntime["rpc"];
 
 function installWorkerConsoleBridge(rpc: Pick<RpcClient, "call">): void {
   if (workerConsoleBridgeInstalled) return;
   workerConsoleBridgeInstalled = true;
-  const workerLogService = createTypedServiceClient("workerLog", workerLogMethods, (svc, m, a) =>
-    rpc.call("main", `${svc}.${m}`, a)
+  const workerLogService = createTypedServiceClient(
+    "workerLog",
+    workerLogMethods,
+    (svc, m, a) => rpc.call("main", `${svc}.${m}`, a),
   );
   const original = {
     debug: console.debug.bind(console),
@@ -223,7 +252,7 @@ function installWorkerConsoleBridge(rpc: Pick<RpcClient, "call">): void {
   const forward = (
     level: "debug" | "log" | "info" | "warn" | "error",
     args: unknown[],
-    source?: string
+    source?: string,
   ): void => {
     if (forwarding) return;
     forwarding = true;
@@ -231,7 +260,8 @@ function installWorkerConsoleBridge(rpc: Pick<RpcClient, "call">): void {
       const message = args
         .map((arg) => {
           if (typeof arg === "string") return arg;
-          if (arg instanceof Error) return arg.stack ?? `${arg.name}: ${arg.message}`;
+          if (arg instanceof Error)
+            return arg.stack ?? `${arg.name}: ${arg.message}`;
           try {
             return JSON.stringify(arg);
           } catch {
@@ -243,18 +273,24 @@ function installWorkerConsoleBridge(rpc: Pick<RpcClient, "call">): void {
       // or every line double-prints in the server terminal (`[workerd]` + `[workerLog]`).
       // On forward failure (workerLog unreachable), fall back to the original console so
       // the line is never lost. `original.*` is bound pre-override ⇒ no recursion.
-      workerLogService.write(level, message, source ? { source } : undefined).catch(() => {
-        original[level](...args);
-      });
+      workerLogService
+        .write(level, message, source ? { source } : undefined)
+        .catch(() => {
+          original[level](...args);
+        });
     } finally {
       forwarding = false;
     }
   };
-  const source = (globalThis as { __vibestudioWorkerSource?: string }).__vibestudioWorkerSource;
+  const source = (globalThis as { __vibestudioWorkerSource?: string })
+    .__vibestudioWorkerSource;
   const installSink = (
     globalThis as typeof globalThis & {
       __vibestudioInstallConsoleSink?: (
-        sink: (level: "debug" | "log" | "info" | "warn" | "error", args: unknown[]) => void
+        sink: (
+          level: "debug" | "log" | "info" | "warn" | "error",
+          args: unknown[],
+        ) => void,
       ) => void;
     }
   ).__vibestudioInstallConsoleSink;
@@ -291,7 +327,11 @@ export function createWorkerRuntime(env: WorkerEnv): WorkerRuntime {
   const workerSource = env.WORKER_SOURCE;
   if (!workerId) throw new Error("Worker env must provide WORKER_ID");
   if (!workerSource) throw new Error("Worker env must provide WORKER_SOURCE");
-  const selfId = canonicalEntityId({ kind: "worker", source: workerSource, key: workerId });
+  const selfId = canonicalEntityId({
+    kind: "worker",
+    source: workerSource,
+    key: workerId,
+  });
 
   // Return cached runtime if same worker
   if (cachedRuntime && cachedWorkerId === selfId) {
@@ -303,7 +343,9 @@ export function createWorkerRuntime(env: WorkerEnv): WorkerRuntime {
     throw new Error("Worker env must provide GATEWAY_URL");
   }
 
-  (globalThis as { __vibestudioWorkerSource?: string }).__vibestudioWorkerSource = workerSource;
+  (
+    globalThis as { __vibestudioWorkerSource?: string }
+  ).__vibestudioWorkerSource = workerSource;
   const parentId = (env.PARENT_ID as string) || null;
   const parentEntityId = (env.PARENT_ENTITY_ID as string) || parentId;
   const parentKind = parseParentKind(env.PARENT_KIND);
@@ -338,7 +380,7 @@ export function createWorkerRuntime(env: WorkerEnv): WorkerRuntime {
       (id) => panelRuntime.getPanelHandle(id),
       parentId,
       parentEntityId,
-      parentKind
+      parentKind,
     );
 
   panelRuntime = createPanelRuntime({
@@ -388,7 +430,8 @@ export function createWorkerRuntime(env: WorkerEnv): WorkerRuntime {
   // now come from `core` / `rpc.expose`).
   const runtime: WorkerRuntime = {
     ...core,
-    handleRpcPost: (body: unknown) => handleInboundWorkerEnvelope(connectionless, body),
+    handleRpcPost: (body: unknown) =>
+      handleInboundWorkerEnvelope(connectionless, body),
     destroy: () => {
       if (cachedWorkerId === selfId) {
         cachedRuntime = null;
@@ -415,7 +458,7 @@ export function createWorkerRuntime(env: WorkerEnv): WorkerRuntime {
  */
 async function handleInboundWorkerEnvelope(
   connectionless: ConnectionlessRpcClient,
-  body: unknown
+  body: unknown,
 ): Promise<unknown> {
   const envelope = body as RpcEnvelope;
   const message = envelope?.message as RpcRequest | undefined;
@@ -432,14 +475,17 @@ function parseParentKind(kind: unknown): "panel" | "worker" | "do" | null {
 
 function parseGatewayAliases(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+    return value.filter(
+      (entry): entry is string => typeof entry === "string" && entry.length > 0,
+    );
   }
   if (typeof value !== "string" || value.length === 0) return [];
   try {
     const parsed = JSON.parse(value) as unknown;
     if (Array.isArray(parsed)) {
       return parsed.filter(
-        (entry): entry is string => typeof entry === "string" && entry.length > 0
+        (entry): entry is string =>
+          typeof entry === "string" && entry.length > 0,
       );
     }
   } catch {
@@ -460,7 +506,7 @@ function parseGatewayAliases(value: unknown): string[] {
  */
 export function handleWorkerRpc(
   runtime: WorkerRuntime,
-  request: Request
+  request: Request,
 ): Promise<Response> | null {
   const url = new URL(request.url);
   if (url.pathname.endsWith("/__rpc") && request.method === "POST") {

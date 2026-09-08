@@ -13,7 +13,8 @@ Read the local reference that matches the task before editing:
 - [Agent tuning](references/agent-tuning.md) for default model/provider changes,
   model credential setup, thinking effort, approval, and response policy.
 - [Subagents](references/subagents.md) for `spawn_subagent`, child task channels,
-  child context inspection, semantic integration, cancellation, and retained terminal results.
+  retained collaborator context, follow-up turns, child state inspection,
+  semantic integration, and cancellation.
 - [Failures and diagnostics](references/failures-and-diagnostics.md) for the
   canonical tool-failure envelope, primary/cleanup ordering, bounded invocation
   diagnostic packets, and paged outside-lineage explanation.

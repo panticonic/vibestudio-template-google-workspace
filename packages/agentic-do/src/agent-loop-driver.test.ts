@@ -374,6 +374,37 @@ function deferred<T>() {
 }
 
 describe("AgentLoopDriver", () => {
+  it("addresses a primary final response to a configured supervisor", async () => {
+    const harness = await makeHarness({
+      config: {
+        ...config,
+        finalResponseParticipantId: "participant:parent",
+      },
+      script: { model: [textReply("finished")], tool: [] },
+    });
+
+    await harness.driver.handleIncoming(CHANNEL, promptIncoming());
+    await settle(harness.driver);
+
+    const rows = inspectSql<{ rows: Array<{ payload_ref_json: string }> }>(
+      harness.gad,
+      `SELECT payload_ref_json FROM log_events
+       WHERE log_id = ? AND payload_kind = 'message.completed'
+       ORDER BY seq`,
+      [LOG_ID],
+    )
+      .rows.map(
+        (row) => JSON.parse(row.payload_ref_json) as Record<string, unknown>,
+      )
+      .filter((payload) => payload["role"] === "assistant");
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      tier: "primary",
+      to: [{ kind: "participant", participantId: "participant:parent" }],
+    });
+  });
+
   it("journals a model-free automation eval as one visible invocation and closes from its result", async () => {
     const closed: Parameters<NonNullable<DriverDeps["onTurnClosed"]>>[0][] = [];
     const observed: EffectDescriptor[] = [];
@@ -1116,11 +1147,6 @@ describe("AgentLoopDriver", () => {
     hung.resolve({ kind: "model", blocks: [], stopReason: "aborted" });
     await alarm;
 
-    const turnId = ids.turnId(
-      CHANNEL,
-      "env-retire-after-interrupt",
-      "agent:self",
-    );
     const rows = inspectSql<{ rows: Array<{ envelope_id: string }> }>(
       harness.gad,
       `SELECT envelope_id FROM log_events
@@ -1129,10 +1155,8 @@ describe("AgentLoopDriver", () => {
          AND envelope_id LIKE '%:interrupt:%'
        ORDER BY seq`,
     );
-    expect(rows.rows.map((row) => row.envelope_id)).toEqual([
-      ids.interruptEvent(turnId, "user_interrupted"),
-      ids.interruptEvent(turnId, "channel_unsubscribe"),
-    ]);
+    expect(rows.rows).toHaveLength(2);
+    expect(new Set(rows.rows.map((row) => row.envelope_id)).size).toBe(2);
   });
 
   it("releases an executor waiting in ensureLoaded without journaling a semantic terminal", async () => {

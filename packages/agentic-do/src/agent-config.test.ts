@@ -17,7 +17,11 @@ import {
 /** Minimal concrete vessel + test handles onto the protected managers. */
 class TestAgentVessel extends AgentVesselBase {
   protected getParticipantInfo(): ParticipantDescriptor {
-    return { type: "agent", name: "Test", handle: "test" } as ParticipantDescriptor;
+    return {
+      type: "agent",
+      name: "Test",
+      handle: "test",
+    } as ParticipantDescriptor;
   }
   participantForTest(config?: unknown): ParticipantDescriptor {
     return this.getEffectiveParticipantInfo("ch-1", config);
@@ -33,8 +37,13 @@ class TestAgentVessel extends AgentVesselBase {
   }
 }
 
-async function makeVessel(env?: Record<string, unknown>): Promise<TestAgentVessel> {
-  const { instance } = await createTestDO(TestAgentVessel, { __objectKey: "agent-key", ...env });
+async function makeVessel(
+  env?: Record<string, unknown>,
+): Promise<TestAgentVessel> {
+  const { instance } = await createTestDO(TestAgentVessel, {
+    __objectKey: "agent-key",
+    ...env,
+  });
   return instance;
 }
 
@@ -45,14 +54,17 @@ describe("resolveRespondFromHandles", () => {
       [
         { participantId: "p-alice", metadata: { handle: "@alice" } },
         { participantId: "p-bob", metadata: {} },
-      ]
+      ],
     );
     expect(resolved).toEqual(["p-alice", "p-bob", "@nobody"]);
   });
 
   it("is a no-op on an empty allowlist", () => {
     expect(
-      resolveRespondFromHandles([], [{ participantId: "p", metadata: { handle: "@p" } }])
+      resolveRespondFromHandles(
+        [],
+        [{ participantId: "p", metadata: { handle: "@p" } }],
+      ),
     ).toEqual([]);
   });
 });
@@ -92,11 +104,17 @@ describe("subagent participant handles", () => {
       },
     });
 
-    expect(vessel.participantForTest({ handle: "pdf-pilot" }).handle).toBe("pdf-pilot");
+    expect(vessel.participantForTest({ handle: "pdf-pilot" }).handle).toBe(
+      "pdf-pilot",
+    );
   });
 
   it("synthesizes a schema-valid handle when the object key is not a valid handle", () => {
-    const handle = deriveSubagentParticipantHandle("ai-chat", "call:bad|run", "subagent:bad|run");
+    const handle = deriveSubagentParticipantHandle(
+      "ai-chat",
+      "call:bad|run",
+      "subagent:bad|run",
+    );
 
     expect(handle).toMatch(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/);
     expect(handle).toContain("ai-chat");
@@ -127,20 +145,21 @@ describe("subagent prompt contract", () => {
     expect(prompt).toContain("## Forked Subagent Scope");
     expect(prompt).toContain("Run id: run-1");
     expect(prompt).toContain("context window cache is shared");
-    expect(prompt).toContain("focus narrowly on the particular task the parent gave you");
-    expect(prompt).toContain("complete({ report, outcome })");
     expect(prompt).toContain(
-      "Idle, turn closure, and a normal final assistant message are not terminal"
+      "focus narrowly on the particular task the parent gave you",
     );
+    expect(prompt).toContain("later follow-up into this same retained context");
   });
 
   it("does not inject the child contract for top-level agents", async () => {
     const vessel = await makeVessel();
 
-    await expect(vessel.promptForTest()).resolves.not.toContain("## Subagent Operating Contract");
+    await expect(vessel.promptForTest()).resolves.not.toContain(
+      "## Subagent Operating Contract",
+    );
   });
 
-  it("keeps the standalone subagent runtime prompt focused on terminal semantics", () => {
+  it("keeps the standalone subagent runtime prompt focused on retained collaboration", () => {
     const prompt = subagentRuntimePrompt({
       runId: "run-2",
       task: "Implement the assigned fixture and verify it.",
@@ -157,9 +176,13 @@ describe("subagent prompt contract", () => {
     expect(prompt).toContain("Implement the assigned fixture and verify it.");
     expect(prompt).toContain("Do not search for a different task");
     expect(prompt).toContain("You own execution of the assigned task");
-    expect(prompt).toContain("do not hand the parent a plan or code block to copy");
-    expect(prompt).toContain("Finish exactly once");
-    expect(prompt).toContain("Only `complete` ends this subagent run");
+    expect(prompt).toContain(
+      "do not hand the parent a plan or code block to copy",
+    );
+    expect(prompt).toContain(
+      "Finish the current assignment with one concise final report",
+    );
+    expect(prompt).toContain("not this collaborator");
     expect(prompt).not.toContain("## Forked Subagent Scope");
   });
 
@@ -178,11 +201,19 @@ describe("subagent prompt contract", () => {
 
     expect(prompt).toContain("## Forked Subagent Scope");
     expect(prompt).toContain("context window cache is shared");
-    expect(prompt).toContain("Assume the parent agent owns the main line of work");
-    expect(prompt).toContain("durable assigned task below is your authoritative current instruction");
-    expect(prompt).toContain("Earlier parent and user messages are inherited context");
+    expect(prompt).toContain(
+      "Assume the parent agent owns the main line of work",
+    );
+    expect(prompt).toContain(
+      "durable assigned task below is your authoritative current instruction",
+    );
+    expect(prompt).toContain(
+      "Earlier parent and user messages are inherited context",
+    );
     expect(prompt).toContain("Do not broaden scope");
-    expect(prompt).toContain("spawn more subagents unless your assigned child task explicitly");
+    expect(prompt).toContain(
+      "spawn more subagents unless your assigned child task explicitly",
+    );
   });
 
   it("renders an explicit assignment boundary in a fork's first task prompt", () => {
@@ -193,10 +224,12 @@ describe("subagent prompt contract", () => {
 
     expect(prompt).toContain("## Fork Assignment Boundary");
     expect(prompt).toContain("not a continuation of the parent agent's plan");
-    expect(prompt).toContain("inherited parent trajectory is reference context only");
+    expect(prompt).toContain(
+      "inherited parent trajectory is reference context only",
+    );
     expect(prompt).toContain("Do not reproduce the parent's orchestration");
     expect(prompt).toContain(
-      "<assigned_task>\nReview the inherited implementation for one concrete defect.\n</assigned_task>"
+      "<assigned_task>\nReview the inherited implementation for one concrete defect.\n</assigned_task>",
     );
   });
 
@@ -205,7 +238,7 @@ describe("subagent prompt contract", () => {
       subagentFirstTaskPrompt({
         mode: "fresh",
         task: "Inspect one package.",
-      })
+      }),
     ).toBe("Inspect one package.");
   });
 
@@ -221,7 +254,7 @@ describe("subagent prompt contract", () => {
         parentParticipantId: "agent:parent",
         depth: 2,
       },
-      { completionMode: "supervised-process" }
+      { completionMode: "supervised-process" },
     );
     expect(prompt).toContain("typed terminal result");
     expect(prompt).toContain("Do not print or imitate tool-call syntax");
@@ -276,8 +309,12 @@ describe("per-agent settings seeding from STATE_ARGS.agentConfig", () => {
   });
 
   it("rejects an invalid model in the seed (falls back to the default model)", async () => {
-    const seeded = await makeVessel({ STATE_ARGS: { agentConfig: { model: "openai:gpt-5.3" } } });
-    const bad = await makeVessel({ STATE_ARGS: { agentConfig: { model: 42 } } });
+    const seeded = await makeVessel({
+      STATE_ARGS: { agentConfig: { model: "openai:gpt-5.3" } },
+    });
+    const bad = await makeVessel({
+      STATE_ARGS: { agentConfig: { model: 42 } },
+    });
     expect(seeded.getAgentSettings().model).toBe("openai:gpt-5.3");
     expect(bad.getAgentSettings().model).not.toBe(42);
     expect(typeof bad.getAgentSettings().model).toBe("string");
@@ -287,7 +324,10 @@ describe("per-agent settings seeding from STATE_ARGS.agentConfig", () => {
 describe("per-agent config invalidation spans all the agent's channels", () => {
   it("dropping config drops the cached loop for EVERY subscribed channel", async () => {
     const vessel = await makeVessel();
-    vi.spyOn(vessel.subscriptionsForTest(), "listChannelIds").mockReturnValue(["ch-a", "ch-b"]);
+    vi.spyOn(vessel.subscriptionsForTest(), "listChannelIds").mockReturnValue([
+      "ch-a",
+      "ch-b",
+    ]);
     const dropLoop = vi.spyOn(vessel.driverForTest(), "dropLoop");
 
     vessel.configureAgent({ model: "anthropic:claude-sonnet-4-6" });

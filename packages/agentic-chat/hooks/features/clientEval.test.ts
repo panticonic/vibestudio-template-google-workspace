@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SandboxOptions, SandboxResult, ScopeManager } from "@workspace/eval";
-import type { MethodExecutionContext } from "@workspace/pubsub";
+import {
+  METHOD_EXECUTION_RESULT,
+  type MethodExecutionContext,
+  type MethodExecutionResult,
+} from "@workspace/pubsub";
 import { buildClientEvalMethod } from "./clientEval";
 
 function scopeManager(initial: Record<string, unknown> = {}) {
@@ -28,7 +32,11 @@ function context(signal = new AbortController().signal): MethodExecutionContext 
     signal,
     stream: vi.fn(async () => undefined),
     streamWithAttachments: vi.fn(async () => undefined),
-    resultWithAttachments: (content, attachments) => ({ content, attachments }),
+    result: (content, options = {}) => ({
+      [METHOD_EXECUTION_RESULT]: true,
+      content,
+      ...options,
+    }),
   };
 }
 
@@ -133,6 +141,7 @@ describe("client_eval", () => {
         consoleOutput: "",
         error: "callMain is not defined",
         failureKind: "user-code" as const,
+        errorData: { operation: "callMain" },
       })),
     });
 
@@ -141,8 +150,20 @@ describe("client_eval", () => {
       context()
     );
 
-    expect(result).toMatchObject({ details: { success: false } });
-    expect(result.content).toEqual(
+    expect(result).toMatchObject({
+      content: {
+        details: {
+          success: false,
+          failureKind: "user-code",
+          errorData: { operation: "callMain" },
+        },
+      },
+      isError: true,
+    });
+    const terminal = result as MethodExecutionResult<{
+      content: Array<{ type: "text"; text: string }>;
+    }>;
+    expect(terminal.content.content).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           text: expect.stringContaining('import { callMain } from "@workspace/runtime"'),

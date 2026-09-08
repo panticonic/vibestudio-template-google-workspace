@@ -17,16 +17,28 @@
         "grep": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads workspace files and search results without a website disclosure contract."
           }
         },
         "find": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads workspace files and search results without a website disclosure contract."
           }
         },
         "read": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads workspace files and search results without a website disclosure contract."
           }
         }
       }

@@ -32,10 +32,10 @@ When \`set_title\` is available, give a new conversation a short, descriptive ti
 - Spawning a subagent with \`mode: "fork"\` carries the current trajectory when the child genuinely needs it. It can save tokens only when the parent and child use cache-compatible model transport; changing provider or model does not inherit the parent's provider cache. Prefer \`mode: "fresh"\` when a precise task, paths, and durable workspace context are sufficient.
 - An ordinary Pi subagent automatically inherits your exact effective model and runtime settings. Omit \`config\` by default; do not guess or restate your model. Set \`config.model\` only when the user explicitly requests a different model and you have its exact current catalog ref.
 - Use subagents for independent investigation, parallel work, isolated edits, or work that benefits from a separate task transcript. Keep small linear work in your own turn.
-- Parent workflow: \`spawn_subagent\` with a precise task and label, track the returned \`runId\`, and keep doing useful foreground work. When no foreground work remains, call \`suspend_turn({ reason: "waiting_for_background" })\`; do not poll a live child with status, transcript, log, or diff reads. After terminal delivery, review the retained result and continue the user's goal. Call \`merge_subagent\` directly only when that goal requires incorporating the child's work; inspection, comparison, and delegated research may deliberately remain unintegrated. Use the bounded \`inspect_subagent\` diff when the user explicitly asks to inspect, review, or compare child work without integration. Integration needs no inspection preflight: the merge derives exact child and parent states and returns intents, composed coordinates, conflicts, and resolution. Also use inspection for deliberate diagnostics or when a requested merge reports dirty work, conflict, or ambiguity. Terminal results remain inspectable, readable, and mergeable without cleanup.
-- Spawning returns a run handle once launch succeeds; the child writes activity once to its canonical durable task transcript. A deliberate child \`notify\` can resume you, and every terminal child fact resumes you. Terminal runs immediately free execution capacity and remain retained. Use \`cancel_subagent\` only to stop live execution. If siblings remain live, continue useful foreground work or suspend again; do not finalize while supervised runs remain live.
-- Child subagents are normal agents on task channels. Their ordinary messages and \`notify\` updates are progress, not terminal. A subagent finishes only by calling \`complete({ report, outcome })\` exactly once; idle and turn closure do not finish the run.
-- Steer a child with \`notify({ to: "run:<runId>", content })\` only to correct course or supply information it lacks. Never message a working child to ask how it is going: progress is read with \`inspect_subagent\`/\`read_subagent\` and arrives on terminal delivery, while a ping costs the child a turn and buys nothing.
+- Parent workflow: \`spawn_subagent\` with a precise task and label, track the returned \`runId\`, and keep doing useful foreground work. When no foreground work remains, call \`suspend_turn({ reason: "waiting_for_background" })\`; do not poll a live child with status, transcript, log, or diff reads. After the child reports and its turn closes, review the retained result and continue the user's goal. Call \`merge_subagent\` directly only when that goal requires incorporating the child's work; inspection, comparison, and delegated research may deliberately remain unintegrated. Use the bounded \`inspect_subagent\` diff when the user explicitly asks to inspect, review, or compare child work without integration. Integration needs no inspection preflight: the merge derives exact child and parent states and returns intents, composed coordinates, conflicts, and resolution. Also use inspection for deliberate diagnostics or when a requested merge reports dirty work, conflict, or ambiguity. Reports and child VCS state remain inspectable, readable, and mergeable without cleanup.
+- Spawning returns a run handle once launch succeeds; the child writes activity once to its canonical durable task transcript. A deliberate child \`notify\` or normal final report can resume you. Closing the current child turn frees execution capacity while retaining the collaborator. Use \`cancel_subagent\` only to stop live execution. If siblings remain live, continue useful foreground work or suspend again; do not finalize while supervised runs remain live.
+- Child subagents are retained collaborators on task channels. Their normal final reply reports the current assignment; later follow-up continues in the same context. Explicit retirement alone closes the collaborator.
+- Steer a child with \`notify({ to: "run:<runId>", content })\` only to correct course or supply information it lacks. Never message a working child to ask how it is going: progress is read with \`inspect_subagent\`/\`read_subagent\` and arrives when the child reports, while a ping costs the child a turn and buys nothing.
 - Use \`notify\` sparingly, for meaningful progress that should be visible to the parent or user. For a detailed operating guide, read \`packages/agentic-do/SKILL.md\` and its subagents reference.
 
 ## Notification Etiquette
@@ -103,7 +103,9 @@ function cleanSection(value: string | undefined): string {
   return (value ?? "").trim();
 }
 
-export function composeSystemPrompt(options: ComposeSystemPromptOptions): string {
+export function composeSystemPrompt(
+  options: ComposeSystemPromptOptions,
+): string {
   const mode = options.systemPromptMode ?? "append";
   const workspacePrompt = cleanSection(options.workspacePrompt);
   const skillIndex = cleanSection(options.skillIndex);
@@ -111,7 +113,12 @@ export function composeSystemPrompt(options: ComposeSystemPromptOptions): string
   const overridePrompt = cleanSection(options.systemPrompt);
 
   if (mode === "replace") {
-    return overridePrompt || agentPrompt || workspacePrompt || VIBESTUDIO_BASE_SYSTEM_PROMPT;
+    return (
+      overridePrompt ||
+      agentPrompt ||
+      workspacePrompt ||
+      VIBESTUDIO_BASE_SYSTEM_PROMPT
+    );
   }
 
   const sections: string[] = [];

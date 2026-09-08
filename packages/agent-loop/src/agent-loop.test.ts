@@ -1366,18 +1366,17 @@ describe("agent-loop core lifecycle", () => {
     );
     expect(interrupts).toEqual([
       expect.objectContaining({
-        envelopeId: ids.interruptEvent(turn1, "user_interrupted"),
         payload: expect.objectContaining({
           details: { kind: "interrupt", reason: "user_interrupted" },
         }),
       }),
       expect.objectContaining({
-        envelopeId: ids.interruptEvent(turn1, "channel_unsubscribe"),
         payload: expect.objectContaining({
           details: { kind: "interrupt", reason: "channel_unsubscribe" },
         }),
       }),
     ]);
+    expect(new Set(interrupts.map((row) => row.envelopeId)).size).toBe(2);
 
     const replay = scenario();
     prompt(replay);
@@ -2963,6 +2962,111 @@ describe("agent-loop message delivery (acks, edit/retract, after-turn, flush)", 
         return { messageId: receipt.messageId, turnId: receipt.turnId };
       });
   }
+
+  it("parks deferred work after a user interrupt until later explicit input", () => {
+    const s = scenario();
+    promptWith(s, { envelopeId: "env-1", sourceMessageId: "u1" });
+    promptWith(s, {
+      envelopeId: "env-after-turn",
+      sourceMessageId: "deferred-after-turn",
+      metadata: { deliverAfterTurn: true },
+    });
+    drainPromptArtifactPreparations(s);
+
+    dispatch(s, { type: "command", command: { kind: "interrupt" } });
+    resolveEffect(s, ids.modelEffect(msg0), {
+      kind: "model",
+      blocks: [],
+      stopReason: "aborted",
+    });
+
+    expect(s.state.openTurn).toBeNull();
+    expect(
+      s.state.deferredPostTurnQueue.map((entry) => entry.sourceMessageId),
+    ).toEqual(["deferred-after-turn"]);
+    expect(pendingEffectIds(s)).toEqual([]);
+    expect(s.state.pausedByUser).toBe(true);
+
+    applyAppend(s, [
+      {
+        envelopeId: "env-late-channel-close",
+        payloadKind: "turn.closed",
+        payload: {
+          protocol: "agentic.trajectory.v1",
+          reason: "channel_unsubscribe",
+        },
+      },
+    ]);
+    expect(s.state.pausedByUser).toBe(true);
+
+    promptWith(s, {
+      envelopeId: "env-late-background",
+      sourceMessageId: "late-background",
+      metadata: { deliverAfterTurn: true },
+    });
+    drainPromptArtifactPreparations(s);
+    expect(s.state.openTurn).toBeNull();
+    expect(
+      s.state.deferredPostTurnQueue.map((entry) => entry.sourceMessageId),
+    ).toEqual(["deferred-after-turn", "late-background"]);
+
+    promptWith(s, {
+      envelopeId: "env-explicit-resume",
+      sourceMessageId: "explicit-resume",
+    });
+    drainPromptArtifactPreparations(s);
+    expect(s.state.openTurn).not.toBeNull();
+    expect(pendingEffectIds(s).some((id) => id.includes("model"))).toBe(true);
+  });
+
+  it("lets a later user Stop override an in-flight queued flush", () => {
+    const s = scenario();
+    promptWith(s, { envelopeId: "env-1", sourceMessageId: "u1" });
+    promptWith(s, {
+      envelopeId: "env-after-turn",
+      sourceMessageId: "deferred-after-turn",
+      metadata: { deliverAfterTurn: true },
+    });
+    drainPromptArtifactPreparations(s);
+
+    dispatch(s, { type: "command", command: { kind: "interrupt" } });
+    expect(s.state.openTurn?.pendingFlush).toBeUndefined();
+    dispatch(s, {
+      type: "command",
+      command: { kind: "interrupt", flushDeferred: true },
+    });
+    expect(s.state.openTurn?.pendingFlush).toBe("queued");
+    dispatch(s, { type: "command", command: { kind: "interrupt" } });
+    expect(s.state.openTurn?.pendingFlush).toBeUndefined();
+    dispatch(s, {
+      type: "command",
+      command: { kind: "interrupt", flushDeferred: true },
+    });
+    expect(s.state.openTurn?.pendingFlush).toBe("queued");
+    dispatch(s, { type: "command", command: { kind: "interrupt" } });
+    expect(s.state.openTurn?.pendingFlush).toBeUndefined();
+
+    const interruptIds = s.outputs
+      .flatMap((output) => output.append)
+      .filter(
+        (item) =>
+          item.payloadKind === "system.event" &&
+          (item.payload as { details?: { kind?: string } }).details?.kind === "interrupt",
+      )
+      .map((item) => item.envelopeId);
+    expect(new Set(interruptIds).size).toBe(interruptIds.length);
+
+    resolveEffect(s, ids.modelEffect(msg0), {
+      kind: "model",
+      blocks: [],
+      stopReason: "aborted",
+    });
+    expect(s.state.openTurn).toBeNull();
+    expect(
+      s.state.deferredPostTurnQueue.map((entry) => entry.sourceMessageId),
+    ).toEqual(["deferred-after-turn"]);
+    expect(pendingEffectIds(s)).toEqual([]);
+  });
 
   it("emits a read ack when a fresh prompt is folded into a model call", () => {
     const s = scenario();

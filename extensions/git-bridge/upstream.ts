@@ -32,6 +32,7 @@ import type {
   GitPublishRepoResult,
   GitPullUpstreamResult,
   GitPushUpstreamResult,
+  GitPushUpstreamOptions,
   GitUpstreamRelationship,
   GitUpstreamState,
   GitUpstreamStatusOptions,
@@ -150,7 +151,7 @@ export class UpstreamEngine {
 
   async pushUpstream(
     repoPath: string,
-    opts: { force?: boolean; credentialIdOverride?: string | null } = {}
+    opts: GitPushUpstreamOptions = {}
   ): Promise<GitPushUpstreamResult> {
     const repo = normalizeWorkspaceRepoPath(repoPath);
     return withRepoLock(repo, async () => {
@@ -159,7 +160,11 @@ export class UpstreamEngine {
         scope = await this.resolveRepoScope(repo, {
           credentialIdOverride: opts.credentialIdOverride,
         });
-        const result = await this.syncLocked(repo, scope, { push: true, force: opts.force });
+        const result = await this.syncLocked(repo, scope, {
+          push: true,
+          force: opts.force,
+          expectedMainEventId: opts.expectedMainEventId,
+        });
         if (result.outcome === "exported-only") {
           throw new Error("Manual upstream push stopped after export without observing the remote");
         }
@@ -185,7 +190,7 @@ export class UpstreamEngine {
   private async syncLocked(
     repo: string,
     scope: RepoOperationScope,
-    opts: { push: boolean; force?: boolean }
+    opts: { push: boolean; force?: boolean; expectedMainEventId?: string }
   ): Promise<SyncResult> {
     const { upstream, remote, fingerprint, transportRemote } = scope;
     const git = this.gitClient(scope.credential);
@@ -194,6 +199,7 @@ export class UpstreamEngine {
     this.setRunning(repo, fingerprint, "exporting");
     try {
       exported = await this.bridge.exportLockedInner(repo, {
+        expectedMainEventId: opts.expectedMainEventId,
         authorEmail: upstream.authorEmail,
         authorName: upstream.authorName,
       });
@@ -787,6 +793,7 @@ export class UpstreamEngine {
     let pushed;
     try {
       pushed = await this.pushUpstream(repo, {
+        expectedMainEventId: input.expectedMainEventId,
         force: input.force,
         credentialIdOverride: credentialId,
       });

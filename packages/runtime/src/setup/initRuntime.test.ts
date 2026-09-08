@@ -131,7 +131,9 @@ describe("initRuntime", () => {
       },
       removeEventListener: (id: number) => listeners.delete(id),
     };
-    const { runtime } = initRuntime({ createTransport: () => createTransport() });
+    const { runtime } = initRuntime({
+      createTransport: () => createTransport(),
+    });
     const emitState = (state: Record<string, unknown>) => {
       for (const listener of listeners.values())
         listener("runtime:stateArgsChanged", state);

@@ -1,26 +1,3 @@
-export interface TemplateCatalogPresentationEntry {
-  name: string;
-  description: string;
-  tags: readonly string[];
-}
-
-export function filterTemplateCatalog<T extends TemplateCatalogPresentationEntry>(
-  entries: readonly T[],
-  query: string
-): T[] {
-  const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return [...entries];
-  return entries.filter((entry) =>
-    [entry.name, entry.description, ...entry.tags].join(" ").toLocaleLowerCase().includes(needle)
-  );
-}
-
-export function templateCatalogEmptyMessage(totalEntries: number, query: string): string | null {
-  if (totalEntries === 0)
-    return "No featured templates are published yet. Use a template address below.";
-  return query.trim() ? "No templates match that search." : null;
-}
-
 export function isTemplateHttpUrl(value: string): boolean {
   try {
     const url = new URL(value.trim());

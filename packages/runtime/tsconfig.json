@@ -15,6 +15,7 @@
     "declarationMap": true,
     "composite": true,
     "paths": {
+      "@workspace/template-management": ["../template-management/src/index.ts"],
       "@workspace/cdp-client": ["../cdp-client/index.d.ts"]
     }
   },

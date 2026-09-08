@@ -37,31 +37,46 @@
         "retryUpstreamPush": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls managed source publication and protected Git export."
           }
         },
         "pauseAutoPush": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls managed source publication and protected Git export."
           }
         },
         "openGitTab": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls managed source publication and protected Git export."
           }
         },
         "suggestTemplateContribution": {
           "effect": {
             "kind": "open"
-          }
-        },
-        "suggestRegistryEntry": {
-          "effect": {
-            "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls managed source publication and protected Git export."
           }
         },
         "publishTemplate": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls managed source publication and protected Git export."
           }
         }
       }

@@ -300,7 +300,7 @@ function subagentLaunchReceipt(
   return (
     `subagent ${handle} is running in the background. Continue independent foreground work, ` +
     `or call suspend_turn({ reason: "waiting_for_background" }) if no foreground work remains. ` +
-    `Do not inspect, read, or merge merely to wait; terminal delivery will resume you.`
+    `Do not inspect, read, or merge merely to wait; a child report will resume you.`
   );
 }
 
@@ -851,7 +851,8 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
       .toArray()[0]?.["sql"];
     if (
       typeof wakeQueueDefinition === "string" &&
-      !wakeQueueDefinition.includes("'turn-recovery'")
+      (!wakeQueueDefinition.includes("'turn-recovery'") ||
+        wakeQueueDefinition.includes("'subagent-terminal-publish'"))
     ) {
       this.ctx.storage.transactionSync(() => {
         this.sql.exec(
@@ -864,7 +865,6 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
             wake_kind TEXT NOT NULL CHECK (wake_kind IN (
               'scheduled-model-resume',
               'turn-recovery',
-              'subagent-terminal-publish',
               'subagent-cancel-settle'
             )),
             payload_json TEXT NOT NULL,
@@ -883,6 +883,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
         this.sql.exec(`
           INSERT INTO agent_wake_queue
           SELECT * FROM agent_wake_queue_before_turn_recovery
+          WHERE wake_kind != 'subagent-terminal-publish'
         `);
         this.sql.exec(`DROP TABLE agent_wake_queue_before_turn_recovery`);
       });
@@ -894,7 +895,6 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
         wake_kind TEXT NOT NULL CHECK (wake_kind IN (
           'scheduled-model-resume',
           'turn-recovery',
-          'subagent-terminal-publish',
           'subagent-cancel-settle'
         )),
         payload_json TEXT NOT NULL,
@@ -1650,33 +1650,6 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
       message: string;
     }>;
   }): Promise<void> {
-    const subagent = this.subagentIdentity();
-    if (
-      subagent &&
-      subagent.taskChannelId === input.channelId &&
-      !this.subagentTerminalIntentRecorded(subagent.runId)
-    ) {
-      const failed = Boolean(
-        input.reason && input.reason !== "tool_terminated",
-      );
-      const primaryFailure = input.effectFailures[0];
-      const failureReport = primaryFailure
-        ? `${primaryFailure.name} failed (${primaryFailure.code}): ${primaryFailure.message}`
-        : undefined;
-      const report =
-        input.finalMessage?.trim() ||
-        failureReport ||
-        input.summary?.trim() ||
-        (failed ? input.reason : undefined);
-      if (report) {
-        await this.recordOwnSubagentTerminalIntent(
-          subagent,
-          report,
-          failed ? "failed" : "completed",
-        );
-      }
-      return;
-    }
     const runId = input.metadata.automation?.runId;
     if (!runId) return;
     const service = await this.rpc.call<{
@@ -2492,7 +2465,12 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
     };
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -2530,6 +2508,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
         ? channelApprovalLevel
         : settings.approvalLevel;
     const publishPolicy = this.getPublishPolicy(channelId);
+    const subagentIdentity = this.subagentIdentity();
     const materialized = this.materializedModel(channelId, settings.model);
     if (!materialized) {
       throw new Error(
@@ -2594,6 +2573,9 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
       maxSubagentDepth: this.getMaxSubagentDepth(),
       maxSubagents: this.getMaxSubagents(),
       ...(publishPolicy ? { publishPolicy } : {}),
+      ...(subagentIdentity?.taskChannelId === channelId
+        ? { finalResponseParticipantId: subagentIdentity.parentParticipantId }
+        : {}),
     };
   }
 
@@ -2853,7 +2835,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
   /**
    * The lookup tables `resolveAddressee` (messaging plan §4.2) needs, assembled
    * from what this vessel already knows durably: who is on the channel, who
-   * supervises it, and which children it is running.
+   * supervises it, and which child runs it retains.
    *
    * The directory and workspace-user tables are deliberately absent until the
    * Gad directory lands (§4.4): an `agent:` ref or an off-roster `user:` ref
@@ -2879,9 +2861,10 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
       ...(parentParticipantId
         ? { parent: { participantId: parentParticipantId } }
         : {}),
-      runs: this.subagentRuns.listLive().map((run) => ({
+      runs: this.subagentRuns.listAll().map((run) => ({
         runId: run.runId,
         taskChannelId: run.taskChannelId,
+        status: run.status,
         ...(run.childParticipantId
           ? { participantId: run.childParticipantId }
           : {}),
@@ -3323,7 +3306,12 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
   // Membership is established by the userland owner that created or acquired
   // the agent. Host lifecycle code can interrupt an active vessel, but does not
   // join it to arbitrary channels on a product service's behalf.
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3384,7 +3372,12 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
   }
 
   /** Adopt this concrete vessel's durable queues for one server generation. */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -3425,7 +3418,12 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
    * turn. `runId` is carried through the journal so the terminal turn can
    * close the exact ledger row without polling the conversation.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3472,7 +3470,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * journaled as an ordinary eval invocation and runs in this agent/channel's
    * EvalDO, so ambient `chat` publishes with this agent's durable identity.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3528,7 +3531,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** Receiver-owned evidence for an automation dispatch. This method hydrates
    * the durable channel fold when needed; it never treats activation-local
    * cache absence as evidence that a run is missing. */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3563,7 +3571,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** MissionsDO calls this only after its terminal ledger row is durable. A
    * missed acknowledgement merely retains replay evidence; it cannot reopen or
    * duplicate the run. */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3639,7 +3652,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   // Symmetric with `subscribeChannel`: an owning userland service must be able
   // to detach a vessel during lifecycle cleanup.
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3665,7 +3683,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   // ── Channel intake ───────────────────────────────────────────────────────
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -3821,7 +3844,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return outcome;
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -3991,7 +4019,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return claimed;
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4026,37 +4059,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
       string,
       unknown
     >;
-    if (wakeKind === "subagent-terminal-publish") {
-      if (
-        typeof payload["runId"] !== "string" ||
-        typeof payload["taskChannelId"] !== "string" ||
-        typeof payload["parentRef"] !== "string" ||
-        typeof payload["report"] !== "string"
-      ) {
-        throw Object.assign(
-          new Error(
-            "executeWakeClaim: invalid subagent-terminal-publish payload",
-          ),
-          { code: "PermanentDurableWork" },
-        );
-      }
-      await this.publishOwnSubagentTerminal({
-        runId: String(payload["runId"]),
-        taskChannelId: String(payload["taskChannelId"]),
-        parentRef: String(payload["parentRef"]),
-        report: String(payload["report"]),
-        outcome:
-          payload["outcome"] === "failed"
-            ? "failed"
-            : payload["outcome"] === "cancelled"
-              ? "cancelled"
-              : "completed",
-        sourceEventId:
-          typeof payload["sourceEventId"] === "string"
-            ? payload["sourceEventId"]
-            : null,
-      });
-    } else if (wakeKind === "subagent-cancel-settle") {
+    if (wakeKind === "subagent-cancel-settle") {
       // PARENT side: re-drive an interrupted cancellation to its terminal
       // fact. Idempotent — a run already terminal no-ops.
       if (typeof payload["runId"] !== "string") {
@@ -4094,7 +4097,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { processed: true };
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4128,7 +4136,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { executed: true };
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4221,7 +4234,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return settlement.disposition;
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4313,7 +4331,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     });
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4554,9 +4577,9 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return true;
   }
 
-  /** A terminal task fact is both the retained card result and the supervisor
-   * wake. Delivery remains pending in the channel mailbox until this finite
-   * transition succeeds, so a foreground turn cannot consume or hide it. */
+  /** Explicit cancellation, abandonment, and infrastructure failure facts
+   * remain durable task lifecycle events. Ordinary child reports use the
+   * normal message and turn lifecycle instead. */
   private async routeSupervisedTaskTerminal(
     channelId: string,
     event: ChannelEvent,
@@ -4641,7 +4664,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
           sourceMessageId: event.messageId,
           content,
           senderRef: participantRefFromActor(agentic.actor),
-          metadata: { deliverAfterTurn: true, supervisedTerminalRunId: runId },
+          metadata: { deliverAfterTurn: true, supervisedRunId: runId },
         },
       });
       this.subagentRuns.setStatus(runId, terminalStatus);
@@ -4671,16 +4694,6 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     event: ChannelEvent,
     sourceMessageId: string | undefined,
   ): Promise<void> {
-    // §7.2 execution fence: once this vessel (running as a subagent) has
-    // committed its terminal intent, no further model execution is admitted.
-    // The delivery itself still settles durably; only dispatch is refused.
-    const sub = this.subagentIdentity();
-    if (sub && this.subagentTerminalIntentRecorded(sub.runId)) {
-      console.warn(
-        `[agent-vessel] refusing post-terminal dispatch for subagent run ${sub.runId} on ${channelId}`,
-      );
-      return;
-    }
     const agentic = event.payload as AgenticEvent | null;
     const metadata = this.turnMetadata(event);
     const command = {
@@ -5274,7 +5287,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   // ── Method calls (agent as PROVIDER) ─────────────────────────────────────
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5312,7 +5330,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     }
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5337,7 +5360,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * below is in-memory or local SQLite; missing folded state remains explicitly
    * missing instead of being hydrated through GAD.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     // PubSubChannel performs the admitted, receiver-gated inspection and then
     // reaches this endpoint as an authenticated code principal. The method's
     // exact channel-DO assertion below is the authority boundary for this
@@ -5381,7 +5409,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * stale, which is precisely when timeout/cancellation diagnostics need it.
    * The response contains no prompt, tool argument, credential, or secret.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5399,7 +5432,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** Direct lifecycle barrier for non-interactive owners. Unlike the chat
    * `pause` method this does not require the controller to remain a channel
    * member while cancellation is already unwinding that membership. */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5413,7 +5451,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { interrupted: true };
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -5661,7 +5704,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * `do:vibestudio/internal:EvalDO:<key>`. Any other caller is rejected; the
    * generic DO relay is open, so a sensitive receiver gates on receipt.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5890,7 +5938,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * intentional: chatOp contains mutations and is therefore correctly
    * classified as write, while a self snapshot must remain usable from a
    * read-only eval. The same own-EvalDO receiver check protects both routes. */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6508,7 +6561,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   /** Channel DO settle path: terminals for our channel_call effects POST back
    *  here. Duplicate delivery is a no-op (deterministic terminal ids). */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6528,7 +6586,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   /** Best-effort host wake hint. Durable outbox state, not this notification,
    * owns continuation; a lost hint is recovered by the ordinary redrive alarm. */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -6992,7 +7055,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * before completing, so every output precedes the `invocation.completed` terminal (the reducer drops
    * output after terminal).
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7086,7 +7154,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * identity is carried separately for causality and never reconstructed from
    * the effect id. Duplicate settlement is an idempotent driver no-op.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7417,7 +7490,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** Per-channel fork preflight. Vets ONLY the named subscription (it must
    *  exist); a multi-channel agent forks the one channel and drops the rest in
    *  the clone (see {@link postClone}), so the old ≤1-subscription gate is gone. */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7430,7 +7508,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { ok: true };
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7525,7 +7608,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * just created), so there is nothing to wipe: outbox/fold caches start empty.
    * The child boots knowing everything the parent knew at the fork point.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7567,8 +7655,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   // ── Subagents ──────────────────────────────────────────────────────────────
 
   /** This agent's own subagent identity (set in `STATE_ARGS.subagent` at spawn),
-   *  or null for a top-level agent. Drives depth accounting + the child `complete`
-   *  tool gate. */
+   *  or null for a top-level agent. Drives retained collaboration and depth. */
   protected subagentIdentity(): SubagentIdentity | null {
     const stateArgs = this.env["STATE_ARGS"];
     const raw =
@@ -7609,11 +7696,6 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     };
   }
 
-  /** True when this agent was spawned as a subagent (advertises `complete`). */
-  protected isSubagent(): boolean {
-    return this.subagentIdentity() !== null;
-  }
-
   /** Validate a model's request to wait for supervised work against both
    * retained child lifecycle and already-admitted terminal prompts. A child
    * may finish while the parent's spawning turn is still open; in that case
@@ -7628,16 +7710,16 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     );
     if (live.length > 0) return { suspend: true };
 
-    const terminalRunIds = new Set(supervised.map((run) => run.runId));
-    if (terminalRunIds.size > 0) {
+    const retainedRunIds = new Set(supervised.map((run) => run.runId));
+    if (retainedRunIds.size > 0) {
       const loop = await this.driver.loop(channelId);
-      const admittedTerminalReport = loop.state.deferredPostTurnQueue.some(
+      const admittedChildReport = loop.state.deferredPostTurnQueue.some(
         (prompt) => {
-          const runId = prompt.metadata?.supervisedTerminalRunId;
-          return typeof runId === "string" && terminalRunIds.has(runId);
+          const runId = prompt.metadata?.supervisedRunId;
+          return typeof runId === "string" && retainedRunIds.has(runId);
         },
       );
-      if (admittedTerminalReport) return { suspend: true };
+      if (admittedChildReport) return { suspend: true };
     }
 
     const completedRunsAwaitingIntegration = supervised
@@ -7654,20 +7736,6 @@ This is one admitted recurring-automation tick. If this tick establishes that th
           : "Turn not suspended: no supervised subagent is live. Continue or finish the foreground request.",
       details: { completedRunsAwaitingIntegration },
     };
-  }
-
-  /** True once this run's terminal intent + execution fence committed (§7.2
-   *  step 1). The wake row is the durable fact; it is retained after the
-   *  notification settles, so the fence survives restart and hibernation. */
-  private subagentTerminalIntentRecorded(runId: string): boolean {
-    return (
-      this.sql
-        .exec(
-          `SELECT 1 FROM agent_wake_queue WHERE wake_id = ?`,
-          `subagent-terminal-publish:${runId}`,
-        )
-        .toArray().length > 0
-    );
   }
 
   private currentSubagentDepth(): number {
@@ -8121,7 +8189,9 @@ This is one admitted recurring-automation tick. If this tick establishes that th
       // then transition from setup to live before the child sees a task prompt.
       const startedRun = this.subagentRuns.get(runId);
       if (!startedRun?.childParticipantId) {
-        throw new Error(`Subagent ${runId} reached publication without its participant identity`);
+        throw new Error(
+          `Subagent ${runId} reached publication without its participant identity`,
+        );
       }
       await this.publishSubagentStarted(startedRun);
       this.subagentRuns.setStatus(runId, "running");
@@ -8533,9 +8603,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
             sourceEventId: terminalDetails["sourceEventId"],
           };
         }
-        if (eventKind === "task.completed") {
-          recovered = { ...recovered, status: "completed" };
-        } else if (eventKind === "task.failed") {
+        if (eventKind === "task.failed") {
           recovered = { ...recovered, status: "failed" };
         } else if (eventKind === "task.cancelled") {
           recovered = { ...recovered, status: "cancelled" };
@@ -8595,7 +8663,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         runId,
       });
     }
-    if (run.status !== "starting" && run.status !== "running") {
+    if (run.status === "abandoned") {
       throw Object.assign(
         new Error(
           `subagent ${subagentRunHandle(run.runId)} is terminal (${run.status}) and cannot receive execution messages. ` +
@@ -8630,7 +8698,14 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         { runId: run.runId },
       );
     }
-    const messageId = `subagent-msg:${toolCallId}`;
+    const resumesIdleExternal =
+      run.externalSessionEntityId != null &&
+      run.externalGenerationId != null &&
+      run.status !== "starting" &&
+      run.status !== "running";
+    const messageId = resumesIdleExternal
+      ? `subagent-followup:${toolCallId}`
+      : `subagent-msg:${toolCallId}`;
     await this.createChannelClient(run.taskChannelId).send(
       participantId,
       messageId,
@@ -8640,6 +8715,37 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         to: [{ kind: "participant", participantId: run.childParticipantId }],
       },
     );
+    if (resumesIdleExternal) {
+      const agentKind = normalizeSubagentAgentKind(run.agentKind);
+      if (!agentKind || agentKind === "pi") {
+        throw new Error(`notify: invalid external agent kind ${run.agentKind}`);
+      }
+      const providerSlot = externalSubagentProviderSlot(agentKind);
+      const continued = await this.rpc.call<ExternalSubagentLaunchResult>(
+        "main",
+        providerSlot ? "extensions.invokeProvider" : "extensions.invoke",
+        [
+          providerSlot ?? externalSubagentExtensionId(agentKind),
+          "continueSubagent",
+          [
+            {
+              entityId: run.externalSessionEntityId,
+              generationId: run.externalGenerationId,
+              messageId,
+              prompt: message,
+              ...(run.launchConfig ? { options: run.launchConfig } : {}),
+            },
+          ],
+        ],
+      );
+      this.subagentRuns.setExternalSession(run.runId, {
+        entityId: continued.entityId,
+        generationId: continued.generationId,
+      });
+    }
+    if (run.status !== "starting" && run.status !== "running") {
+      this.subagentRuns.setStatus(run.runId, "running");
+    }
     this.subagentRuns.touch(run.runId, Date.now());
     const handle = subagentRunHandle(run.runId);
     return this.toolText(`sent to subagent ${handle}`, {
@@ -8745,7 +8851,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
       const queryStartedAt = performance.now();
       const comparison = await vcs.compare({
         target: parentStatus.workingHead,
-        source: { kind: "event", eventId: status.committed.eventId },
+        source: status.workingHead,
         limit: page.limit,
         ...(page.cursor ? { cursor: page.cursor } : {}),
       });
@@ -8771,13 +8877,13 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         comparison,
         note: status.clean
           ? "Comparison includes the child's committed work."
-          : "Comparison includes committed work only; workingCounts reports additional uncommitted semantic work.",
+          : "Comparison includes the child's current working state, including the reported uncommitted semantic work.",
       };
       renderedResult =
         `${renderCompareReview(comparison)}\n` +
         (status.clean
           ? "Child source is committed and clean."
-          : `Child has ${status.workingCounts.changes} additional uncommitted semantic change(s); comparison includes committed work only.`);
+          : `Child has ${status.workingCounts.changes} uncommitted semantic change(s); comparison includes its current working state.`);
     } else if (q === "log") {
       const status = await childStatus;
       statusFetchMs = performance.now() - childStatusStartedAt;
@@ -9036,9 +9142,10 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     });
   }
 
-  /** Cancel live execution while retaining the complete durable run result. */
+  /** Cancel current execution while retaining the collaborator and context. */
   protected async cancelSubagent(
     runId: string,
+    toolCallId: string,
     reason: string,
     parentChannelId?: string,
     toolRpc: RpcClient = this.rpc,
@@ -9057,7 +9164,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     // Durable cancel intent BEFORE any side effect: a crash anywhere between
     // the child abort and the terminal settle re-drives through the wake
     // queue instead of leaking a fenced-but-`running` run and its slot.
-    const wakeId = `subagent-cancel-settle:${run.runId}`;
+    const wakeId = `subagent-cancel-settle:${run.runId}:${toolCallId}`;
     const now = Date.now();
     this.ctx.storage.transactionSync(() => {
       this.sql.exec(
@@ -9088,10 +9195,9 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     });
   }
 
-  /** Idempotent core of cancellation: fence the child's live execution, then
-   *  settle the terminal fact. Safe to re-drive from the wake queue — a run
-   *  already terminal no-ops, the abort is fencing (repeatable), and the
-   *  terminal publish is idempotent by run identity. */
+  /** Idempotent core of cancellation: interrupt the current execution, then
+   *  settle its cancellation fact. The retained collaborator may later run
+   *  another assignment through the same handle and context. */
   private async driveCancelSubagent(
     runId: string,
     reason: string,
@@ -9112,7 +9218,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         providerSlot ? "extensions.invokeProvider" : "extensions.invoke",
         [
           providerSlot ?? externalSubagentExtensionId(agentKind),
-          "release",
+          "interrupt",
           [
             {
               entityId: run.externalSessionEntityId,
@@ -9130,7 +9236,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     await this.settleSubagentTerminal(run, "cancelled", reason);
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -9151,16 +9262,49 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         "cancelSubagentExecution: caller does not own this subagent run",
       );
     }
-    await this.recordOwnSubagentTerminalIntent(
-      subagent,
-      input.reason,
-      "cancelled",
-    );
     await this.driver.abortChannel(input.taskChannelId, input.reason);
     return { cancelled: true };
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason: "Subagent activity is private orchestration state.",
+    },
+    principals: ["code"],
+    effect: { kind: "open" },
+    tier: "open",
+    sensitivity: "read",
+  })
+  async readSubagentExecutionActivity(input: {
+    runId: string;
+    taskChannelId: string;
+  }): Promise<{ active: boolean }> {
+    const subagent = this.subagentIdentity();
+    if (
+      !subagent ||
+      subagent.runId !== input.runId ||
+      subagent.parentRef !== this.rpcCallerId ||
+      subagent.taskChannelId !== input.taskChannelId
+    ) {
+      throw new Error(
+        "readSubagentExecutionActivity: caller does not own this subagent run",
+      );
+    }
+    return { active: await this.subagentExecutionActive(input.taskChannelId) };
+  }
+
+  protected async subagentExecutionActive(channelId: string): Promise<boolean> {
+    await this.driver.loop(channelId);
+    return this.driver.hasOpenTurn(channelId);
+  }
+
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -9181,27 +9325,6 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         "retireSubagentExecution: caller does not own this subagent run",
       );
     }
-    const wakeId = `subagent-terminal-publish:${subagent.runId}`;
-    const now = Date.now();
-    this.ctx.storage.transactionSync(() => {
-      this.sql.exec(
-        `INSERT OR IGNORE INTO agent_wake_queue (
-           wake_id, channel_id, wake_kind, payload_json, prerequisite_delivery_id,
-           idempotency_key, attempts, next_attempt_at, lease_generation, created_at,
-           disposition
-         ) VALUES (?, ?, 'subagent-terminal-publish', ?, NULL, ?, 0, ?, 0, ?, 'terminal-completed')`,
-        wakeId,
-        subagent.taskChannelId,
-        JSON.stringify({
-          runId: subagent.runId,
-          reason: input.reason,
-          outcome: "abandoned",
-        }),
-        wakeId,
-        now,
-        now,
-      );
-    });
     await this.driver.abortChannel(input.taskChannelId, input.reason);
     return { retired: true };
   }
@@ -9220,98 +9343,6 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     });
   }
 
-  /** CHILD side of the terminal trigger (§7.2 steps 1–2): commit the terminal
-   *  outcome and the post-terminal execution fence in ONE child-local
-   *  transaction, then let the durable wake queue drive the parent
-   *  notification at-least-once. A child crash after this commit can no
-   *  longer lose the terminal fact — the wake row survives and republishes;
-   *  the parent's settle is idempotent by run identity. */
-  protected async completeAsSubagent(
-    report: string,
-    outcome: "success" | "failed",
-  ): Promise<AgentToolResult<Record<string, unknown>>> {
-    const sub = this.subagentIdentity();
-    if (!sub) throw new Error("complete is only available to subagents");
-    await this.recordOwnSubagentTerminalIntent(
-      sub,
-      report,
-      outcome === "failed" ? "failed" : "completed",
-    );
-    return {
-      ...this.toolText("subagent run completed; terminal delivery is durable", {
-        runId: sub.runId,
-        outcome,
-      }),
-      // `complete` is the semantic end of this child, not an ordinary tool
-      // result for the model to reason over. The Pi loop otherwise starts a
-      // continuation after receiving the successful result, causing the child
-      // to call `complete` repeatedly while its first durable terminal intent
-      // waits to reach the parent.
-      terminate: true,
-    };
-  }
-
-  private async recordOwnSubagentTerminalIntent(
-    sub: SubagentIdentity,
-    report: string,
-    outcome: "completed" | "failed" | "cancelled",
-  ): Promise<void> {
-    const contextId = this.subscriptions.getContextId(sub.taskChannelId);
-    const childStatus = await createSubagentVcsClient(this.rpc).status({
-      contextId,
-    });
-    if (outcome === "completed" && !childStatus.clean) {
-      throw Object.assign(
-        new Error(
-          `subagent ${sub.runId} has uncommitted semantic work; commit the child context before completing`,
-        ),
-        {
-          code: "IntegrationIncomplete",
-          errorData: {
-            code: "IntegrationIncomplete",
-            operation: "complete-subagent",
-            runId: sub.runId,
-            contextId,
-            workingChangeCount: childStatus.workingCounts.changes,
-          },
-        },
-      );
-    }
-    const sourceEventId =
-      childStatus.clean && childStatus.committed.kind === "event"
-        ? childStatus.committed.eventId
-        : null;
-    const wakeId = `subagent-terminal-publish:${sub.runId}`;
-    const now = Date.now();
-    this.ctx.storage.transactionSync(() => {
-      // The wake row is simultaneously the durable terminal intent, the
-      // execution fence marker (see dispatchApprovedInput), and the
-      // notification driver. First intent wins; a duplicate `complete` from a
-      // retried model turn is a no-op against the same wakeId.
-      this.sql.exec(
-        `INSERT OR IGNORE INTO agent_wake_queue (
-           wake_id, channel_id, wake_kind, payload_json, prerequisite_delivery_id,
-           idempotency_key, attempts, next_attempt_at, lease_generation, created_at,
-           disposition
-         ) VALUES (?, ?, 'subagent-terminal-publish', ?, NULL, ?, 0, ?, 0, ?, 'ready')`,
-        wakeId,
-        sub.taskChannelId,
-        JSON.stringify({
-          runId: sub.runId,
-          parentRef: sub.parentRef,
-          taskChannelId: sub.taskChannelId,
-          report,
-          outcome,
-          sourceEventId,
-        }),
-        wakeId,
-        now,
-        now,
-      );
-    });
-    this.markWorkReady("agent-wake");
-  }
-
   /** Publish the terminal subagent card and notify the parent, then mark the run
    *  terminal to keep delivery retryable if either terminal side effect fails.
    *  `spawn_subagent`
@@ -9320,7 +9351,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    */
   protected async settleSubagentTerminal(
     run: SubagentRunRow,
-    outcome: "completed" | "failed" | "cancelled" | "abandoned",
+    outcome: "failed" | "cancelled" | "abandoned",
     text: string,
   ): Promise<void> {
     const canonicalStatus = await this.publishSubagentTerminal(
@@ -9386,17 +9417,15 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   private async publishSubagentTerminal(
     run: SubagentRunRow,
-    outcome: "completed" | "failed" | "cancelled" | "abandoned",
+    outcome: "failed" | "cancelled" | "abandoned",
     text: string,
-  ): Promise<"completed" | "failed" | "cancelled" | "abandoned"> {
+  ): Promise<"failed" | "cancelled" | "abandoned"> {
     const kindByOutcome = {
-      completed: "task.completed",
       failed: "task.failed",
       cancelled: "task.cancelled",
       abandoned: "task.abandoned",
     } as const;
     const terminalOutcomeByOutcome = {
-      completed: "success",
       failed: "tool_error",
       cancelled: "cancelled",
       abandoned: "abandoned",
@@ -9427,27 +9456,13 @@ This is one admitted recurring-automation tick. If this tick establishes that th
       outcome: terminalOutcomeByOutcome[outcome],
       ...(sourceEventId ? { sourceEventId } : {}),
     };
-    const payload: Record<string, unknown> =
-      outcome === "completed"
-        ? {
-            protocol: AGENTIC_PROTOCOL_VERSION,
-            terminalOutcome: "success",
-            summary: text,
-            to: [{ kind: "participant", participantId }],
-            result: {
-              protocolContent: [{ type: "text", text }],
-              details: {
-                ...terminalDetails,
-              },
-            },
-          }
-        : {
-            protocol: AGENTIC_PROTOCOL_VERSION,
-            reason: text,
-            terminalOutcome: terminalOutcomeByOutcome[outcome],
-            to: [{ kind: "participant", participantId }],
-            details: terminalDetails,
-          };
+    const payload: Record<string, unknown> = {
+      protocol: AGENTIC_PROTOCOL_VERSION,
+      reason: text,
+      terminalOutcome: terminalOutcomeByOutcome[outcome],
+      to: [{ kind: "participant", participantId }],
+      details: terminalDetails,
+    };
     const event = {
       kind: kindByOutcome[outcome],
       actor,
@@ -9482,28 +9497,18 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   private authorizedSubagentTerminalStatus(
     run: SubagentRunRow,
     envelope: ChannelEvent,
-  ): "completed" | "failed" | "cancelled" | "abandoned" | null {
+  ): "failed" | "cancelled" | "abandoned" | null {
     if (envelope.type !== AGENTIC_EVENT_PAYLOAD_KIND) return null;
     const event = envelope.payload as AgenticEvent;
     const status = this.subagentTerminalStatus(event, run.runId);
     if (!status) return null;
-    const childParticipantId = run.childParticipantId;
-    if (!childParticipantId) return null;
     const actorParticipantId = event.actor.participantId ?? event.actor.id;
-    if (
-      envelope.senderId === childParticipantId &&
-      actorParticipantId === childParticipantId
-    ) {
-      return status;
-    }
-    // A supervisor may author cancellation/abandonment/infrastructure failure
-    // facts when the child is unreachable. Successful completion is child
-    // evidence and can never be asserted by the supervisor.
+    // A supervisor authors cancellation/abandonment/infrastructure failure
+    // facts when the child is unreachable.
     const supervisorParticipantId =
       this.subscriptions.getParticipantId(run.taskChannelId) ??
       this.participantId();
-    return status !== "completed" &&
-      envelope.senderId === supervisorParticipantId &&
+    return envelope.senderId === supervisorParticipantId &&
       actorParticipantId === supervisorParticipantId
       ? status
       : null;
@@ -9512,11 +9517,9 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   private subagentTerminalStatus(
     event: AgenticEvent,
     runId: string,
-  ): "completed" | "failed" | "cancelled" | "abandoned" | null {
+  ): "failed" | "cancelled" | "abandoned" | null {
     if (event.causality?.taskId !== runId) return null;
     switch (event.kind) {
-      case "task.completed":
-        return "completed";
       case "task.failed":
         return "failed";
       case "task.cancelled":
@@ -9547,82 +9550,6 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     );
   }
 
-  private async publishOwnSubagentTerminal(input: {
-    runId: string;
-    taskChannelId: string;
-    parentRef: string;
-    report: string;
-    outcome: "completed" | "failed" | "cancelled";
-    sourceEventId: string | null;
-  }): Promise<void> {
-    const kind =
-      input.outcome === "completed"
-        ? "task.completed"
-        : input.outcome === "failed"
-          ? "task.failed"
-          : "task.cancelled";
-    const terminalOutcome =
-      input.outcome === "completed"
-        ? "success"
-        : input.outcome === "failed"
-          ? "tool_error"
-          : "cancelled";
-    const participantId =
-      this.subscriptions.getParticipantId(input.taskChannelId) ??
-      this.participantId();
-    const actor: ActorRef = {
-      kind: "agent",
-      id: participantId,
-      displayName: "Subagent",
-      metadata: { type: "agent", subagentRunId: input.runId },
-    };
-    const details = {
-      runId: subagentRunHandle(input.runId),
-      outcome: terminalOutcome,
-      ...(input.sourceEventId ? { sourceEventId: input.sourceEventId } : {}),
-    };
-    const payload =
-      input.outcome === "completed"
-        ? {
-            protocol: AGENTIC_PROTOCOL_VERSION,
-            terminalOutcome,
-            summary: input.report,
-            to: [
-              { kind: "participant" as const, participantId: input.parentRef },
-            ],
-            result: {
-              protocolContent: [{ type: "text", text: input.report }],
-              details,
-            },
-          }
-        : {
-            protocol: AGENTIC_PROTOCOL_VERSION,
-            reason: input.report,
-            terminalOutcome,
-            to: [
-              { kind: "participant" as const, participantId: input.parentRef },
-            ],
-            details,
-          };
-    const event = {
-      kind,
-      actor,
-      causality: {
-        taskId: input.runId as never,
-        invocationId: input.runId as never,
-      },
-      payload,
-      createdAt: new Date().toISOString(),
-    } as unknown as AgenticEvent;
-    await this.createChannelClient(input.taskChannelId).publishAgenticEvent(
-      participantId,
-      event,
-      {
-        idempotencyKey: `subagent-terminal:${input.runId}`,
-        senderMetadata: actor.metadata,
-      },
-    );
-  }
   /** Compensation for a spawn transaction that never reached a published
    * running result. This is intentionally unreachable from normal lifecycle. */
   private async rollbackFailedSubagentSpawn(
@@ -9727,13 +9654,33 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         }) ?? {};
       if (
         payload.saliency === "say" ||
-        this.eventAddressesSelf(channelId, payload)
+        this.eventAddressesSelf(channelId, payload) ||
+        this.subagentRuns.getByTaskChannel(channelId)?.childParticipantId ===
+          event.senderId
       ) {
         await this.wakeSupervisorFromExplicitChildMessage(
           channelId,
           event,
           agentic,
         );
+      }
+      return true;
+    }
+    if (agentic !== null && kind === "turn.closed") {
+      const run = this.subagentRuns.getByTaskChannel(channelId);
+      if (run?.childParticipantId === event.senderId) {
+        const activity = await this.rpc.call<{ active: boolean }>(
+          run.childEntityId,
+          "readSubagentExecutionActivity",
+          [{ runId: run.runId, taskChannelId: run.taskChannelId }],
+        );
+        if (!activity.active)
+          this.subagentRuns.setStatus(run.runId, "completed");
+        this.subagentRuns.touch(run.runId, Date.now());
+        // A report can reach the parent before the child's closing event. Wake
+        // the parent again after the collaborator becomes idle so a suspended
+        // parent can consume the already-admitted report without phantom work.
+        await this.driver.wake(run.parentChannelId);
       }
       return true;
     }
@@ -9758,6 +9705,13 @@ This is one admitted recurring-automation tick. If this tick establishes that th
       );
       return;
     }
+    if (run.childParticipantId !== event.senderId) {
+      console.error(
+        "[AgentVessel] refusing task report from a participant other than the retained child",
+        { taskChannelId: channelId, senderId: event.senderId },
+      );
+      return;
+    }
     const update = this.extractMessageText(agentic).trim();
     if (!update) return;
     this.subagentRuns.touch(run.runId, Date.now());
@@ -9765,10 +9719,8 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     const sourceMessageId =
       (agentic.causality?.messageId as string | undefined) ?? event.messageId;
     const content =
-      `Subagent ${label} sent an explicit progress update for the existing user request. ` +
-      `This is not a new request and does not mean the run is complete. Continue supervising ` +
-      `the full goal; if no foreground work remains, call suspend_turn rather than finalizing.` +
-      `\n\nUpdate:\n${update}`;
+      `Subagent ${label} sent a report for the existing user request.` +
+      `\n\nReport:\n${update}`;
     await this.driver.handleIncoming(run.parentChannelId, {
       type: "command",
       command: {
@@ -9780,6 +9732,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         ...(sourceMessageId ? { sourceMessageId } : {}),
         content,
         senderRef: participantRefFromActor(agentic.actor),
+        metadata: { deliverAfterTurn: true, supervisedRunId: run.runId },
       },
     });
   }
@@ -9841,7 +9794,12 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     };
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+  @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",

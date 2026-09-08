@@ -793,8 +793,8 @@ describe("GitBridge semantic snapshot boundary", () => {
         ? repositoryInspection(main, repoPath)
         : eventInspection(main.eventId)
     );
-    host.vcs.listFiles = vi.fn(async () => ({
-      state: main,
+    host.vcs.listFiles = vi.fn(async ({ state }) => ({
+      state,
       repositoryId: repositoryRef.repositoryId,
       files: [
         {
@@ -857,6 +857,33 @@ describe("GitBridge semantic snapshot boundary", () => {
     expect(host.vcs.resolveRepository).toHaveBeenNthCalledWith(2, { state: main, repoPath });
     expect(host.vcs.neighbors).not.toHaveBeenCalled();
     expect(bridge.git.commit).toHaveBeenCalledTimes(1);
+
+    // Recording the remote advances global main but leaves this repository unchanged.
+    await expect(
+      bridge.exportProtectedRepository(repoPath, {
+        expectedMainEventId: "event:before-remote-config",
+      })
+    ).resolves.toMatchObject({ headCommit: "git:main", exported: 0 });
+    const listFiles = host.vcs.listFiles;
+    host.vcs.listFiles = vi.fn(async (input) => {
+      const page = await listFiles(input);
+      return input.state.kind === "event" && input.state.eventId === "event:before-remote-config"
+        ? {
+            ...page,
+            files: page.files.map((file) => ({
+              ...file,
+              contentHash: sha256Hex(Buffer.from("old source")),
+            })),
+          }
+        : page;
+    });
+    await expect(
+      bridge.exportProtectedRepository(repoPath, {
+        expectedMainEventId: "event:before-remote-config",
+      })
+    ).rejects.toThrow("review the new source before publishing");
+    expect(bridge.git.commit).toHaveBeenCalledTimes(1);
+    host.vcs.listFiles = listFiles;
 
     writeFileSync(path.join(dir, "index.ts"), "checkout-only edit\n");
     let previewDir = "";

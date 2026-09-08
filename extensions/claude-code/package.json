@@ -17,7 +17,9 @@
           "methods": [
             "prepare",
             "launchSubagent",
+            "continueSubagent",
             "inspectLaunch",
+            "interrupt",
             "release",
             "resolvePrimaryChannel"
           ]

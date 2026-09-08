@@ -20,14 +20,26 @@ export { z } from "../core/zod.js";
 export { defineContract } from "../core/defineContract.js";
 
 // Pure context-id / path helpers
-export { parseContextId, isValidContextId, getInstanceId } from "../core/context.js";
+export {
+  parseContextId,
+  isValidContextId,
+  getInstanceId,
+} from "../core/context.js";
 export { normalizePath, getFileName, resolvePath } from "./pathUtils.js";
 
 // Panel-link builder (SSR-guarded) + gateway fetch factory
-export { buildPanelLink, buildPanelDeepLink, buildPanelShareLink } from "../core/panelLinks.js";
+export {
+  buildPanelLink,
+  buildPanelDeepLink,
+  buildPanelShareLink,
+} from "../core/panelLinks.js";
 export type { BuildPanelLinkOptions } from "../core/panelLinks.js";
 export { createGatewayFetch } from "./gatewayFetch.js";
-export type { GatewayFetch, GatewayFetchConfig, GatewayRpcFetchConfig } from "./gatewayFetch.js";
+export type {
+  GatewayFetch,
+  GatewayFetchConfig,
+  GatewayRpcFetchConfig,
+} from "./gatewayFetch.js";
 
 // Canonical panel lifecycle contract and the structured error thrown by
 // readiness-bearing panel operations.

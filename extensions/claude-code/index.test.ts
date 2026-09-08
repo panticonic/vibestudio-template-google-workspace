@@ -50,6 +50,11 @@ function makeCtx(
     failRevocationOnce?: string;
     failStart?: boolean;
     failStopOnce?: boolean;
+    snapshot?: {
+      state: "running" | "exited";
+      exit: { code: number | null; signal: string | null; at: string } | null;
+      log: { bytes: number; tail: string; truncated: boolean };
+    };
   } = {},
 ) {
   const contextProjectionsPath = path.join(
@@ -108,6 +113,41 @@ function makeCtx(
           pid: 4242,
           exit: null,
           log: { bytes: 0, tail: "", truncated: false },
+        };
+      }
+      if (method === "linkedClaude.continue") {
+        return {
+          generationId: (args[0] as { generationId: string }).generationId,
+          entityId: (args[0] as { entityId: string }).entityId,
+          state: "running",
+          pid: 4343,
+          exit: null,
+          log: { bytes: 0, tail: "", truncated: false },
+        };
+      }
+      if (method === "linkedClaude.interrupt") {
+        return {
+          generationId: (args[0] as { generationId: string }).generationId,
+          entityId: (args[0] as { entityId: string }).entityId,
+          state: "exited",
+          pid: null,
+          exit: { code: null, signal: "SIGTERM", at: new Date().toISOString() },
+          log: { bytes: 0, tail: "", truncated: false },
+        };
+      }
+      if (method === "linkedClaude.inspect") {
+        const ref = args[0] as { generationId: string; entityId: string };
+        return {
+          generationId: ref.generationId,
+          entityId: ref.entityId,
+          state: options.snapshot?.state ?? "running",
+          pid: options.snapshot?.state === "exited" ? null : 4242,
+          exit: options.snapshot?.exit ?? null,
+          log: options.snapshot?.log ?? {
+            bytes: 0,
+            tail: "",
+            truncated: false,
+          },
         };
       }
       if (method === "linkedClaude.stop") {
@@ -267,12 +307,14 @@ describe("@workspace-extensions/claude-code prepare", () => {
         subtype: "success",
         is_error: false,
         result: "bounded audit complete",
+        session_id: "123e4567-e89b-12d3-a456-426614174000",
       }),
     ].join("\n");
     expect(parseClaudeStreamCompletion(log)).toEqual({
       source: "stream-result",
       outcome: "success",
       report: "bounded audit complete",
+      sessionId: "123e4567-e89b-12d3-a456-426614174000",
     });
     expect(
       parseClaudeStreamCompletion(
@@ -560,6 +602,106 @@ describe("@workspace-extensions/claude-code prepare", () => {
     expect(lifecycleEvents.indexOf(`stop:${result.generationId}`)).toBeLessThan(
       lifecycleEvents.indexOf(`revoke:${agentId(1)}`),
     );
+  });
+
+  it("continues a reported run with its exact Claude conversation and credential", async () => {
+    const options: Parameters<typeof makeCtx>[2] = {};
+    const { ctx, rpcCall, revoked } = makeCtx(tmpRoot, new Map(), options);
+    ctx.invocation.current.mockReturnValue({
+      requestId: "req-continue",
+      extensionName: "@workspace-extensions/claude-code",
+      method: "providers.claudeCode.launchSubagent",
+      caller: { callerId: "do:parent", callerKind: "do" },
+    });
+    const api = (await activate(ctx as never)).providerContracts.claudeCode;
+    const subagent = {
+      runId: "run-retained",
+      task: "first task",
+      parentRef: "do:parent",
+      parentChannelId: "home",
+      taskChannelId: "task",
+      parentContextId: "parent",
+      parentParticipantId: "participant",
+      depth: 1,
+    };
+    const first = await api.launchSubagent({ channelId: CHANNEL, subagent });
+    options.snapshot = {
+      state: "exited",
+      exit: { code: 0, signal: null, at: new Date().toISOString() },
+      log: {
+        bytes: 200,
+        truncated: false,
+        tail: JSON.stringify({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          result: "first report",
+          session_id: first.generationId,
+        }),
+      },
+    };
+    await vi.waitFor(() =>
+      expect(
+        rpcCall.mock.calls.some((call) => call[1] === "reportExternalResult"),
+      ).toBe(true),
+    );
+    expect(
+      rpcCall.mock.calls.find(
+        (call) => call[1] === "reportExternalResult",
+      )?.[2],
+    ).toMatchObject({ messageId: "subagent-seed:run-retained" });
+
+    const resumed = await api.continueSubagent({
+      entityId: first.entityId,
+      generationId: first.generationId,
+      messageId: "subagent-followup:follow-up-1",
+      prompt: "follow-up task",
+    });
+    expect(resumed.generationId).toBe(first.generationId);
+    expect(
+      rpcCall.mock.calls.filter((call) => call[1] === "linkedClaude.start"),
+    ).toHaveLength(1);
+    expect(
+      rpcCall.mock.calls.find(
+        (call) => call[1] === "linkedClaude.continue",
+      )?.[2],
+    ).toMatchObject({
+      generationId: first.generationId,
+      sessionId: first.generationId,
+      prompt: "follow-up task",
+    });
+    await expect(
+      api.continueSubagent({
+        entityId: first.entityId,
+        generationId: first.generationId,
+        messageId: "subagent-followup:follow-up-1",
+        prompt: "follow-up task",
+      }),
+    ).resolves.toEqual(resumed);
+    expect(
+      rpcCall.mock.calls.filter((call) => call[1] === "linkedClaude.continue"),
+    ).toHaveLength(1);
+    await vi.waitFor(() =>
+      expect(
+        rpcCall.mock.calls.filter((call) => call[1] === "reportExternalResult"),
+      ).toHaveLength(2),
+    );
+    expect(
+      rpcCall.mock.calls.filter(
+        (call) => call[1] === "reportExternalResult",
+      )[1]?.[2],
+    ).toMatchObject({ messageId: "subagent-followup:follow-up-1" });
+    expect(revoked).toEqual([]);
+    await expect(
+      api.interrupt({
+        entityId: resumed.entityId,
+        generationId: resumed.generationId,
+      }),
+    ).resolves.toEqual({ interrupted: true });
+    expect(
+      rpcCall.mock.calls.some((call) => call[1] === "linkedClaude.interrupt"),
+    ).toBe(true);
+    expect(revoked).toEqual([]);
   });
 
   it.each(["start", "stop"])(

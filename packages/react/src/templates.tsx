@@ -12,20 +12,24 @@ import {
   Flex,
   Grid,
   Heading,
-  Spinner,
   Text,
   TextField,
+  RadioCards,
+  Select,
 } from "@radix-ui/themes";
 import type {
-  TemplateCatalogSnapshot,
   TemplateExactPin,
   TemplateInspection,
   TemplateLocator,
 } from "@vibestudio/service-schemas/templates";
 import { sameWorkspaceTemplatePin } from "@vibestudio/service-schemas/templates";
+import { workspaceExamples } from "@workspace/template-management";
 import type { TemplateManagementClient } from "@workspace/template-management";
 
-type BrowserClient = Pick<TemplateManagementClient, "catalog" | "inspect">;
+import type { StoredCredentialSummary } from "@vibestudio/credential-client/types";
+import { findMatchingUrlAudience } from "@vibestudio/credential-client/urlAudience";
+
+type BrowserClient = Pick<TemplateManagementClient, "inspect">;
 export type CreateTemplateWorkspace = (
   name: string,
   pin: TemplateExactPin,
@@ -185,78 +189,86 @@ export function TemplateWorkspaceReview({
   );
 }
 
-/** Catalog and source inspection are read-only; the host supplies workspace creation. */
-export function TemplateBrowser({
+interface TemplateBrowserProps {
+  client: BrowserClient;
+  initialPin?: TemplateExactPin;
+  initialSourceUrl?: string;
+  initialInspection?: TemplateInspection;
+  onReviewPending?: (approvalId: string) => void;
+  onCreate?: CreateTemplateWorkspace;
+  listSourceAccounts?: () => Promise<StoredCredentialSummary[]>;
+  onCreateFresh?: (name: string) => Promise<void>;
+  onChooseFolder?: () => Promise<TemplateInspection | null>;
+  onOpenInApp?: (inspection: TemplateInspection) => Promise<void>;
+}
+
+/** Each externally selected source owns one review session and its async work. */
+export function TemplateBrowser(props: TemplateBrowserProps) {
+  return (
+    <WorkspaceSourceSession
+      key={JSON.stringify(
+        props.initialInspection?.pin ??
+          props.initialPin ??
+          props.initialSourceUrl ??
+          null,
+      )}
+      {...props}
+    />
+  );
+}
+
+function WorkspaceSourceSession({
   client,
   onCreate,
   onOpenInApp,
   initialPin,
+  initialSourceUrl,
   initialInspection,
-  candidates = [],
   onReviewPending,
-}: {
-  client: BrowserClient;
-  initialPin?: TemplateExactPin;
-  initialInspection?: TemplateInspection;
-  candidates?: readonly TemplateInspection[];
-  onReviewPending?: (approvalId: string) => void;
-  onCreate?: CreateTemplateWorkspace;
-  onOpenInApp?: (inspection: TemplateInspection) => Promise<void>;
-}) {
-  const [catalog, setCatalog] = useState<TemplateCatalogSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
-  const [attempt, setAttempt] = useState(0);
-  const review = pendingAuthorityNotice(error);
-  const awaitingReview = isAuthorityPending(error);
-  const [query, setQuery] = useState("");
-  const [url, setUrl] = useState("");
-  const [credential, setCredential] = useState("");
-  const [inspectionState, setInspectionState] = useState<{
-    inspection: TemplateInspection;
-    requestedPin: TemplateExactPin;
-  } | null>(null);
-  const [inspecting, setInspecting] = useState(false);
-  const generation = useRef(0);
-  const live = useRef(true);
-  const requestedPin = initialInspection?.pin ?? initialPin;
-  const currentInspection = initialInspection
-    ? initialInspection
-    : inspectionState &&
-        (!requestedPin ||
-          (sameWorkspaceTemplatePin(
-            inspectionState.requestedPin,
-            requestedPin,
-          ) &&
-            sameWorkspaceTemplatePin(
-              inspectionState.inspection.pin,
-              requestedPin,
-            )))
-      ? inspectionState.inspection
-      : null;
+  onChooseFolder,
+  onCreateFresh,
+  listSourceAccounts,
+}: TemplateBrowserProps) {
+  const [accounts, setAccounts] = useState<StoredCredentialSummary[]>([]);
+  const [accountError, setAccountError] = useState<string | null>(null);
   useEffect(() => {
-    live.current = true;
+    if (!listSourceAccounts) return;
     let active = true;
-    setLoading(true);
-    setError(null);
-    client
-      .catalog()
+    void listSourceAccounts()
       .then((value) => {
-        if (active) setCatalog(value);
+        if (active) setAccounts(value);
       })
       .catch((error) => {
-        if (active) setError(error);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        if (active) setAccountError(errorMessage(error));
       });
     return () => {
       active = false;
+    };
+  }, [listSourceAccounts]);
+  const [sourceKind, setSourceKind] = useState("git");
+  const [freshName, setFreshName] = useState("");
+  const [creatingFresh, setCreatingFresh] = useState(false);
+  const freshPending = useRef(false);
+  const [error, setError] = useState<unknown>(null);
+  const lastLocator = useRef<TemplateLocator | null>(null);
+  const review = pendingAuthorityNotice(error);
+  const awaitingReview = isAuthorityPending(error);
+  const [url, setUrl] = useState(initialSourceUrl ?? "");
+  const [credential, setCredential] = useState("");
+  const [currentInspection, setInspection] =
+    useState<TemplateInspection | null>(initialInspection ?? null);
+  const [inspecting, setInspecting] = useState(false);
+  const generation = useRef(0);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
       live.current = false;
       generation.current += 1;
     };
-  }, [client, attempt]);
+  }, []);
   const inspect = async (locator: TemplateLocator) => {
+    lastLocator.current = locator;
     const operation = ++generation.current;
     setInspecting(true);
     setError(null);
@@ -270,10 +282,7 @@ export function TemplateBrowser({
           "The inspected source does not match the selected workspace. Review the source again.",
         );
       if (live.current && operation === generation.current)
-        setInspectionState({
-          inspection: result,
-          requestedPin: "pin" in locator ? locator.pin : result.pin,
-        });
+        setInspection(result);
     } catch (error) {
       if (live.current && operation === generation.current) setError(error);
     } finally {
@@ -282,30 +291,16 @@ export function TemplateBrowser({
     }
   };
   useEffect(() => {
-    if (initialInspection) {
-      generation.current += 1;
-      setInspectionState({
-        inspection: initialInspection,
-        requestedPin: initialInspection.pin,
-      });
-      setError(null);
-      setInspecting(false);
-    } else if (initialPin) void inspect({ pin: initialPin });
-  }, [initialInspection, initialPin, client, attempt]);
+    if (!initialInspection && initialPin) void inspect({ pin: initialPin });
+  }, [initialInspection, initialPin, client]);
   if (currentInspection && onCreate)
     return (
       <TemplateWorkspaceReview
         inspection={currentInspection}
         onCreate={onCreate}
-        onBack={() => setInspectionState(null)}
+        onBack={() => setInspection(null)}
       />
     );
-  const entries = (catalog?.entries ?? []).filter((entry) =>
-    [entry.name, entry.description, ...entry.tags]
-      .join(" ")
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
   const canInspect = (() => {
     try {
       return ["https:", "http:"].includes(
@@ -317,12 +312,88 @@ export function TemplateBrowser({
   })();
   return (
     <Flex direction="column" gap="5">
-      <Box>
-        <Heading size="5">A workspace for what’s next</Heading>
-        <Text as="p" color="gray" size="2" mt="2">
-          Explore an app or bring a workspace from its source address.
-        </Text>
-      </Box>
+      <RadioCards.Root
+        value={sourceKind}
+        onValueChange={setSourceKind}
+        columns={{
+          initial: "1",
+          sm: onChooseFolder && onCreateFresh ? "3" : "2",
+        }}
+        gap="3"
+        aria-label="Workspace starting point"
+        disabled={inspecting || creatingFresh}
+      >
+        {onCreateFresh ? (
+          <RadioCards.Item value="fresh">
+            <Flex direction="column" gap="1">
+              <Text weight="bold">Start fresh</Text>
+              <Text size="2" color="gray">
+                Start with Base
+              </Text>
+            </Flex>
+          </RadioCards.Item>
+        ) : null}
+        {onChooseFolder ? (
+          <RadioCards.Item value="folder">
+            <Flex direction="column" gap="1">
+              <Text weight="bold">Folder</Text>
+              <Text size="2" color="gray">
+                Use a local checkout
+              </Text>
+            </Flex>
+          </RadioCards.Item>
+        ) : null}
+        <RadioCards.Item value="git">
+          <Flex direction="column" gap="1">
+            <Text weight="bold">Git URL</Text>
+            <Text size="2" color="gray">
+              Use a repository
+            </Text>
+          </Flex>
+        </RadioCards.Item>
+      </RadioCards.Root>
+      {sourceKind === "fresh" && onCreateFresh ? (
+        <Flex direction="column" gap="3">
+          <Text size="2" color="gray">
+            A separate workspace using this host’s configured Base, with its own
+            data and panels.
+          </Text>
+          <TextField.Root
+            aria-label="Workspace name"
+            placeholder="my-project"
+            value={freshName}
+            disabled={creatingFresh}
+            onChange={(event) => setFreshName(event.target.value)}
+            size="3"
+          />
+          <Text size="1" color="gray">
+            Use letters, numbers, hyphens or underscores.
+          </Text>
+          <Box>
+            <Button
+              size="3"
+              loading={creatingFresh}
+              disabled={
+                creatingFresh || !/^[A-Za-z0-9_-]+$/.test(freshName.trim())
+              }
+              onClick={() => {
+                if (freshPending.current) return;
+                freshPending.current = true;
+                setCreatingFresh(true);
+                setError(null);
+                void onCreateFresh(freshName.trim())
+                  .catch(setError)
+                  .finally(() => {
+                    freshPending.current = false;
+                    setCreatingFresh(false);
+                  });
+              }}
+            >
+              Create workspace
+            </Button>
+          </Box>
+        </Flex>
+      ) : null}
       {error ? (
         <Callout.Root
           color={awaitingReview ? "amber" : "red"}
@@ -349,7 +420,9 @@ export function TemplateBrowser({
               )}
               <Button
                 variant="soft"
-                onClick={() => setAttempt((value) => value + 1)}
+                onClick={() => {
+                  if (lastLocator.current) void inspect(lastLocator.current);
+                }}
               >
                 Check again
               </Button>
@@ -384,157 +457,163 @@ export function TemplateBrowser({
           ) : null}
         </Card>
       ) : null}
-      {candidates.length > 0 ? (
+      {onChooseFolder && sourceKind === "folder" ? (
+        <Flex direction="column" gap="2">
+          <Heading size="3">From a folder on this computer</Heading>
+          <Text size="2" color="gray">
+            Use a workspace folder, including changes you haven’t committed.
+          </Text>
+          <Box>
+            <Button
+              size="3"
+              variant="soft"
+              disabled={inspecting}
+              loading={inspecting}
+              onClick={() => {
+                const operation = ++generation.current;
+                setInspecting(true);
+                setError(null);
+                void onChooseFolder()
+                  .then((result) => {
+                    if (
+                      live.current &&
+                      operation === generation.current &&
+                      result
+                    )
+                      setInspection(result);
+                  })
+                  .catch((error) => {
+                    if (live.current && operation === generation.current)
+                      setError(error);
+                  })
+                  .finally(() => {
+                    if (live.current && operation === generation.current)
+                      setInspecting(false);
+                  });
+              }}
+            >
+              Choose folder…
+            </Button>
+          </Box>
+        </Flex>
+      ) : null}
+      {sourceKind === "git" ? (
         <Flex direction="column" gap="3">
-          <Heading size="3">Local workspaces</Heading>
-          <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-            {candidates.map((candidate) => (
-              <Card key={JSON.stringify(candidate.pin)}>
-                <Heading size="3">
-                  {candidate.presentation?.name ?? "Workspace source"}
-                </Heading>
-                {candidate.presentation?.description ? (
-                  <Text as="p" size="2" color="gray" mt="2">
-                    {candidate.presentation.description}
-                  </Text>
-                ) : null}
-                <Button
-                  size="3"
-                  variant="soft"
-                  mt="3"
-                  onClick={() =>
-                    setInspectionState({
-                      inspection: candidate,
-                      requestedPin: candidate.pin,
+          <Flex justify="between" align="center">
+            <Heading size="3">From a source address</Heading>
+          </Flex>
+          <TextField.Root
+            size="3"
+            aria-label="Workspace source address"
+            placeholder="https://github.com/owner/workspace"
+            value={url}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              setCredential("");
+            }}
+            disabled={inspecting}
+          />
+          {listSourceAccounts ? (
+            <Flex direction="column" gap="2">
+              <Text size="2" weight="medium">
+                Repository access
+              </Text>
+              <Select.Root
+                value={credential || "anonymous"}
+                onValueChange={(value) =>
+                  setCredential(value === "anonymous" ? "" : value)
+                }
+                disabled={inspecting}
+              >
+                <Select.Trigger
+                  aria-label="Repository account"
+                  placeholder="Public repository"
+                />
+                <Select.Content>
+                  <Select.Item value="anonymous">
+                    Public repository — no account
+                  </Select.Item>
+                  {accounts
+                    .filter((account) => {
+                      if (
+                        account.revokedAt ||
+                        account.lifecycle.state === "revoked"
+                      )
+                        return false;
+                      try {
+                        return account.bindings?.some(
+                          (binding) =>
+                            binding.use === "git-http" &&
+                            !!findMatchingUrlAudience(
+                              new URL(url.replace(/^git\+/, "")),
+                              binding.audience,
+                            ),
+                        );
+                      } catch {
+                        return false;
+                      }
                     })
-                  }
+                    .map((account) => (
+                      <Select.Item key={account.id} value={account.label}>
+                        {account.label}
+                      </Select.Item>
+                    ))}
+                </Select.Content>
+              </Select.Root>
+              <Text size="1" color="gray">
+                For a private repository, choose a connected account that can
+                access this address.
+              </Text>
+              {accountError ? (
+                <Text size="2" color="red" role="alert">
+                  Couldn’t load connected accounts: {accountError}
+                </Text>
+              ) : null}
+            </Flex>
+          ) : null}
+          <Flex justify="end">
+            <Button
+              size="3"
+              variant="soft"
+              disabled={!canInspect || inspecting}
+              loading={inspecting}
+              onClick={() =>
+                void inspect({
+                  url: url.trim(),
+                  ...(credential.trim()
+                    ? { credential: credential.trim() }
+                    : {}),
+                })
+              }
+            >
+              Review workspace
+            </Button>
+          </Flex>
+        </Flex>
+      ) : null}
+      {sourceKind === "git" ? (
+        <Flex direction="column" gap="3">
+          <Heading size="3">Start from an example</Heading>
+          <Grid columns={{ initial: "1", sm: "2" }} gap="3">
+            {workspaceExamples.map((entry) => (
+              <Card key={entry.url}>
+                <Heading size="3">{entry.name}</Heading>
+                <Text as="p" size="2" color="gray" mt="2">
+                  {entry.description}
+                </Text>
+                <Button
+                  mt="3"
+                  variant="soft"
+                  disabled={inspecting}
+                  onClick={() => void inspect({ url: entry.url })}
                 >
-                  Explore {candidate.presentation?.name ?? "workspace"}
+                  Review {entry.name}
                 </Button>
               </Card>
             ))}
           </Grid>
         </Flex>
       ) : null}
-      <Flex direction="column" gap="3">
-        <Flex justify="between" align="center">
-          <Heading size="3">From a source address</Heading>
-          <Badge color="gray">Your choice</Badge>
-        </Flex>
-        <TextField.Root
-          size="3"
-          aria-label="Workspace source address"
-          placeholder="https://github.com/owner/workspace"
-          value={url}
-          onChange={(event) => setUrl(event.target.value)}
-          disabled={inspecting}
-        />
-        <details>
-          <summary
-            style={{
-              fontSize: 13,
-              cursor: "pointer",
-              minHeight: 44,
-              alignContent: "center",
-            }}
-          >
-            Private repository?
-          </summary>
-          <TextField.Root
-            size="3"
-            aria-label="Connected account name"
-            placeholder="Connected account name"
-            value={credential}
-            onChange={(event) => setCredential(event.target.value)}
-          />
-          <Text as="p" size="1" color="gray" mt="1">
-            Use the name of an account already connected for this repository.
-          </Text>
-        </details>
-        <Flex justify="end">
-          <Button
-            size="3"
-            variant="soft"
-            disabled={!canInspect || inspecting}
-            loading={inspecting}
-            onClick={() =>
-              void inspect({
-                url: url.trim(),
-                ...(credential.trim() ? { credential: credential.trim() } : {}),
-              })
-            }
-          >
-            Review workspace
-          </Button>
-        </Flex>
-      </Flex>
-      <Flex direction="column" gap="3">
-        <Heading size="3">Browse workspaces</Heading>
-        {loading ? (
-          <Flex role="status" gap="2">
-            <Spinner />
-            <Text size="2">Loading the catalog…</Text>
-          </Flex>
-        ) : null}
-        {catalog?.entries.length ? (
-          <TextField.Root
-            size="3"
-            aria-label="Search workspaces"
-            placeholder="Find something to explore…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        ) : null}
-        {catalog?.stale ? (
-          <Text size="1" color="gray">
-            Showing the last verified catalog.
-          </Text>
-        ) : null}
-        {!loading && entries.length === 0 ? (
-          <Text as="p" size="2" color="gray">
-            {query
-              ? "No workspaces match that search."
-              : "More workspaces will appear here. You can open one from its source address above."}
-          </Text>
-        ) : null}
-        <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-          {entries.map((entry) => (
-            <Card
-              key={entry.id}
-              style={{ display: "flex", flexDirection: "column", gap: 12 }}
-            >
-              <Flex align="center" gap="2">
-                <Heading size="3">{entry.name}</Heading>
-                {entry.recommended ? <Badge size="1">Featured</Badge> : null}
-              </Flex>
-              <Text as="p" size="2" color="gray" style={{ flex: 1 }}>
-                {entry.description}
-              </Text>
-              <Flex gap="1" wrap="wrap">
-                {entry.tags.slice(0, 3).map((tag) => (
-                  <Badge key={tag} color="gray" variant="soft">
-                    {tag}
-                  </Badge>
-                ))}
-              </Flex>
-              <Button
-                size="3"
-                variant="soft"
-                disabled={inspecting}
-                onClick={() =>
-                  void inspect({
-                    catalogId: entry.id,
-                    registryCommit: catalog!.coordinates.commit,
-                    registrySnapshot: catalog!.coordinates.snapshot,
-                  })
-                }
-              >
-                Explore {entry.name}
-              </Button>
-            </Card>
-          ))}
-        </Grid>
-      </Flex>
     </Flex>
   );
 }

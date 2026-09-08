@@ -1,6 +1,9 @@
 import type { RpcClient, RpcEventContext } from "@vibestudio/rpc";
 import type { PanelHandle as CorePanelHandle, Rpc } from "../core/index.js";
-import type { OpenExternalOptions, OpenExternalResult } from "@vibestudio/shared/externalOpen";
+import type {
+  OpenExternalOptions,
+  OpenExternalResult,
+} from "@vibestudio/shared/externalOpen";
 import {
   createPanelRuntime,
   type PanelRuntimeTree,
@@ -25,7 +28,7 @@ export function createPanelHandleApi(
     parentId?: string | null;
     parentRpcTargetId?: string | null;
     effectiveVersion?: string | null;
-  } = {}
+  } = {},
 ) {
   const shell = (globalThis as any).__vibestudioShell;
   const runtime = createPanelRuntime({
@@ -69,7 +72,8 @@ export function createPanelHandleApi(
     onOpen: (entry) => currentJournal()?.append({ type: "open", ...entry }),
     onReload: (id) => currentJournal()?.append({ type: "reload", id }),
     onClose: (id) => currentJournal()?.append({ type: "close", id }),
-    onStateArgsSet: (id) => currentJournal()?.append({ type: "stateArgs.set", id }),
+    onStateArgsSet: (id) =>
+      currentJournal()?.append({ type: "stateArgs.set", id }),
   });
   const subscriptions = new Set<() => void>();
   let destroyed = false;
@@ -84,57 +88,89 @@ export function createPanelHandleApi(
 
   async function openExternal(
     url: string,
-    options?: OpenExternalOptions
+    options?: OpenExternalOptions,
   ): Promise<OpenExternalResult> {
-    return rpc.call<OpenExternalResult>("main", "externalOpen.openExternal", [url, options]);
+    return rpc.call<OpenExternalResult>("main", "externalOpen.openExternal", [
+      url,
+      options,
+    ]);
   }
 
   function onChildCreated(
-    handler: (info: { childId: string; url: string }) => void
+    handler: (info: { childId: string; url: string }) => void,
   ): () => void {
     if (destroyed) throw new Error("Panel handle runtime has been destroyed");
     const unsubs: Array<() => void> = [];
     if (shell?.addEventListener) {
-      const listenerId = shell.addEventListener((event: string, payload: unknown) => {
-        if (event === "runtime:child-created") {
-          const data = payload as { childId?: string; url?: string } | null;
-          if (data?.childId && data?.url) handler({ childId: data.childId, url: data.url });
-        }
-      });
+      const listenerId = shell.addEventListener(
+        (event: string, payload: unknown) => {
+          if (event === "runtime:child-created") {
+            const data = payload as { childId?: string; url?: string } | null;
+            if (data?.childId && data?.url)
+              handler({ childId: data.childId, url: data.url });
+          }
+        },
+      );
       unsubs.push(() => shell.removeEventListener(listenerId));
     }
     unsubs.push(
-      rpc.on("runtime:child-created", (event: RpcEventContext) => {
-        const data = event.payload as { childId?: string; url?: string } | null;
-        if (data?.childId && data?.url) handler({ childId: data.childId, url: data.url });
-      }, {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."})
+      rpc.on(
+        "runtime:child-created",
+        (event: RpcEventContext) => {
+          const data = event.payload as {
+            childId?: string;
+            url?: string;
+          } | null;
+          if (data?.childId && data?.url)
+            handler({ childId: data.childId, url: data.url });
+        },
+        {
+          kind: "closed",
+          reason:
+            "This listener consumes host or implementation lifecycle events.",
+        },
+      ),
     );
     return ownSubscription(unsubs);
   }
 
   function onChildCreationError(
-    handler: (info: { url: string; error: string }) => void
+    handler: (info: { url: string; error: string }) => void,
   ): () => void {
     if (destroyed) throw new Error("Panel handle runtime has been destroyed");
     const unsubs: Array<() => void> = [];
     const notify = (payload: unknown) => {
       const data = payload as { url?: string; error?: string } | null;
-      if (data?.url && data?.error) handler({ url: data.url, error: data.error });
+      if (data?.url && data?.error)
+        handler({ url: data.url, error: data.error });
     };
     if (shell?.addEventListener) {
-      const listenerId = shell.addEventListener((event: string, payload: unknown) => {
-        if (event === "runtime:child-creation-error") notify(payload);
-      });
+      const listenerId = shell.addEventListener(
+        (event: string, payload: unknown) => {
+          if (event === "runtime:child-creation-error") notify(payload);
+        },
+      );
       unsubs.push(() => shell.removeEventListener(listenerId));
     }
     unsubs.push(
-      rpc.on("runtime:child-creation-error", (event: RpcEventContext) => notify(event.payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."})
+      rpc.on(
+        "runtime:child-creation-error",
+        (event: RpcEventContext) => notify(event.payload),
+        {
+          kind: "closed",
+          reason:
+            "This listener consumes host or implementation lifecycle events.",
+        },
+      ),
     );
     return ownSubscription(unsubs);
   }
 
   return {
-    ...runtime, openExternal, onChildCreated, onChildCreationError,
+    ...runtime,
+    openExternal,
+    onChildCreated,
+    onChildCreationError,
     destroy: () => {
       destroyed = true;
       for (const unsubscribe of subscriptions) unsubscribe();

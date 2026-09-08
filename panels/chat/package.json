@@ -213,6 +213,15 @@
           },
           "tier": "gated",
           "evidence": "exact"
+        },
+        {
+          "capability": "userland:extensions/templates/workspace.templates.inspect#*",
+          "resource": {
+            "kind": "exact",
+            "key": "workspace.templates:extension:@workspace-extensions/templates"
+          },
+          "tier": "gated",
+          "evidence": "bounded-dynamic"
         }
       ]
     }

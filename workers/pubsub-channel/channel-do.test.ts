@@ -360,6 +360,17 @@ async function createGadBackedChannel(
 }
 
 describe("PubSubChannel", () => {
+  it("declares website eligibility only for the bounded conversation boundary", async () => {
+    const { instance } = await createTestDO(PubSubChannel, { __objectKey: "website-chat" });
+    for (const method of ["subscribe", "sendAsCaller", "getReplayAfter"]) {
+      const authority = rpcMethodAuthority(instance, method);
+      expect(authority?.website).toMatchObject({ kind: "eligible" });
+      expect(authority?.principals).toContain("website");
+    }
+    for (const method of ["adminUnsubscribeParticipant", "getChannelPresence", "callMethod"]) {
+      expect(rpcMethodAuthority(instance, method)?.website).toMatchObject({ kind: "closed" });
+    }
+  });
   it("projects a DO-to-DO work-ready edge into the next host alarm", async () => {
     const { instance, sql } = await createGadBackedChannel();
     const edgeAt = Date.now();
@@ -3066,7 +3077,7 @@ describe("PubSubChannel", () => {
   it("declares inspection as a receiver-enforced channel capability", async () => {
     const { instance } = await createGadBackedChannel();
     expect(rpcMethodAuthority(instance, "inspectAgent")).toMatchObject({
- website: {"kind":"eligible","rationale":"Explicit website receiver policy for this fixture."} as const,
+      website: { kind: "closed" },
       principals: ["host", "user", "code"],
       effect: {
         kind: "userland-capability",

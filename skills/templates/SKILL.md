@@ -5,7 +5,7 @@ description: Discover, inspect, create, and publish exact upstream workspace sna
 
 # Workspace templates
 
-`@workspace-extensions/templates` owns catalog discovery, exact acquisition,
+`@workspace-extensions/templates` owns exact acquisition,
 manifest inspection, and snapshot publication. A template is a self-contained
 upstream workspace source. It is not an installed layer and confers no grants.
 
@@ -16,41 +16,50 @@ and merge are explicit source operations that preserve provenance and do not
 grant authority.
 
 Use [public-contract.json](public-contract.json) for exact method shapes and
-[template authoring](references/template-authoring.md) when publishing.
+[workspace creation](references/workspace-creation.md) for folder, URL, link and
+recovery behavior, and [template authoring](references/template-authoring.md)
+when publishing.
 
-## Discover and create
+## Add a workspace
 
-Open the host workspace chooser to discover development checkouts selected for
-the current launch. The host validates and presents those private exact
-snapshots; their filesystem paths never enter workspace code. Selecting one
-creates a new workspace from its exact pin. Do not send that pin through remote
-Git inspection because its checkpoint commit may intentionally be unpublished.
+Open **Add workspace** from the sidebar or onboarding. Choose a folder on the
+host or enter a Git URL. The host captures the selected folder's current bytes,
+including unpublished changes, and reviews that exact snapshot. Its filesystem
+path never enters workspace code. Development checkouts selected at launch use
+the same exact source acquisition path.
 
-Read `catalog` without arguments for cached rendering. Refresh only after an
-explicit user action with `[{ refresh: true }]`. Catalog selections remain
-bound to the returned `coordinates.commit` and `coordinates.snapshot`.
-The result is `null` when no catalog is cached. Otherwise `entries` is the
-template array: use `entries.length` for the template count. `coordinates`
-identifies the verified registry snapshot; it does not describe a workspace
-that has already been created.
+Websites can offer an Add workspace link. Use the existing shell-surface link
+builder so the Git URL is encoded correctly:
 
-Use the extension's complete installed unit name when invoking it:
+```ts
+import { createShellSurfaceLink } from "@vibestudio/shared/shellSurface";
+const href = createShellSurfaceLink({
+  kind: "workspace-chooser",
+  sourceUrl: "https://github.com/owner/workspace",
+});
+```
+
+The link pre-fills the source for review; it does not create a workspace. The
+same link works from a browser panel or an installed panel. A literal link has
+the form `vibestudio://surface?v=1&kind=workspace-chooser&source=ENCODED_GIT_URL`.
+Use connected accounts for private repositories instead of embedding credentials
+in the URL.
+
+Agents can inspect a remote source through the installed extension:
 
 ```ts
 import { extensions } from "@workspace/runtime";
-
-return await extensions.invoke("@workspace-extensions/templates", "catalog", []);
+return await extensions.invoke("@workspace-extensions/templates", "inspect", [
+  { url: "https://github.com/owner/workspace" },
+]);
 ```
 
-Call `inspect` with an already reviewed exact `{ pin }`, a direct
-`{ url, credential? }`, or a catalog-bound
-`{ catalogId, registryCommit, registrySnapshot }`. The result contains the
-exact immutable `pin`, self-asserted presentation, and validated repository and
-file inventory. To open an application, pass that exact pin to the ordinary
-workspace creation flow as `rootTemplate`, creating a new standalone
-workspace. Standalone template sources follow the same inspect-exact-pin-then-
-create flow. Never merge it into the current workspace as an installed
-template.
+Call `inspect` with an already reviewed exact `{ pin }` or a direct
+`{ url, credential? }`. The result contains the exact immutable `pin`,
+self-asserted presentation, and validated repository and file inventory. Pass
+that exact pin to the ordinary workspace creation flow as `rootTemplate`,
+creating a new standalone workspace. Host-selected local snapshots already have
+an inspection; do not re-fetch their unpublished checkpoint from remote Git.
 
 To incorporate selected source into an existing workspace, use ordinary VCS
 compare and merge operations and record their normal source baseline. Template
@@ -120,8 +129,8 @@ companions are included so the published snapshot is self-contained.
 
 Publish the unchanged receipt through `publishAuthoring` with its fingerprint,
 version, explicit destination, and fresh command ID. The resulting URL, ref,
-commit, and snapshot are the exact release coordinates. Registry recommendation
-is a separate `suggestRegistryEntry` contribution.
+commit, and snapshot are the exact release coordinates. Share the source URL
+or an exact source link to let another user review and create a workspace.
 
 Logical credential names may be recorded. Concrete credential IDs are used only
 for the explicit publication call and never written into the snapshot.

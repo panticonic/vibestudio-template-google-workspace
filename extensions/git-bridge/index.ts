@@ -31,25 +31,25 @@ import { UpstreamEngine } from "./upstream.js";
 import { TemplatePushEngine } from "./templatePush.js";
 import { TemplatePublishEngine } from "./templatePublish.js";
 import type { TemplatePushInput } from "./templatePush.js";
-import {
-  RegistryContributionEngine,
-  type RegistryContributionInput,
-} from "./registryContribution.js";
 import type { ExtensionContextLike } from "./context.js";
 
 function createBridgeHost(ctx: ExtensionContextLike): BridgeHost {
   const main = <T>(method: string, ...args: unknown[]): Promise<T> =>
     ctx.rpc.call<T>("main", method, ...args);
-  const vcs = createTypedServiceClient("vcs", vcsMethods, (_service, method, args) =>
-    main(`vcs.${method}`, ...args)
+  const vcs = createTypedServiceClient(
+    "vcs",
+    vcsMethods,
+    (_service, method, args) => main(`vcs.${method}`, ...args),
   );
   const blobstore = createTypedServiceClient(
     "blobstore",
     blobstoreMethods,
-    (_service, method, args) => main(`blobstore.${method}`, ...args)
+    (_service, method, args) => main(`blobstore.${method}`, ...args),
   );
-  const runtime = createTypedServiceClient("runtime", runtimeMethods, (_service, method, args) =>
-    main(`runtime.${method}`, ...args)
+  const runtime = createTypedServiceClient(
+    "runtime",
+    runtimeMethods,
+    (_service, method, args) => main(`runtime.${method}`, ...args),
   );
 
   return {
@@ -68,11 +68,12 @@ type GitBridgeApi = {
   pauseAutoPush(repoPath: string): Promise<unknown>;
   openGitTab(repoPath?: string): ReturnType<UpstreamEngine["openGitTab"]>;
   /** Userland template composer entry; deliberately outside the host provider namespace. */
-  suggestTemplateContribution(input: TemplatePushInput): ReturnType<TemplatePushEngine["push"]>;
-  suggestRegistryEntry(
-    input: RegistryContributionInput
-  ): ReturnType<RegistryContributionEngine["suggest"]>;
-  publishTemplate(input: GitTemplatePublishInput): ReturnType<TemplatePublishEngine["publish"]>;
+  suggestTemplateContribution(
+    input: TemplatePushInput,
+  ): ReturnType<TemplatePushEngine["push"]>;
+  publishTemplate(
+    input: GitTemplatePublishInput,
+  ): ReturnType<TemplatePublishEngine["publish"]>;
 };
 
 /** Internal provider surface exposed to the extension host. */
@@ -86,40 +87,56 @@ export async function activate(ctx: ExtensionContextLike) {
   const upstream = new UpstreamEngine(ctx, bridge);
   const templatePush = new TemplatePushEngine(ctx, bridge);
   const templatePublish = new TemplatePublishEngine(ctx, bridge);
-  const registryContribution = new RegistryContributionEngine(ctx);
   await upstream.activate();
-  const unsubscribe = ctx.rpc.on?.("workspace:protected-refs-changed", (event) => {
-    const payload = event.payload as { repoPaths?: unknown };
-    if (
-      !Array.isArray(payload.repoPaths) ||
-      !payload.repoPaths.every((item) => typeof item === "string")
-    ) {
-      ctx.log.warn?.("ignored malformed protected-ref event");
-      return;
-    }
-    upstream.reconcileUpstreams(payload.repoPaths.map((repoPath) => ({ repoPath })));
-  });
+  const unsubscribe = ctx.rpc.on?.(
+    "workspace:protected-refs-changed",
+    (event) => {
+      const payload = event.payload as { repoPaths?: unknown };
+      if (
+        !Array.isArray(payload.repoPaths) ||
+        !payload.repoPaths.every((item) => typeof item === "string")
+      ) {
+        ctx.log.warn?.("ignored malformed protected-ref event");
+        return;
+      }
+      upstream.reconcileUpstreams(
+        payload.repoPaths.map((repoPath) => ({ repoPath })),
+      );
+    },
+  );
   if (unsubscribe) ctx.subscriptions?.push({ dispose: unsubscribe });
   const gitInterop = {
-    setSharedRemote(repoPath: string, remote: Parameters<UpstreamEngine["setRemote"]>[1]) {
+    setSharedRemote(
+      repoPath: string,
+      remote: Parameters<UpstreamEngine["setRemote"]>[1],
+    ) {
       return upstream.setRemote(repoPath, remote);
     },
     removeSharedRemote(repoPath: string, remoteName: string) {
       return upstream.removeRemote(repoPath, remoteName);
     },
-    setUpstream(repoPath: string, config: Parameters<UpstreamEngine["setUpstream"]>[1]) {
+    setUpstream(
+      repoPath: string,
+      config: Parameters<UpstreamEngine["setUpstream"]>[1],
+    ) {
       return upstream.setUpstream(repoPath, config);
     },
     removeUpstream(repoPath: string) {
       return upstream.removeUpstream(repoPath);
     },
-    detachUpstream(repoPath: string, options?: Parameters<UpstreamEngine["detachUpstream"]>[1]) {
+    detachUpstream(
+      repoPath: string,
+      options?: Parameters<UpstreamEngine["detachUpstream"]>[1],
+    ) {
       return upstream.detachUpstream(repoPath, options);
     },
     setAutoPush(repoPath: string, enabled: boolean) {
       return upstream.setAutoPush(repoPath, enabled);
     },
-    upstreamStatus(repoPaths: string[], options: GitUpstreamStatusOptions = {}) {
+    upstreamStatus(
+      repoPaths: string[],
+      options: GitUpstreamStatusOptions = {},
+    ) {
       return upstream.upstreamStatus(repoPaths, options);
     },
     pushUpstream(repoPath: string, options?: GitPushUpstreamOptions) {
@@ -137,14 +154,23 @@ export async function activate(ctx: ExtensionContextLike) {
     importProject(input: Parameters<UpstreamEngine["importProject"]>[0]) {
       return upstream.importProject(input);
     },
-    cloneRepo(input: { repoPath: string; credentialIdOverride?: string | null }) {
+    cloneRepo(input: {
+      repoPath: string;
+      credentialIdOverride?: string | null;
+    }) {
       return upstream.cloneRepo(input);
     },
-    remoteDefaultBranch(input: { url: string; credentialIdOverride?: string | null }) {
+    remoteDefaultBranch(input: {
+      url: string;
+      credentialIdOverride?: string | null;
+    }) {
       return upstream.remoteDefaultBranch(input);
     },
     async reconcileUpstreams(
-      entries: Array<{ repoPath: string; credentialIdOverride?: string | null }>
+      entries: Array<{
+        repoPath: string;
+        credentialIdOverride?: string | null;
+      }>,
     ) {
       upstream.reconcileUpstreams(entries);
       return { queued: entries.length };
@@ -163,9 +189,6 @@ export async function activate(ctx: ExtensionContextLike) {
     },
     suggestTemplateContribution(input: TemplatePushInput) {
       return templatePush.push(input);
-    },
-    suggestRegistryEntry(input: RegistryContributionInput) {
-      return registryContribution.suggest(input);
     },
     publishTemplate(input: GitTemplatePublishInput) {
       return templatePublish.publish(input);

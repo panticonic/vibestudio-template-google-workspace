@@ -10,6 +10,9 @@ boundary. For host enforcement, automation execution, product seeds, or the Syst
 Agent, also read the [authority implementation
 checklist](references/authority-implementation-checklist.md).
 
+For browser-panel access, connection consent, mutable origin identities, and
+resource escalation, read [website authority](references/website-authority.md).
+
 ## Authority layers
 
 1. **Method contract** — defines principals, receiver/resource derivation,
@@ -17,7 +20,9 @@ checklist](references/authority-implementation-checklist.md).
 2. **Authority manifest** — the installed unit's maximum gated/critical
    authority request. A request is not a grant.
 3. **Host grant or fresh approval** — authorizes an eligible request. Open
-   methods need no grant; critical effects require a fresh decision.
+   methods need no ordinary operation grant; website callers must still be
+   connected, explicitly eligible, and satisfy any website resource requirement.
+   Critical effects require a fresh decision.
 4. **Provided capability** — a workspace provider protects a resource it owns.
    The receiver enforces it before provider code runs. Downstream host effects
    (credentials, egress, publication, browser) remain independently protected.

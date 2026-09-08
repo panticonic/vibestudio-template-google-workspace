@@ -1,4 +1,11 @@
-import { createTemplateManagementClient, type TemplateManagementClient } from "@workspace/template-management";
+import {
+  createWorkspaceCreationClient,
+  type WorkspaceCreationClient,
+} from "@vibestudio/service-schemas/clients/workspaceCreationClient";
+import {
+  createTemplateManagementClient,
+  type TemplateManagementClient,
+} from "@workspace/template-management";
 /**
  * createHostedRuntime — the ONE shared assembly of the portable workspace
  * runtime surface, derived from a per-target `RuntimeHost`. Panel, worker, and
@@ -18,19 +25,34 @@ import { createTemplateManagementClient, type TemplateManagementClient } from "@
  */
 
 import type { RpcClient } from "@vibestudio/rpc";
-import { createBrowserDataClient, type BrowserDataClient } from "@vibestudio/browser-data/client";
-import type { OpenExternalOptions, OpenExternalResult } from "@vibestudio/shared/externalOpen";
+import {
+  createBrowserDataClient,
+  type BrowserDataClient,
+} from "@vibestudio/browser-data/client";
+import type {
+  OpenExternalOptions,
+  OpenExternalResult,
+} from "@vibestudio/shared/externalOpen";
 import { PanelOperationError } from "@vibestudio/shared/panel/observation";
 import { helpfulNamespace } from "./helpfulNamespace.js";
 import { createGadClient, type GadClient } from "./gad.js";
 import { createImagesClient, type ImagesClient } from "./images.js";
 import { createBlobstoreClient, type BlobstoreClient } from "./blobstore.js";
 import { createWorkspaceClient, type WorkspaceClient } from "./workspace.js";
-import { createCredentialClient, type CredentialClient } from "./credentials.js";
+import {
+  createCredentialClient,
+  type CredentialClient,
+} from "./credentials.js";
 import { createVcsClient, type VcsClient } from "./vcsClient.js";
-import { createWebhookIngressClient, type WebhookIngressClient } from "./webhooks.js";
+import {
+  createWebhookIngressClient,
+  type WebhookIngressClient,
+} from "./webhooks.js";
 import { createExtensionsClient, type ExtensionsClient } from "./extensions.js";
-import { createNotificationClient, type NotificationClient } from "./notifications.js";
+import {
+  createNotificationClient,
+  type NotificationClient,
+} from "./notifications.js";
 import { createGitClient, type GitClient } from "./git.js";
 import { createMainCaller, type MainCaller } from "./mainRpc.js";
 import { createParentHandleApi, type ParentHandleApi } from "./handles.js";
@@ -80,7 +102,10 @@ export interface RuntimeHost {
   gatewayFetch: GatewayFetch;
   panelRuntime: PanelRuntimePorts;
   workers: WorkerdClient;
-  openExternal(url: string, options?: OpenExternalOptions): Promise<OpenExternalResult>;
+  openExternal(
+    url: string,
+    options?: OpenExternalOptions,
+  ): Promise<OpenExternalResult>;
   /**
    * Resolve this runtime's parent PanelHandle from verified launch metadata, or
    * null when there is no parent. Each target builds this closure from its own
@@ -110,6 +135,7 @@ export interface WorkspaceRuntime {
   readonly blobstore: BlobstoreClient;
   readonly images: ImagesClient;
   readonly workspace: WorkspaceClient;
+  readonly workspaces: WorkspaceCreationClient;
   readonly runtime: RuntimeServiceClient;
   readonly credentials: CredentialClient;
   readonly browserData: BrowserDataClient;
@@ -123,11 +149,14 @@ export interface WorkspaceRuntime {
   readonly doTargetId: typeof doTargetId;
   readonly createDurableObjectServiceClient: (
     query: string,
-    objectKey?: string | null
+    objectKey?: string | null,
   ) => DurableObjectServiceClient;
   readonly gatewayConfig: GatewayConfig | null;
   readonly gatewayFetch: GatewayFetch;
-  openExternal(url: string, options?: OpenExternalOptions): Promise<OpenExternalResult>;
+  openExternal(
+    url: string,
+    options?: OpenExternalOptions,
+  ): Promise<OpenExternalResult>;
   createPanelSlot: PanelRuntimeApi["createPanelSlot"];
   openPanel: PanelRuntimeApi["openPanel"];
   getPanelHandle: PanelRuntimeApi["getPanelHandle"];
@@ -171,7 +200,9 @@ export { createRuntimeParentHandle } from "./handles.js";
  * member: `createHostedRuntime` installs it as `services` on every target. The
  * cross-target parity gate includes that member directly.
  */
-export function createServicesProxy(rt: WorkspaceRuntime): Record<string, unknown> {
+export function createServicesProxy(
+  rt: WorkspaceRuntime,
+): Record<string, unknown> {
   const rtRecord = rt as unknown as Record<string, unknown>;
   // Cache per-service fallback clients so repeated `services.foo` access is stable
   // (=== across reads) and a method proxy isn't rebuilt on every property get.
@@ -180,7 +211,10 @@ export function createServicesProxy(rt: WorkspaceRuntime): Record<string, unknow
   const fallbackClient = (service: string): Record<string, unknown> => {
     const cached = fallbackClients.get(service);
     if (cached) return cached;
-    const methodCache = new Map<string, (...args: unknown[]) => Promise<unknown>>();
+    const methodCache = new Map<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >();
     const client = new Proxy(
       {},
       {
@@ -189,12 +223,13 @@ export function createServicesProxy(rt: WorkspaceRuntime): Record<string, unknow
           const m = String(method);
           let fn = methodCache.get(m);
           if (!fn) {
-            fn = (...args: unknown[]) => rt.callMain(`${service}.${m}`, ...args);
+            fn = (...args: unknown[]) =>
+              rt.callMain(`${service}.${m}`, ...args);
             methodCache.set(m, fn);
           }
           return fn;
         },
-      }
+      },
     ) as Record<string, unknown>;
     fallbackClients.set(service, client);
     return client;
@@ -204,7 +239,8 @@ export function createServicesProxy(rt: WorkspaceRuntime): Record<string, unknow
     {},
     {
       get(_t, prop, receiver) {
-        if (typeof prop === "symbol") return Reflect.get(rtRecord, prop, receiver);
+        if (typeof prop === "symbol")
+          return Reflect.get(rtRecord, prop, receiver);
         const name = String(prop);
         // Layer 1 — ergonomic override: the rich, curated runtime client wins.
         // `in` (not a truthy check) so a falsy-but-present member still overrides.
@@ -217,7 +253,7 @@ export function createServicesProxy(rt: WorkspaceRuntime): Record<string, unknow
       has(_t, prop) {
         return typeof prop === "string" ? true : prop in rtRecord;
       },
-    }
+    },
   );
 }
 
@@ -228,7 +264,10 @@ export interface AttachedHostClient {
   readonly childGenerationId: string;
   readonly authorityCeilingDigest: string;
   readonly expiresAt: number;
-  readonly services: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>;
+  readonly services: Record<
+    string,
+    Record<string, (...args: unknown[]) => Promise<unknown>>
+  >;
 }
 
 export interface AttachedHostsApi {
@@ -238,7 +277,9 @@ export interface AttachedHostsApi {
 /** Owner-scoped child-host runtime helper. Each dynamic method remains an
  * ordinary service/method/args invocation and is schema-validated by the child
  * dispatcher; this helper adds no development-specific operation bridge. */
-export function createAttachedHostsApi(rt: Pick<WorkspaceRuntime, "callMain">): AttachedHostsApi {
+export function createAttachedHostsApi(
+  rt: Pick<WorkspaceRuntime, "callMain">,
+): AttachedHostsApi {
   const runtime = {
     async attach(sessionId: string) {
       const session = (await rt.callMain("attachedHosts.attachClient", {
@@ -256,7 +297,10 @@ export function createAttachedHostsApi(rt: Pick<WorkspaceRuntime, "callMain">): 
             const service = String(serviceKey);
             const existing = serviceCache.get(service);
             if (existing) return existing;
-            const methodCache = new Map<string, (...args: unknown[]) => Promise<unknown>>();
+            const methodCache = new Map<
+              string,
+              (...args: unknown[]) => Promise<unknown>
+            >();
             const client = new Proxy(
               {},
               {
@@ -276,12 +320,12 @@ export function createAttachedHostsApi(rt: Pick<WorkspaceRuntime, "callMain">): 
                   }
                   return invoke;
                 },
-              }
+              },
             ) as Record<string, (...args: unknown[]) => Promise<unknown>>;
             serviceCache.set(service, client);
             return client;
           },
-        }
+        },
       ) as AttachedHostClient["services"];
       return Object.freeze({ ...session, services });
     },
@@ -291,36 +335,63 @@ export function createAttachedHostsApi(rt: Pick<WorkspaceRuntime, "callMain">): 
 
 export function createHostedRuntime(host: RuntimeHost): WorkspaceRuntime {
   const rpc = host.rpc;
-  const credentials = helpfulNamespace("credentials", createCredentialClient(rpc));
+  const credentials = helpfulNamespace(
+    "credentials",
+    createCredentialClient(rpc),
+  );
   const browserData = helpfulNamespace(
     "browserData",
     createBrowserDataClient({
-      callService: (service, method, args) => rpc.call("main", `${service}.${method}`, args),
-    })
+      callService: (service, method, args) =>
+        rpc.call("main", `${service}.${method}`, args),
+    }),
   );
   const gad = helpfulNamespace("gad", createGadClient(rpc));
-  const blobstore = helpfulNamespace("blobstore", createBlobstoreClient(rpc, host.fs));
+  const blobstore = helpfulNamespace(
+    "blobstore",
+    createBlobstoreClient(rpc, host.fs),
+  );
   const workspace = helpfulNamespace("workspace", createWorkspaceClient(rpc));
+  const workspaces = helpfulNamespace(
+    "workspaces",
+    createWorkspaceCreationClient(rpc),
+  );
   const runtimeService = helpfulNamespace(
     "runtime",
     createLazyTypedServiceClient(
       "runtime",
       RUNTIME_METHOD_NAMES,
-      async () => (await import("@vibestudio/service-schemas/runtime")).runtimeMethods,
-      (service, method, args) => rpc.call("main", `${service}.${method}`, args)
-    )
+      async () =>
+        (await import("@vibestudio/service-schemas/runtime")).runtimeMethods,
+      (service, method, args) => rpc.call("main", `${service}.${method}`, args),
+    ),
   );
   const vcs = helpfulNamespace(
     "vcs",
     createVcsClient(
-      <T>(method: string, ...args: unknown[]) => rpc.call<T>("main", method, args),
-      host.contextId
-    )
+      <T>(method: string, ...args: unknown[]) =>
+        rpc.call<T>("main", method, args),
+      host.contextId,
+    ),
   );
-  const webhooks = helpfulNamespace("webhooks", createWebhookIngressClient(rpc));
-  const extensions = helpfulNamespace("extensions", createExtensionsClient(rpc));
-  const templates = helpfulNamespace("templates", createTemplateManagementClient((name, method, args) => extensions.invoke(name, method, args)));
-  const notifications = helpfulNamespace("notifications", createNotificationClient(rpc));
+  const webhooks = helpfulNamespace(
+    "webhooks",
+    createWebhookIngressClient(rpc),
+  );
+  const extensions = helpfulNamespace(
+    "extensions",
+    createExtensionsClient(rpc),
+  );
+  const templates = helpfulNamespace(
+    "templates",
+    createTemplateManagementClient((name, method, args) =>
+      extensions.invoke(name, method, args),
+    ),
+  );
+  const notifications = helpfulNamespace(
+    "notifications",
+    createNotificationClient(rpc),
+  );
   const git = helpfulNamespace("git", createGitClient(rpc));
   const callMain = createMainCaller(rpc);
   const parentApi = createParentHandleApi(host.resolveParent);
@@ -339,6 +410,7 @@ export function createHostedRuntime(host: RuntimeHost): WorkspaceRuntime {
     blobstore,
     images: helpfulNamespace("images", createImagesClient(rpc)),
     workspace,
+    workspaces,
     runtime: runtimeService,
     credentials,
     browserData,

@@ -35,6 +35,22 @@ Dynamic workspace service copy does not belong in the host presentation census. 
 its stable user-facing `title`, `action`, and `description` in the live workspace
 service declaration; live docs and resolution consume that same declaration.
 
+## Website admission and effect review
+
+Use [website authority](website-authority.md) for the complete subject and
+escalation contract. Review mandatory method eligibility separately from tier;
+a missing annotation must fail definition, and a closed annotation needs a
+concrete reason. Verify zero workspace I/O before explicit connection, saved
+origin grants on fresh documents, document/generation revocation, and truthful
+approval origin/lifetime copy on both desktop and mobile.
+
+Test root website attribution and liveness at downstream effect and response
+boundaries, including streams, callbacks, queued work, and cross-workspace calls.
+Derive resource scope at its owner, including canonical paths and file-handle
+backing resources. Treat private retained data separately from response audience.
+Do not report the inventory reviewed or the product complete merely because
+bulk annotations and synchronous RPC tests pass.
+
 ## Add or change an executable workspace unit
 
 1. Put gated/critical requests performed by the installed unit in its checked-in

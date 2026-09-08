@@ -21,6 +21,10 @@
         "createContext": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "exec": {
@@ -30,6 +34,10 @@
             "resource": {
               "kind": "receiver"
             }
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "open": {
@@ -39,111 +47,199 @@
             "resource": {
               "kind": "receiver"
             }
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "dispose": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "restart": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "write": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "acknowledgeDataEvent": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "resize": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "kill": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "list": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "get": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "getSessionInfo": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "watchSessionInfo": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "watchAllSessionInfo": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "attach": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "awaitExit": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "getScrollback": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "setScrollbackLimit": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "clearScrollback": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "stashScratch": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "setMeta": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "getMeta": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "deleteMeta": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         },
         "setLabel": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls native terminal processes and retained terminal data."
           }
         }
       }

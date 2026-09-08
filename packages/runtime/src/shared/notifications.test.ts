@@ -9,10 +9,12 @@ function makeRpc() {
       if (method === "notification.show") return "n1";
       return undefined;
     }),
-    on: vi.fn((_event: string, listener: (event: { payload: unknown }) => void) => {
-      directListeners.add(listener);
-      return () => directListeners.delete(listener);
-    }),
+    on: vi.fn(
+      (_event: string, listener: (event: { payload: unknown }) => void) => {
+        directListeners.add(listener);
+        return () => directListeners.delete(listener);
+      },
+    ),
   };
   return {
     rpc,
@@ -26,7 +28,9 @@ describe("notification client", () => {
   it("routes action button clicks through the addressed event without serializing functions", async () => {
     const fixture = makeRpc();
     const onClick = vi.fn();
-    const client = createNotificationClient(fixture.rpc as unknown as RpcClient);
+    const client = createNotificationClient(
+      fixture.rpc as unknown as RpcClient,
+    );
 
     const id = await client.show({
       type: "success",
@@ -34,7 +38,15 @@ describe("notification client", () => {
       actions: [{ id: "reveal", label: "Reveal", onClick }],
     });
 
-    expect(fixture.rpc.on).toHaveBeenCalledWith("notification:action", expect.any(Function));
+    expect(fixture.rpc.on).toHaveBeenCalledWith(
+      "notification:action",
+      expect.any(Function),
+      {
+        kind: "closed",
+        reason:
+          "Only trusted notification delivery may invoke these action callbacks.",
+      },
+    );
     expect(fixture.rpc.call).toHaveBeenCalledWith("main", "notification.show", [
       expect.objectContaining({
         actions: [expect.objectContaining({ id: "reveal", label: "Reveal" })],
@@ -42,7 +54,7 @@ describe("notification client", () => {
     ]);
     expect(id).toBe("n1");
     const shown = fixture.rpc.call.mock.calls.find(
-      (call) => call[1] === "notification.show"
+      (call) => call[1] === "notification.show",
     )?.[2][0] as {
       actions?: Array<Record<string, unknown>>;
     };
@@ -55,7 +67,9 @@ describe("notification client", () => {
   it("uses the host-issued notification ID with stable action IDs", async () => {
     const fixture = makeRpc();
     const onClick = vi.fn();
-    const client = createNotificationClient(fixture.rpc as unknown as RpcClient);
+    const client = createNotificationClient(
+      fixture.rpc as unknown as RpcClient,
+    );
 
     const id = await client.show({
       type: "success",
@@ -65,7 +79,12 @@ describe("notification client", () => {
 
     expect(fixture.rpc.call).toHaveBeenCalledWith("main", "notification.show", [
       expect.objectContaining({
-        actions: [expect.objectContaining({ id: "reveal-in-folder-0", label: "Reveal in folder" })],
+        actions: [
+          expect.objectContaining({
+            id: "reveal-in-folder-0",
+            label: "Reveal in folder",
+          }),
+        ],
       }),
     ]);
     fixture.emitDirectAction({ id, actionId: "reveal-in-folder-0" });
@@ -75,7 +94,9 @@ describe("notification client", () => {
   it("handles user-addressed action events on the direct RPC channel", async () => {
     const fixture = makeRpc();
     const onClick = vi.fn();
-    const client = createNotificationClient(fixture.rpc as unknown as RpcClient);
+    const client = createNotificationClient(
+      fixture.rpc as unknown as RpcClient,
+    );
 
     const id = await client.show({
       title: "Approval complete",
@@ -88,9 +109,14 @@ describe("notification client", () => {
 
   it("defaults to an info notification without opening an unused watch", async () => {
     const fixture = makeRpc();
-    const client = createNotificationClient(fixture.rpc as unknown as RpcClient);
+    const client = createNotificationClient(
+      fixture.rpc as unknown as RpcClient,
+    );
 
-    await client.show({ title: "Hello", message: "Shown from the message field" });
+    await client.show({
+      title: "Hello",
+      message: "Shown from the message field",
+    });
 
     expect(fixture.rpc.call).toHaveBeenCalledWith("main", "notification.show", [
       expect.objectContaining({

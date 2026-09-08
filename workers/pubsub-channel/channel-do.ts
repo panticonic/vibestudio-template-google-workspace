@@ -2724,8 +2724,8 @@ export class PubSubChannel extends DurableObjectBase {
    * Subscribe a participant to this channel. Inserts the participant first,
    * then builds replay, so an initial roster snapshot includes the subscriber.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
-    principals: ["user", "code"],
+  @rpc({ website: {"kind":"eligible","rationale":"A connected website may participate in one selected workspace conversation; durable history remains in the ordinary workspace channel and live delivery ends with the document."},
+    principals: ["user", "code", "website"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -3294,8 +3294,8 @@ export class PubSubChannel extends DurableObjectBase {
    * role assistant for an agent), carrying the same addressing fields
    * (`to`/`mentions`) a participant's message would.
    */
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
-    principals: ["host", "user", "code"],
+  @rpc({ website: {"kind":"eligible","rationale":"A connected website may publish a user message to one selected workspace conversation; the existing channel and model approvals still govern downstream work."},
+    principals: ["host", "user", "code", "website"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -3487,8 +3487,8 @@ export class PubSubChannel extends DurableObjectBase {
     );
   }
 
-  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
-    principals: ["host", "user", "code"],
+  @rpc({ website: {"kind":"eligible","rationale":"A connected website may read one selected workspace conversation through the ordinary bounded channel replay API."},
+    principals: ["host", "user", "code", "website"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "read",

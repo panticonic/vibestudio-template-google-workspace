@@ -18,8 +18,8 @@ import { createGitHubClient, resolveGitHubPublishOperation } from "./github.js";
 function makeMockEnv(
   respond: (
     url: string,
-    init?: { method?: string; headers?: Record<string, string>; body?: string }
-  ) => Response
+    init?: { method?: string; headers?: Record<string, string>; body?: string },
+  ) => Response,
 ) {
   const stats = {
     resolveCalls: 0,
@@ -32,10 +32,24 @@ function makeMockEnv(
     providerId: "mock",
     accountIdentity: { providerUserId: "mock" },
     audience: [],
-    injection: { type: "header", name: "authorization", valueTemplate: "Bearer {token}" },
+    injection: {
+      type: "header",
+      name: "authorization",
+      valueTemplate: "Bearer {token}",
+    },
     bindings: [
-      { id: "github-user", use: "fetch", audience: [], injection: credentialInjection() },
-      { id: "github-git-http", use: "git-http", audience: [], injection: credentialInjection() },
+      {
+        id: "github-user",
+        use: "fetch",
+        audience: [],
+        injection: credentialInjection(),
+      },
+      {
+        id: "github-git-http",
+        use: "git-http",
+        audience: [],
+        injection: credentialInjection(),
+      },
     ],
     scopes: ["metadata:read", "contents:write", "administration:write"],
     lifecycle: { state: "active", canRefresh: false },
@@ -48,7 +62,11 @@ function makeMockEnv(
   } as unknown as StoredCredentialSummary;
 
   const rpc: RpcCaller = {
-    call: (async <T = unknown>(_targetId: string, method: string, args: unknown[]): Promise<T> => {
+    call: (async <T = unknown>(
+      _targetId: string,
+      method: string,
+      args: unknown[],
+    ): Promise<T> => {
       if (method === "credentials.resolveCredential") {
         stats.resolveCalls++;
         stats.resolveDescriptors.push(args[0]);
@@ -82,7 +100,11 @@ function makeMockEnv(
 }
 
 function credentialInjection() {
-  return { type: "header", name: "authorization", valueTemplate: "Bearer {token}" } as const;
+  return {
+    type: "header",
+    name: "authorization",
+    valueTemplate: "Bearer {token}",
+  } as const;
 }
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
@@ -94,13 +116,34 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 describe("createGitHubClient", () => {
+  it("requires Pages permission before making publication requests", async () => {
+    const { credentials, stats } = makeMockEnv(() =>
+      jsonResponse({ login: "octocat" }),
+    );
+    await expect(
+      resolveGitHubPublishOperation(credentials, { publication: "pages" }),
+    ).rejects.toMatchObject({
+      name: "GitHubCredentialSetupError",
+      message: expect.stringContaining("pages:write"),
+      repair: {
+        provider: "github",
+        accessLevel: "publish-pages",
+        credentialId: "cred-mock",
+      },
+    });
+    expect(stats.fetchCalls).toEqual([]);
+  });
+
   it("preflights and resolves the credential owner for publishing", async () => {
     const { credentials } = makeMockEnv((url) => {
-      if (url.endsWith("/user")) return jsonResponse({ login: "octocat", id: 1 });
+      if (url.endsWith("/user"))
+        return jsonResponse({ login: "octocat", id: 1 });
       return jsonResponse({}, { status: 404 });
     });
 
-    await expect(resolveGitHubPublishOperation(credentials)).resolves.toMatchObject({
+    await expect(
+      resolveGitHubPublishOperation(credentials),
+    ).resolves.toMatchObject({
       credentialId: "cred-mock",
       credentialLabel: "Mock",
       login: "octocat",
@@ -113,9 +156,12 @@ describe("createGitHubClient", () => {
 
   it("memoizes the credential handle across method calls", async () => {
     const { credentials, stats } = makeMockEnv((url) => {
-      if (url.endsWith("/user")) return jsonResponse({ login: "octocat", id: 1 });
+      if (url.endsWith("/user"))
+        return jsonResponse({ login: "octocat", id: 1 });
       if (url.endsWith("/user/repos"))
-        return jsonResponse([{ id: 1, name: "spoon-knife", full_name: "octocat/spoon-knife" }]);
+        return jsonResponse([
+          { id: 1, name: "spoon-knife", full_name: "octocat/spoon-knife" },
+        ]);
       return jsonResponse({}, { status: 404 });
     });
     const github = createGitHubClient(credentials);
@@ -132,7 +178,13 @@ describe("createGitHubClient", () => {
 
   it("constructs the right paths for issue methods", async () => {
     const { credentials, stats } = makeMockEnv(() =>
-      jsonResponse({ number: 7, title: "test", state: "open", html_url: "x", id: 1 })
+      jsonResponse({
+        number: 7,
+        title: "test",
+        state: "open",
+        html_url: "x",
+        id: 1,
+      }),
     );
     const github = createGitHubClient(credentials);
 
@@ -146,7 +198,11 @@ describe("createGitHubClient", () => {
       "https://api.github.com/repos/owner/repo/issues/7",
       "https://api.github.com/repos/owner/repo/issues",
     ]);
-    expect(stats.fetchCalls.map((c) => c.method)).toEqual(["GET", "PATCH", "POST"]);
+    expect(stats.fetchCalls.map((c) => c.method)).toEqual([
+      "GET",
+      "PATCH",
+      "POST",
+    ]);
   });
 
   it("creates repositories through the GitHub user repos API", async () => {
@@ -158,8 +214,14 @@ describe("createGitHubClient", () => {
         private: true,
         html_url: "https://github.com/octocat/demo",
         clone_url: "https://github.com/octocat/demo.git",
-        owner: { id: 1, login: "octocat", avatar_url: "", html_url: "", type: "User" },
-      })
+        owner: {
+          id: 1,
+          login: "octocat",
+          avatar_url: "",
+          html_url: "",
+          type: "User",
+        },
+      }),
     );
     const github = createGitHubClient(credentials);
 
@@ -178,7 +240,11 @@ describe("createGitHubClient", () => {
       {
         url: "https://api.github.com/user/repos",
         method: "POST",
-        body: JSON.stringify({ name: "demo", private: true, description: "Demo repo" }),
+        body: JSON.stringify({
+          name: "demo",
+          private: true,
+          description: "Demo repo",
+        }),
       },
     ]);
   });
@@ -192,8 +258,14 @@ describe("createGitHubClient", () => {
         private: true,
         html_url: "https://github.com/acme/demo",
         clone_url: "https://github.com/acme/demo.git",
-        owner: { id: 2, login: "acme", avatar_url: "", html_url: "", type: "Organization" },
-      })
+        owner: {
+          id: 2,
+          login: "acme",
+          avatar_url: "",
+          html_url: "",
+          type: "Organization",
+        },
+      }),
     );
     const github = createGitHubClient(credentials);
 
@@ -233,7 +305,7 @@ describe("createGitHubClient", () => {
         owner: "acme",
         name: "demo",
         private: true,
-      })
+      }),
     ).resolves.toEqual({
       cloneUrl: "https://github.com/acme/demo.git",
       webUrl: "https://github.com/acme/demo",
@@ -246,7 +318,8 @@ describe("createGitHubClient", () => {
 
   it("creates an absent repository under the explicit owner", async () => {
     const { credentials, stats } = makeMockEnv((url, init) => {
-      if (url.endsWith("/repos/acme/demo")) return jsonResponse({}, { status: 404 });
+      if (url.endsWith("/repos/acme/demo"))
+        return jsonResponse({}, { status: 404 });
       if (url.endsWith("/user")) return jsonResponse({ login: "acme", id: 1 });
       if (url.endsWith("/user/repos") && init?.method === "POST") {
         return jsonResponse({
@@ -268,7 +341,7 @@ describe("createGitHubClient", () => {
         name: "demo",
         private: false,
         description: "Demo",
-      })
+      }),
     ).resolves.toMatchObject({ owner: "acme", name: "demo", created: true });
     expect(stats.fetchCalls).toEqual([
       {
@@ -282,7 +355,11 @@ describe("createGitHubClient", () => {
       {
         url: "https://api.github.com/user/repos",
         method: "POST",
-        body: JSON.stringify({ name: "demo", private: false, description: "Demo" }),
+        body: JSON.stringify({
+          name: "demo",
+          private: false,
+          description: "Demo",
+        }),
       },
     ]);
   });
@@ -307,7 +384,7 @@ describe("createGitHubClient", () => {
       if (url.endsWith("/user/repos") && init?.method === "POST") {
         return jsonResponse(
           { message: "already exists" },
-          { status: 422, statusText: "Unprocessable Content" }
+          { status: 422, statusText: "Unprocessable Content" },
         );
       }
       return jsonResponse({}, { status: 404 });
@@ -318,7 +395,7 @@ describe("createGitHubClient", () => {
         owner: "acme",
         name: "demo",
         private: true,
-      })
+      }),
     ).resolves.toMatchObject({ created: false, owner: "acme", name: "demo" });
   });
 
@@ -331,12 +408,24 @@ describe("createGitHubClient", () => {
         private: true,
         html_url: "https://github.com/acme/demo",
         clone_url: "https://github.com/acme/demo.git",
-        owner: { id: 3, login: "acme", avatar_url: "", html_url: "", type: "Organization" },
-      })
+        owner: {
+          id: 3,
+          login: "acme",
+          avatar_url: "",
+          html_url: "",
+          type: "Organization",
+        },
+      }),
     );
-    const github = createGitHubClient(credentials, { credentialId: "github-org-token" });
+    const github = createGitHubClient(credentials, {
+      credentialId: "github-org-token",
+    });
 
-    await github.createRepo({ name: "demo", organization: "acme", private: true });
+    await github.createRepo({
+      name: "demo",
+      organization: "acme",
+      private: true,
+    });
 
     expect(stats.resolveDescriptors).toEqual([
       expect.objectContaining({ credentialId: "github-org-token" }),
@@ -355,38 +444,47 @@ describe("createGitHubClient", () => {
           {
             status: 403,
             statusText: "Forbidden",
-          }
-        )
+          },
+        ),
     );
     const github = createGitHubClient(credentials);
 
-    await expect(github.createRepo({ name: "demo", private: true })).rejects.toThrow(
-      /GitHub repository creation failed \(403 Forbidden\): Resource not accessible by personal access token.*Review the connected credential and any GitHub account or organization restrictions/iu
+    await expect(
+      github.createRepo({ name: "demo", private: true }),
+    ).rejects.toThrow(
+      /GitHub repository creation failed \(403 Forbidden\): Resource not accessible by personal access token.*Review the connected credential and any GitHub account or organization restrictions/iu,
     );
   });
 
   it("adds repository-creation context to non-permission API failures too", async () => {
     const { credentials } = makeMockEnv(
       () =>
-        new Response('{"message":"Repository creation failed: name already exists"}', {
-          status: 422,
-          statusText: "Unprocessable Content",
-        })
+        new Response(
+          '{"message":"Repository creation failed: name already exists"}',
+          {
+            status: 422,
+            statusText: "Unprocessable Content",
+          },
+        ),
     );
     const github = createGitHubClient(credentials);
 
-    await expect(github.createRepo({ name: "demo", private: true })).rejects.toThrow(
-      /GitHub repository creation failed \(422 Unprocessable Content\): Repository creation failed: name already exists/iu
+    await expect(
+      github.createRepo({ name: "demo", private: true }),
+    ).rejects.toThrow(
+      /GitHub repository creation failed \(422 Unprocessable Content\): Repository creation failed: name already exists/iu,
     );
   });
 
   it("throws a typed error on non-2xx responses", async () => {
     const { credentials } = makeMockEnv(
-      () => new Response("forbidden", { status: 403, statusText: "Forbidden" })
+      () => new Response("forbidden", { status: 403, statusText: "Forbidden" }),
     );
     const github = createGitHubClient(credentials);
 
-    await expect(github.getUser()).rejects.toThrow(/GitHub API request failed: 403 Forbidden/);
+    await expect(github.getUser()).rejects.toThrow(
+      /GitHub API request failed: 403 Forbidden/,
+    );
   });
 });
 
@@ -401,7 +499,11 @@ describe("factory client retry semantics", () => {
       providerId: "test",
       accountIdentity: { providerUserId: "x" },
       audience: [],
-      injection: { type: "header", name: "authorization", valueTemplate: "Bearer {token}" },
+      injection: {
+        type: "header",
+        name: "authorization",
+        valueTemplate: "Bearer {token}",
+      },
       bindings: [],
       scopes: [],
       metadata: {},
@@ -420,7 +522,9 @@ describe("factory client retry semantics", () => {
     const github = createGitHubClient(createCredentialClient(rpc));
 
     // First call rejects.
-    await expect(github.getUser()).rejects.toThrow(/No URL-bound credential found/);
+    await expect(github.getUser()).rejects.toThrow(
+      /No URL-bound credential found/,
+    );
 
     // Register credential mid-session.
     credentialRegistered = true;

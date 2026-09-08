@@ -100,6 +100,14 @@ export interface LaunchSubagentResult {
   pid: number | null;
 }
 
+export interface ContinueSubagentInput {
+  entityId: string;
+  generationId: string;
+  messageId: string;
+  prompt: string;
+  options?: Record<string, unknown>;
+}
+
 export interface InspectLaunchResult {
   entityId: string;
   generationId: string;
@@ -116,6 +124,7 @@ export interface InspectLaunchResult {
     source: "stream-result";
     outcome: "success" | "failed";
     report: string;
+    sessionId: string;
   };
   log: {
     bytes: number;
@@ -136,6 +145,7 @@ export interface ClaudeStreamCompletion {
   source: "stream-result";
   outcome: "success" | "failed";
   report: string;
+  sessionId: string;
 }
 
 function boundedUtf8Tail(value: string, maxBytes: number): string {
@@ -167,6 +177,13 @@ export function parseClaudeStreamCompletion(
       continue;
     }
     if (record["type"] !== "result") continue;
+    if (
+      typeof record["session_id"] !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+        record["session_id"],
+      )
+    )
+      continue;
     const success =
       record["subtype"] === "success" && record["is_error"] !== true;
     const rawReport =
@@ -179,6 +196,7 @@ export function parseClaudeStreamCompletion(
       source: "stream-result",
       outcome: success ? "success" : "failed",
       report: boundedUtf8Tail(rawReport, MAX_COMPLETION_REPORT_BYTES),
+      sessionId: record["session_id"],
     };
   }
   return null;
@@ -194,13 +212,18 @@ export async function activate(ctx: ExtensionContext) {
     launchId: string;
     runId: string;
     vesselRef: string;
+    vesselEntityId: string;
+    vesselParticipantId: string | null;
     deliberate: boolean;
     monitor: ReturnType<typeof setInterval> | null;
+    sessionId: string | null;
+    assignmentMessageId: string;
   }
   const headlessLaunches = new Map<string, HeadlessLaunch>();
   const terminalLaunches = new Map<string, InspectLaunchResult>();
   const channelTransactions = new Map<string, Promise<unknown>>();
   const finalizations = new Map<string, Promise<boolean>>();
+  const continuations = new Map<string, Promise<LaunchSubagentResult>>();
   const retireHeadlessLaunch = async (
     launch: HeadlessLaunch,
   ): Promise<void> => {
@@ -215,11 +238,19 @@ export async function activate(ctx: ExtensionContext) {
     dispose() {
       for (const launch of headlessLaunches.values()) {
         launch.deliberate = true;
-        void retireHeadlessLaunch(launch).catch((failure) =>
-          ctx.log.warn?.("Linked Claude retirement failed", {
-            error: String(failure),
-          }),
-        );
+        void readLaunchRecord(launchKey(launch.generationId))
+          .then(async (record) => {
+            if (record) {
+              await finalizeRecord(record, launch);
+              return;
+            }
+            await retireHeadlessLaunch(launch);
+          })
+          .catch((failure) =>
+            ctx.log.warn?.("Linked Claude retirement failed", {
+              error: String(failure),
+            }),
+          );
       }
     },
   });
@@ -500,8 +531,12 @@ export async function activate(ctx: ExtensionContext) {
       launchId: `claude-code:${input.subagent.runId}`,
       runId: input.subagent.runId,
       vesselRef: prepared.vesselRef,
+      vesselEntityId: prepared.vesselEntityId,
+      vesselParticipantId: prepared.vesselParticipantId,
       deliberate: false,
       monitor: null,
+      sessionId: prepared.profile.launchId,
+      assignmentMessageId: `subagent-seed:${input.subagent.runId}`,
     };
     headlessLaunches.set(launch.generationId, launch);
     const record = await readLaunchRecord(launchKey(launch.generationId));
@@ -512,6 +547,20 @@ export async function activate(ctx: ExtensionContext) {
       await finalizeRecord(record, launch);
       throw failure;
     }
+    observeHeadlessLaunch(launch, prepared.channelId);
+    return {
+      entityId: prepared.entityId,
+      contextId: prepared.contextId,
+      channelId: prepared.channelId,
+      vesselRef: prepared.vesselRef,
+      vesselEntityId: prepared.vesselEntityId,
+      vesselParticipantId: prepared.vesselParticipantId,
+      launchId: launch.launchId,
+      generationId: launch.generationId,
+      pid: snapshot.pid,
+    };
+  }
+  function observeHeadlessLaunch(launch: HeadlessLaunch, channelId: string) {
     let checking = false;
     launch.monitor = setInterval(() => {
       if (checking) return;
@@ -523,7 +572,7 @@ export async function activate(ctx: ExtensionContext) {
         })
         .then((state) =>
           state.state === "exited"
-            ? serializeByKey(channelTransactions, prepared.channelId, () =>
+            ? serializeByKey(channelTransactions, channelId, () =>
                 finalizeHeadlessLaunch(launch, state),
               )
             : undefined,
@@ -537,17 +586,6 @@ export async function activate(ctx: ExtensionContext) {
           checking = false;
         });
     }, 500);
-    return {
-      entityId: prepared.entityId,
-      contextId: prepared.contextId,
-      channelId: prepared.channelId,
-      vesselRef: prepared.vesselRef,
-      vesselEntityId: prepared.vesselEntityId,
-      vesselParticipantId: prepared.vesselParticipantId,
-      launchId: launch.launchId,
-      generationId: launch.generationId,
-      pid: snapshot.pid,
-    };
   }
   async function finalizeHeadlessLaunch(
     launch: HeadlessLaunch,
@@ -558,7 +596,11 @@ export async function activate(ctx: ExtensionContext) {
     const record = await readLaunchRecord(launchKey(launch.generationId));
     if (!record) throw error("ECORRUPT", "Missing owned Claude generation");
     const terminal = snapshotResult(launch, snapshot);
-    await finalizeRecord(record, launch);
+    if (
+      terminal.completion?.sessionId &&
+      terminal.completion.sessionId !== launch.sessionId
+    )
+      throw error("ECORRUPT", "Claude changed its retained conversation id");
     terminalLaunches.set(
       terminalLaunchKey(launch.entityId, launch.generationId),
       terminal,
@@ -570,6 +612,7 @@ export async function activate(ctx: ExtensionContext) {
     if (terminal.completion)
       await ctx.rpc.call(launch.vesselRef, "reportExternalResult", {
         runId: launch.runId,
+        messageId: launch.assignmentMessageId,
         outcome: terminal.completion.outcome,
         report: terminal.completion.report,
         code: exit.code,
@@ -577,6 +620,7 @@ export async function activate(ctx: ExtensionContext) {
     else
       await ctx.rpc.call(launch.vesselRef, "reportExternalExit", {
         runId: launch.runId,
+        messageId: launch.assignmentMessageId,
         code: exit.code,
         signal: exit.signal,
       });
@@ -812,6 +856,18 @@ export async function activate(ctx: ExtensionContext) {
     });
   }
 
+  async function interrupt(input: {
+    entityId: string;
+    generationId: string;
+  }): Promise<{ interrupted: boolean }> {
+    const launch = headlessLaunches.get(input.generationId);
+    if (!launch || launch.entityId !== input.entityId)
+      return { interrupted: false };
+    launch.deliberate = true;
+    await ctx.rpc.call("main", "linkedClaude.interrupt", input);
+    return { interrupted: true };
+  }
+
   async function launchSubagent(
     input: LaunchSubagentInput,
   ): Promise<LaunchSubagentResult> {
@@ -846,6 +902,73 @@ export async function activate(ctx: ExtensionContext) {
     });
   }
 
+  async function continueSubagent(
+    input: ContinueSubagentInput,
+  ): Promise<LaunchSubagentResult> {
+    if (!input.messageId.startsWith("subagent-followup:"))
+      throw error(
+        "EINVAL",
+        "Claude follow-up requires its canonical message id",
+      );
+    if (!input.prompt.trim())
+      throw error("EINVAL", "Claude follow-up requires a non-empty prompt");
+    const retained = headlessLaunches.get(input.generationId);
+    if (!retained || retained.entityId !== input.entityId)
+      throw error("ENOENT", "No retained Claude conversation");
+    if (!retained.sessionId)
+      throw error(
+        "ECORRUPT",
+        "Claude conversation has no resumable session id",
+      );
+    const record = await readLaunchRecord(launchKey(retained.generationId));
+    if (!record) throw error("ECORRUPT", "Missing retained Claude generation");
+    const continuationKey = `${input.generationId}\u0000${input.messageId}`;
+    const existing = continuations.get(continuationKey);
+    if (existing) return existing;
+    const continuation = serializeByKey(
+      channelTransactions,
+      record.channelId,
+      async () => {
+        const snapshot = await ctx.rpc.call<LinkedClaudeSnapshot>(
+          "main",
+          "linkedClaude.continue",
+          {
+            entityId: retained.entityId,
+            generationId: retained.generationId,
+            sessionId: retained.sessionId,
+            prompt: input.prompt,
+            options: input.options,
+          },
+        );
+        retained.deliberate = false;
+        retained.assignmentMessageId = input.messageId;
+        terminalLaunches.delete(
+          terminalLaunchKey(retained.entityId, retained.generationId),
+        );
+        observeHeadlessLaunch(retained, record.channelId);
+        return {
+          entityId: retained.entityId,
+          contextId: record.contextId,
+          channelId: record.channelId,
+          vesselRef: retained.vesselRef,
+          vesselEntityId: retained.vesselEntityId,
+          vesselParticipantId: retained.vesselParticipantId,
+          launchId: retained.launchId,
+          generationId: retained.generationId,
+          pid: snapshot.pid,
+        };
+      },
+    );
+    continuations.set(continuationKey, continuation);
+    continuation.catch(() => {
+      if (continuations.get(continuationKey) === continuation)
+        continuations.delete(continuationKey);
+    });
+    while (continuations.size > 128)
+      continuations.delete(continuations.keys().next().value!);
+    return continuation;
+  }
+
   async function resolvePrimaryChannel(input: {
     contextId: string;
   }): Promise<{ channelId: string } | null> {
@@ -864,7 +987,9 @@ export async function activate(ctx: ExtensionContext) {
       claudeCode: {
         prepare,
         launchSubagent,
+        continueSubagent,
         inspectLaunch,
+        interrupt,
         release,
         resolvePrimaryChannel,
       },

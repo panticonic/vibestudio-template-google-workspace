@@ -29,8 +29,13 @@ export interface NotificationClient {
 }
 type NotificationRpc = Pick<RpcClient, "call" | "on">;
 
-export function createNotificationClient(rpc: NotificationRpc): NotificationClient {
-  const actionHandlers = new Map<string, Map<string, () => void | Promise<void>>>();
+export function createNotificationClient(
+  rpc: NotificationRpc,
+): NotificationClient {
+  const actionHandlers = new Map<
+    string,
+    Map<string, () => void | Promise<void>>
+  >();
   let unsubscribeDirectActions: (() => void) | undefined;
 
   const handleAction = (payload: unknown): void => {
@@ -50,8 +55,14 @@ export function createNotificationClient(rpc: NotificationRpc): NotificationClie
   };
 
   function ensureActionSubscription(): void {
-    unsubscribeDirectActions ??= rpc.on("notification:action", ({ payload }) =>
-      handleAction(payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."}
+    unsubscribeDirectActions ??= rpc.on(
+      "notification:action",
+      ({ payload }) => handleAction(payload),
+      {
+        kind: "closed",
+        reason:
+          "Only trusted notification delivery may invoke these action callbacks.",
+      },
     );
   }
 
@@ -82,10 +93,13 @@ export function createNotificationClient(rpc: NotificationRpc): NotificationClie
   };
 }
 
-function parseNotificationAction(payload: unknown): { id: string; actionId: string } | undefined {
+function parseNotificationAction(
+  payload: unknown,
+): { id: string; actionId: string } | undefined {
   if (!payload || typeof payload !== "object") return undefined;
   const record = payload as Record<string, unknown>;
-  return typeof record["id"] === "string" && typeof record["actionId"] === "string"
+  return typeof record["id"] === "string" &&
+    typeof record["actionId"] === "string"
     ? { id: record["id"], actionId: record["actionId"] }
     : undefined;
 }

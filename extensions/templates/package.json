@@ -9,33 +9,141 @@
     "entry": "index.ts",
     "sourcemap": true,
     "extension": {
-      "activationEvents": ["onInvoke"],
+      "activationEvents": [
+        "onInvoke"
+      ],
       "methodAuthority": {
-        "catalog": { "effect": { "kind": "open" } },
-        "inspect": { "effect": { "kind": "open" } },
-        "inspectAuthoring": { "effect": { "kind": "open" } },
-        "authoringParts": { "effect": { "kind": "open" } },
-        "publishAuthoring": { "effect": { "kind": "userland-capability", "capability": "workspace.templates.publish", "resource": { "kind": "receiver" } } },
-        "suggestRegistryEntry": { "effect": { "kind": "userland-capability", "capability": "workspace.templates.publish", "resource": { "kind": "receiver" } } }
+        "resolveSource": {
+          "effect": {
+            "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Websites use the reviewed templates.inspect operation."
+          }
+        },
+        "inspect": {
+          "effect": {
+            "kind": "userland-capability",
+            "capability": "workspace.templates.inspect",
+            "resource": {
+              "kind": "receiver"
+            }
+          },
+          "website": {
+            "kind": "eligible",
+            "rationale": "Acquires the exact requested source and returns its verified pin, repository names, and file inventory. Private source metadata is disclosed to the requester; source code is not executed."
+          }
+        },
+        "inspectAuthoring": {
+          "effect": {
+            "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls workspace source authoring or inspection requiring source disclosure review."
+          }
+        },
+        "authoringParts": {
+          "effect": {
+            "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls workspace source authoring or inspection requiring source disclosure review."
+          }
+        },
+        "publishAuthoring": {
+          "effect": {
+            "kind": "userland-capability",
+            "capability": "workspace.templates.publish",
+            "resource": {
+              "kind": "receiver"
+            }
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Controls workspace source authoring or inspection requiring source disclosure review."
+          }
+        }
       }
     },
     "authority": {
-      "provides": [{
-        "name": "workspace.templates.publish",
-        "title": "Publish workspace snapshot",
-        "action": "publish this workspace source as an upstream template",
-        "tier": "gated",
-        "sensitivity": "write",
-        "resourceType": "workspace.templates",
-        "presentation": { "domain": "sharing", "verb": "act" },
-        "notability": "headline",
-        "grantScopes": ["once", "task", "session"]
-      }],
+      "provides": [
+        {
+          "name": "workspace.templates.publish",
+          "title": "Publish workspace snapshot",
+          "action": "publish this workspace source as an upstream template",
+          "tier": "gated",
+          "sensitivity": "write",
+          "resourceType": "workspace.templates",
+          "presentation": {
+            "domain": "sharing",
+            "verb": "act"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once",
+            "task",
+            "session"
+          ]
+        },
+        {
+          "name": "workspace.templates.inspect",
+          "title": "Inspect a template source",
+          "action": "inspect the requested template source",
+          "description": "Acquires the exact requested source and returns its verified pin, repository names, and file inventory. Private source metadata is disclosed to the requester; source code is not executed.",
+          "tier": "gated",
+          "sensitivity": "read",
+          "resourceType": "workspace.templates",
+          "presentation": {
+            "domain": "sharing",
+            "verb": "see"
+          },
+          "notability": "headline",
+          "grantScopes": [
+            "once",
+            "session"
+          ]
+        }
+      ],
       "requests": [
-        { "capability": "credential.use", "resource": { "kind": "prefix", "prefix": "" }, "tier": "gated", "evidence": "intentional-broad" },
-        { "capability": "network.response.read", "resource": { "kind": "origin", "origin": "https://github.com" }, "tier": "gated", "evidence": "bounded-dynamic" },
-        { "capability": "network.response.read", "resource": { "kind": "prefix", "prefix": "" }, "tier": "gated", "evidence": "intentional-broad" },
-        { "capability": "git.publish", "resource": { "kind": "prefix", "prefix": "workspace-source-change:" }, "tier": "gated", "evidence": "bounded-dynamic" }
+        {
+          "capability": "credential.use",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "network.response.read",
+          "resource": {
+            "kind": "origin",
+            "origin": "https://github.com"
+          },
+          "tier": "gated",
+          "evidence": "bounded-dynamic"
+        },
+        {
+          "capability": "network.response.read",
+          "resource": {
+            "kind": "prefix",
+            "prefix": ""
+          },
+          "tier": "gated",
+          "evidence": "intentional-broad"
+        },
+        {
+          "capability": "git.publish",
+          "resource": {
+            "kind": "prefix",
+            "prefix": "workspace-source-change:"
+          },
+          "tier": "gated",
+          "evidence": "bounded-dynamic"
+        }
       ]
     }
   },
@@ -46,7 +154,6 @@
     "@vibestudio/service-schemas": "workspace:*",
     "@vibestudio/workspace": "workspace:*",
     "@vibestudio/workspace-contracts": "workspace:*",
-    "@workspace/template-registry": "workspace:*",
     "yaml": "^2.8.0"
   }
 }

@@ -606,8 +606,7 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
     ] as unknown as AgentTool[];
     // The generalized `notify` tool (carries saliency:"say"; the config-level
     // publishPolicy governs whether model narration also publishes) + the
-    // subagent supervision surface. The child-side `complete` tool is added
-    // ONLY when this agent is itself a subagent.
+    // subagent supervision surface.
     return [
       ...base,
       this.createSetTitleTool(channelId),
@@ -1038,7 +1037,11 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
             push("parent", "supervisor", "the agent that spawned you");
           }
           for (const run of context.runs ?? []) {
-            push(`run:${run.runId}`, "subagent run", run.taskChannelId);
+            push(
+              `run:${run.runId}`,
+              "subagent run",
+              [run.status, run.taskChannelId].filter(Boolean).join(" · "),
+            );
           }
           if (includeDirectory !== false) {
             for (const entry of context.directory ?? []) {
@@ -1491,8 +1494,7 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
   }
 
   /** The subagent tool surface: parent-side supervision (spawn/send/inspect/
-   *  integrate/read/cancel) plus the child-side `complete` terminal trigger
-   *  (advertised only to subagents). The vessel implements the spawn mechanics
+   *  integrate/read/cancel). The vessel implements the spawn mechanics
    *  in the local-tool executor (it never reaches the `execute` below — see
    *  AgentVesselBase.runDeferredSpawn). */
   private createSubagentTools(
@@ -1504,7 +1506,7 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
         name: "spawn_subagent",
         label: "spawn_subagent",
         description:
-          "Delegate separable work to a child agent in its own durable task channel and retained child context. Returns a runId once launch succeeds; the spawn invocation does not stay open for the child's lifetime. Use for independent investigation, parallel work, or isolated edits; do small linear work yourself. mode:'fresh' seeds a child from task; mode:'fork' starts from your current trajectory and can share context-window cache. Track the runId exactly, continue useful foreground work, and steer only with new instructions via notify({ to: 'run:<runId>' }). Read progress with inspect_subagent/read_subagent instead of messaging the child to ask how it is going. After terminal delivery, review the retained result and decide from the user's goal whether to integrate it; inspection-only and comparison tasks may deliberately leave it unintegrated. Detailed activity remains on the canonical child transcript. Terminal results immediately free execution capacity and remain inspectable, readable, and mergeable; no cleanup tool is required. Use cancel_subagent only to stop a live run. If siblings remain live, continue foreground work or suspend_turn({ reason:'waiting_for_background' }) again. The child finishes only by calling complete.",
+          "Delegate separable work to a child agent in its own durable task channel and retained child context. Returns a runId once launch succeeds; the spawn invocation does not stay open for the child's lifetime. Use for independent investigation, parallel work, or isolated edits; do small linear work yourself. mode:'fresh' seeds a child from task; mode:'fork' starts from your current trajectory and can share context-window cache. Track the runId exactly, continue useful foreground work, and steer only with new instructions via notify({ to: 'run:<runId>' }). Read progress with inspect_subagent/read_subagent instead of messaging the child to ask how it is going. A normal child reply is a retained report; when its turn closes the collaborator becomes idle and stops consuming execution capacity. Later notify continues the same retained collaborator and context. Review the report and decide from the user's goal whether to integrate its VCS work; inspection-only and comparison tasks may deliberately leave it unintegrated. Use cancel_subagent only to stop active work.",
         parameters: {
           type: "object",
           properties: {
@@ -1589,7 +1591,7 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
         name: "inspect_subagent",
         label: "inspect_subagent",
         description:
-          "Inspects a supervised child's runtime or semantic workspace state; it never exposes the model's private context window. Use the bounded parent-relative 'diff' when the user's goal is to inspect, review, or compare child work without integrating it. No inspection preflight is required before merge_subagent when the goal instead calls for integration. Use 'status', 'diff'/'log', or an exact repo-prefixed file path. 'runtime' is only for external-agent diagnostics; read_subagent returns what the child said. Do not poll a live child with this tool; suspend_turn wakes on terminal delivery.",
+          "Inspects a supervised child's runtime or semantic workspace state; it never exposes the model's private context window. Use the bounded parent-relative 'diff' when the user's goal is to inspect, review, or compare child work without integrating it. No inspection preflight is required before merge_subagent when the goal instead calls for integration. Use 'status', 'diff'/'log', or an exact repo-prefixed file path. 'runtime' is only for external-agent diagnostics; read_subagent returns what the child said. Do not poll a live child with this tool; suspend_turn wakes when the child reports.",
         parameters: {
           type: "object",
           properties: {
@@ -1764,7 +1766,7 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
         name: "cancel_subagent",
         label: "cancel_subagent",
         description:
-          "Cancel a subagent that is still starting or running. Cancellation fences execution and records a retained terminal result; it does not delete the agent, context, transcript, or workspace.",
+          "Cancel a subagent that is still starting or running. Cancellation stops the current assignment while retaining the collaborator, context, transcript, and workspace for later follow-up.",
         parameters: {
           type: "object",
           properties: {
@@ -1780,10 +1782,11 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
           },
           required: ["runId"],
         } as never,
-        execute: async (_toolCallId, params) => {
+        execute: async (toolCallId, params) => {
           const p = params as { runId?: unknown; reason?: unknown };
           return this.cancelSubagent(
             String(p.runId ?? ""),
+            toolCallId,
             typeof p.reason === "string" ? p.reason : "cancelled by supervisor",
             channelId,
             toolRpc,
@@ -1791,36 +1794,6 @@ export abstract class AgentWorkerBase extends AgentVesselBase {
         },
       } as AgentTool,
     ];
-    if (this.isSubagent()) {
-      tools.push({
-        name: "complete",
-        label: "complete",
-        description:
-          "Finish this subagent run exactly once and hand your report back to the parent. This is the explicit terminal trigger: ordinary final text, turn closure, and idle are NOT terminal. Use outcome:'failed' when blocked or unable to complete, with a report explaining what was tried and whether partial work exists.",
-        parameters: {
-          type: "object",
-          properties: {
-            report: {
-              type: "string",
-              description: "Your final report to the parent.",
-            },
-            outcome: {
-              type: "string",
-              enum: ["success", "failed"],
-              description: "Run outcome (default 'success').",
-            },
-          },
-          required: ["report"],
-        } as never,
-        execute: async (_toolCallId, params) => {
-          const p = params as { report?: unknown; outcome?: unknown };
-          return this.completeAsSubagent(
-            String(p.report ?? ""),
-            p.outcome === "failed" ? "failed" : "success",
-          );
-        },
-      } as AgentTool);
-    }
     return tools;
   }
 

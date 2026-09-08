@@ -16,21 +16,37 @@
         "resize": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "eligible",
+            "rationale": "Transforms or inspects only image bytes supplied in this invocation."
           }
         },
         "convert": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "eligible",
+            "rationale": "Transforms or inspects only image bytes supplied in this invocation."
           }
         },
         "detectMimeType": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "eligible",
+            "rationale": "Transforms or inspects only image bytes supplied in this invocation."
           }
         },
         "getMetadata": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "eligible",
+            "rationale": "Transforms or inspects only image bytes supplied in this invocation."
           }
         }
       }

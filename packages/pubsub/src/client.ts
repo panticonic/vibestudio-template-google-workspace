@@ -107,10 +107,10 @@ export interface PubSubClient<T extends ParticipantMetadata = ParticipantMetadat
   /** Count of replayable channel envelopes. */
   readonly envelopeCount: number | undefined;
 
-  /** First replayable channel-envelope sequence. */
+  /** Earliest durable envelope retained by this client for replay. */
   readonly firstEnvelopeSeq: number | undefined;
 
-  /** Whether the server reported older envelopes before the initial replay window. */
+  /** Whether older envelopes exist before the client's retained replay window. */
   readonly hasMoreBefore: boolean | undefined;
 
   /** Get older channel envelopes before a sequence. */

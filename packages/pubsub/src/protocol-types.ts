@@ -447,20 +447,21 @@ export interface MethodExecutionContext {
   stream(content: unknown): Promise<void>;
   /** Stream a partial result with binary attachments */
   streamWithAttachments(content: unknown, attachments: AttachmentInput[]): Promise<void>;
-  /** Create a final result with binary attachments */
-  resultWithAttachments<T>(
-    content: T,
-    attachments: AttachmentInput[]
-  ): MethodResultWithAttachments<T>;
+  /** Create a final result with transport metadata. */
+  result<T>(content: T, options?: MethodResultOptions): MethodExecutionResult<T>;
 }
 
-/**
- * A method result with attached binary payloads.
- * Returned from context.resultWithAttachments().
- */
-export interface MethodResultWithAttachments<T> {
+export interface MethodResultOptions {
+  attachments?: AttachmentInput[];
+  isError?: boolean;
+}
+
+export const METHOD_EXECUTION_RESULT = Symbol("pubsub.method-execution-result");
+
+/** A terminal method result created by MethodExecutionContext.result(). */
+export interface MethodExecutionResult<T> extends MethodResultOptions {
+  readonly [METHOD_EXECUTION_RESULT]: true;
   content: T;
-  attachments: AttachmentInput[];
 }
 
 /**
@@ -484,7 +485,10 @@ export interface MethodDefinition<TArgs extends z.ZodTypeAny = z.ZodTypeAny, TRe
    *  and won't be exposed as AI model tools. */
   internal?: boolean;
   /** Execute the method. Automatically called when method is invoked. */
-  execute(args: z.infer<TArgs>, context: MethodExecutionContext): Promise<TResult>;
+  execute(
+    args: z.infer<TArgs>,
+    context: MethodExecutionContext
+  ): Promise<TResult | MethodExecutionResult<TResult>>;
 }
 
 /** Definition for a method whose parameter contract is already JSON Schema. */
@@ -495,7 +499,10 @@ export interface JsonSchemaMethodDefinition<TResult = unknown> {
   streaming?: boolean;
   menu?: boolean;
   internal?: boolean;
-  execute(args: unknown, context: MethodExecutionContext): Promise<TResult>;
+  execute(
+    args: unknown,
+    context: MethodExecutionContext
+  ): Promise<TResult | MethodExecutionResult<TResult>>;
 }
 
 /** Method definitions accepted by transports that advertise or execute methods. */

@@ -2,6 +2,11 @@
 
 Type-safe parent-child communication using contracts.
 
+For a connected website using this same RPC API, first read
+[website development](WEBSITES.md) and [website authority](../capabilities/references/website-authority.md).
+Every method, stream, and event intake declares a website policy, independently
+of its cross-workspace exposure and operation authority.
+
 ## Cross-workspace calls
 
 Parent-child panel relationships remain workspace-local. For integration with
@@ -73,14 +78,14 @@ export default function Editor() {
   const [content, setContent] = useState("");
 
   useEffect(() => {
-    rpc.expose("getContent", () => content);
+    rpc.expose("getContent", () => content, { kind: "closed", reason: "Editor contents are private to the installed editor relationship." });
     rpc.expose("setContent", (request) => {
       const [text] = request.args as [string];
       setContent(text);
-    });
+    }, { kind: "closed", reason: "Only the installed editor relationship may replace editor contents." });
     rpc.expose("save", async () => {
       await parent?.emit("saved", { path: "/file.txt", timestamp: Date.now() });
-    });
+    }, { kind: "closed", reason: "Saving requires the installed editor relationship and its own source authority." });
   }, [content]);
 
   return (

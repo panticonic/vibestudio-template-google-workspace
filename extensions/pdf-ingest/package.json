@@ -17,26 +17,46 @@
         "engines": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads filesystem-backed documents and retained extraction artifacts."
           }
         },
         "probe": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads filesystem-backed documents and retained extraction artifacts."
           }
         },
         "ingest": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads filesystem-backed documents and retained extraction artifacts."
           }
         },
         "renderPage": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads filesystem-backed documents and retained extraction artifacts."
           }
         },
         "readArtifact": {
           "effect": {
             "kind": "open"
+          },
+          "website": {
+            "kind": "closed",
+            "reason": "Reads filesystem-backed documents and retained extraction artifacts."
           }
         }
       }

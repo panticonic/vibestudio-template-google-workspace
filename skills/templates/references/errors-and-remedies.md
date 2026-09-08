@@ -1,14 +1,12 @@
 # Template errors and remedies
 
-Use the error returned by catalog discovery, exact inspection, or publication.
+Use the error returned by exact inspection, or publication.
 There is no installed-template composition operation to resume, no managed
 settings to repair, and no template update removal flow.
 
 | Failure | Next action |
 | --- | --- |
 | Private source needs credentials | Open the standard connection flow, then retry the explicit acquisition with the selected credential. Never store concrete credentials in the snapshot. |
-| No verified catalog is cached | Offer an explicit catalog refresh. |
-| Catalog changed or entry retired | Refresh and review the new registry-bound selection before inspection. |
 | Snapshot integrity or manifest validation failed | Stop and show the returned details. Do not substitute another source or retry an integrity failure. |
 | Remote unavailable | Show which explicit acquisition failed and offer another attempt later. |
 | Authoring source changed after inspection | Run `inspectAuthoring` again and review the new fingerprint and required source closure before publishing. |

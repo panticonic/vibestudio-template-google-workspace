@@ -533,7 +533,7 @@ function promoteDeferredHead(state: AgentState, ctx: StepContext): StepOutput {
 
 function turnClosedItem(
   turn: Pick<OpenTurn, "turnId" | "metadata"> | string,
-  opts: { reason?: string; summary?: string } = {}
+  opts: { reason?: string; summary?: string; resumeQueuedAfterClose?: boolean } = {}
 ): AppendItem {
   const turnId = typeof turn === "string" ? turn : turn.turnId;
   const metadata = typeof turn === "string" ? undefined : turn.metadata;
@@ -544,6 +544,7 @@ function turnClosedItem(
       protocol: AGENTIC_PROTOCOL_VERSION,
       ...(opts.reason ? { reason: opts.reason } : {}),
       ...(opts.summary ? { summary: opts.summary } : {}),
+      ...(opts.resumeQueuedAfterClose ? { resumeQueuedAfterClose: true } : {}),
       ...(metadata ? { metadata } : {}),
     },
     causality: { turnId },
@@ -667,7 +668,11 @@ function modelFailurePayload(
 }
 
 /** Terminal cleanup for an interrupted/aborted turn (E-after-interrupt). */
-function interruptCleanupItems(state: AgentState, reason: string): AppendItem[] {
+function interruptCleanupItems(
+  state: AgentState,
+  reason: string,
+  opts: { resumeQueuedAfterClose?: boolean } = {}
+): AppendItem[] {
   const items: AppendItem[] = [];
   for (const invocation of Object.values(state.pendingInvocations)) {
     // Carry the transportCallId (the on-the-wire id the PROVIDER knows — its
@@ -737,6 +742,7 @@ function interruptCleanupItems(state: AgentState, reason: string): AppendItem[] 
     items.push(
       turnClosedItem(state.openTurn, {
         reason: reason === "forked" ? "forked" : "user_interrupted",
+        ...(opts.resumeQueuedAfterClose ? { resumeQueuedAfterClose: true } : {}),
       })
     );
   }
@@ -1157,7 +1163,12 @@ function flushStep(state: AgentState, ctx: StepContext): StepOutput | null {
     // a feedback form). "Send now" means abandon the wait — interruptCleanupItems
     // cancels every pending invocation (a valid cancelled tool-result) and closes
     // the turn; the turn.closed cascade then opens a fresh turn folding the steers.
-    return { append: interruptCleanupItems(state, "user_interrupted"), effects: [] };
+    return {
+      append: interruptCleanupItems(state, "user_interrupted", {
+        resumeQueuedAfterClose: true,
+      }),
+      effects: [],
+    };
   }
 
   // Priority 2: promote exactly ONE deferred head.
@@ -1169,12 +1180,20 @@ function flushStep(state: AgentState, ctx: StepContext): StepOutput | null {
         return {
           append: [
             {
-              envelopeId: ids.interruptEvent(state.openTurn.turnId, "user_interrupted"),
+              envelopeId: ids.systemEvent(
+                state.openTurn.turnId,
+                "interrupt",
+                state.lastSeq,
+              ),
               payloadKind: "system.event",
               payload: {
                 protocol: AGENTIC_PROTOCOL_VERSION,
                 kind: "interrupt",
-                details: { kind: "interrupt", reason: "user_interrupted" },
+                details: {
+                  kind: "interrupt",
+                  reason: "user_interrupted",
+                  resumeQueuedAfterClose: true,
+                },
               },
               causality: { turnId: state.openTurn.turnId },
               publish: true,
@@ -1184,7 +1203,12 @@ function flushStep(state: AgentState, ctx: StepContext): StepOutput | null {
         };
       }
       // Idle open turn: close it now; the turn.closed cascade promotes the head.
-      return { append: interruptCleanupItems(state, "user_interrupted"), effects: [] };
+      return {
+        append: interruptCleanupItems(state, "user_interrupted", {
+          resumeQueuedAfterClose: true,
+        }),
+        effects: [],
+      };
     }
     // No open turn: promote the head directly.
     const head = state.deferredPostTurnQueue[0]!;
@@ -1384,7 +1408,7 @@ function commandStep(state: AgentState, command: Command, ctx: StepContext): Ste
       const reason =
         command.kind === "abort" ? (command.reason ?? "work_failed") : "user_interrupted";
       const marker: AppendItem = {
-        envelopeId: ids.interruptEvent(state.openTurn.turnId, reason),
+        envelopeId: ids.systemEvent(state.openTurn.turnId, "interrupt", state.lastSeq),
         payloadKind: "system.event",
         payload: {
           protocol: AGENTIC_PROTOCOL_VERSION,
@@ -1608,7 +1632,12 @@ function eventStep(state: AgentState, envelope: LogEnvelope, ctx: StepContext): 
       ) {
         return nextModelCall(state, 0, ctx);
       }
-      return { append: interruptCleanupItems(state, "user_interrupted"), effects: [] };
+      return {
+        append: interruptCleanupItems(state, "user_interrupted", {
+          resumeQueuedAfterClose: turn.pendingFlush === "queued",
+        }),
+        effects: [],
+      };
     }
     const blocks = Array.isArray(payload["blocks"]) ? (payload["blocks"] as unknown[]) : [];
     const toolCalls = blocks.filter(isToolCallBlock);
@@ -1631,6 +1660,7 @@ function eventStep(state: AgentState, envelope: LogEnvelope, ctx: StepContext): 
   // natural or flush-induced — keeping the one-turn-per-message cadence.
   if (kind === "turn.closed") {
     if (state.openTurn) return EMPTY;
+    if (state.pausedByUser) return EMPTY;
     // Steers orphaned by a forced close (flush against a blocked turn) take
     // priority — matching the flush ordering (steers first, then deferred) —
     // and bootstrap a fresh turn of their own.
@@ -1831,6 +1861,7 @@ function eventStep(state: AgentState, envelope: LogEnvelope, ctx: StepContext): 
     const details = (payload["details"] ?? {}) as Record<string, unknown>;
     if (details["kind"] === "prompt.artifacts_ready") {
       if (!state.openTurn) {
+        if (state.pausedByUser) return EMPTY;
         if (state.pendingPrompt?.artifactsReady) return promotePendingPrompt(state, ctx, []);
         if (state.steeringQueue.length > 0) return promoteSteersAsTurn(state, ctx);
         return promoteDeferredHead(state, ctx);

@@ -97,6 +97,7 @@ export type ResolvedAddressee =
 export interface AddresseeRunEntry {
   runId: string;
   taskChannelId: string;
+  status?: "starting" | "running" | "completed" | "failed" | "cancelled" | "abandoned";
   /** The child's participant id on its task channel, when known. */
   participantId?: string;
 }

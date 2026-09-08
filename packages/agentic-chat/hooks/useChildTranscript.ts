@@ -14,9 +14,8 @@ import { useChannelMessages } from "./useChannelMessages.js";
  * inspection the child's own panel would show — instead of a bounded summary.
  *
  * Deliberately bounded: a card observes while the user has its transcript open,
- * or while a live run is waiting for its canonical terminal fact. The caller
- * disables observation as soon as that terminal is folded, so retained history
- * owns no long-lived transport and no copied progress feed is needed.
+ * and releases the observer when the card closes. Retained collaborators do
+ * not require a permanent stream or a copied progress feed in the parent.
  */
 
 export interface ChildTranscriptConnection {

@@ -27,6 +27,7 @@ interface ClientEvalMethodResult {
     success: boolean;
     failureKind?: SandboxResult["failureKind"];
     failureCode?: string;
+    errorData?: unknown;
   };
 }
 
@@ -296,14 +297,16 @@ APIs and workspace packages with static imports. \`return\` sends a value back;
             ? `[scope] keys: ${keys.join(", ")} (${keys.length} total)`
             : "[scope] (empty)",
         });
-        return {
+        const content = {
           content: parts,
           details: {
             success: result.success,
             ...(result.failureKind ? { failureKind: result.failureKind } : {}),
             ...(result.failureCode ? { failureCode: result.failureCode } : {}),
+            ...(result.errorData !== undefined ? { errorData: result.errorData } : {}),
           },
         };
+        return result.success ? content : context.result(content, { isError: true });
       } finally {
         timeout.dispose();
         await scopeManager.exitEval();

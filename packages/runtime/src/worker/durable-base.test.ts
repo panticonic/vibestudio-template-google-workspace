@@ -32,7 +32,11 @@ function authenticatedTestCaller(
 class EchoDO extends TestDurableObjectBase {
   protected createTables(): void {}
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -46,7 +50,11 @@ class EchoDO extends TestDurableObjectBase {
 class DetachedRpcProbeDO extends TestDurableObjectBase {
   protected createTables(): void {}
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -70,7 +78,11 @@ class UndeclaredProbeDO extends TestDurableObjectBase {
 class StreamProbeDO extends TestDurableObjectBase {
   protected createTables(): void {}
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -86,7 +98,11 @@ class StreamProbeDO extends TestDurableObjectBase {
 class AgentSubscriptionProbeDO extends TestDurableObjectBase {
   protected createTables(): void {}
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -100,7 +116,11 @@ class AgentSubscriptionProbeDO extends TestDurableObjectBase {
 class StructuredErrorDO extends TestDurableObjectBase {
   protected createTables(): void {}
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -139,7 +159,11 @@ class LifecycleProbeDO extends TestDurableObjectBase {
     this.resumed = true;
   }
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -160,7 +184,11 @@ class WorkReadyProbeDO extends TestDurableObjectBase {
     return ["agent-wake", "agent-effect"];
   }
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -171,7 +199,11 @@ class WorkReadyProbeDO extends TestDurableObjectBase {
     return { committed: true };
   }
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -255,7 +287,11 @@ class SchemaProbeDO extends TestDurableObjectBase {
     return ["required_table"];
   }
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -279,7 +315,11 @@ class SchemaProbeDO extends TestDurableObjectBase {
 class AlarmProbeDO extends TestDurableObjectBase {
   protected createTables(): void {}
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -296,7 +336,11 @@ class DerivedAlarmProbeDO extends TestDurableObjectBase {
 
   protected createTables(): void {}
 
-  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
+  @rpc({
+    website: {
+      kind: "eligible",
+      rationale: "Explicit receiver exposure for this test fixture.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",

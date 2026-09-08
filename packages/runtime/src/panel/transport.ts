@@ -20,7 +20,9 @@ type PanelBridge = EnvelopeBridge & {
 export const recoveryCoordinator: RecoveryCoordinator =
   createRecoveryCoordinator();
 
-export function createPanelTransport(lifetime: AbortSignal): EnvelopeRpcTransport {
+export function createPanelTransport(
+  lifetime: AbortSignal,
+): EnvelopeRpcTransport {
   const bridge = (
     globalThis as typeof globalThis & { __vibestudioShell?: PanelBridge }
   ).__vibestudioShell;

@@ -190,7 +190,11 @@ function structuredFailureCode(error: unknown): string | undefined {
 function guestFailureCode(error: unknown): string {
   const structured = structuredFailureCode(error);
   if (structured) return structured;
-  if (error && typeof error === "object" && (error as { name?: unknown }).name === "TypeError") {
+  if (
+    error &&
+    typeof error === "object" &&
+    (error as { name?: unknown }).name === "TypeError"
+  ) {
     return "guest_type_error";
   }
   return "guest_execution_failed";
@@ -1891,6 +1895,8 @@ export async function executeSandbox(
     const errorMessage = err instanceof Error ? err.message : String(err);
     const errorStack = err instanceof Error ? err.stack : undefined;
     const errorData = structuredFailureData(err);
+    const failureKind = structuredFailureKind(err);
+    const failureCode = structuredFailureCode(err);
     // Typed application failures already carry bounded recovery data. Repeating
     // their transport stack in the primary agent surface obscures that recovery;
     // keep stacks for unstructured exceptions where they remain diagnostic.
@@ -1906,15 +1912,19 @@ export async function executeSandbox(
       failureKind:
         err instanceof SandboxInfrastructureError
           ? "infrastructure"
-          : signal?.aborted
-            ? "cancelled"
-            : (structuredFailureKind(err) ?? "user-code"),
+          : failureKind
+            ? failureKind
+            : signal?.aborted
+              ? "cancelled"
+              : "user-code",
       failureCode:
         err instanceof SandboxInfrastructureError
           ? err.code
-          : signal?.aborted
-            ? "eval_cancelled"
-            : guestFailureCode(err),
+          : failureCode
+            ? failureCode
+            : signal?.aborted
+              ? "eval_cancelled"
+              : guestFailureCode(err),
       ...(errorData === undefined ? {} : { errorData }),
     };
   } finally {
@@ -2055,11 +2065,15 @@ export async function compileComponent<
     };
   } catch (err) {
     const errorKind =
-      err && typeof err === "object" && typeof (err as { errorKind?: unknown }).errorKind === "string"
+      err &&
+      typeof err === "object" &&
+      typeof (err as { errorKind?: unknown }).errorKind === "string"
         ? (err as { errorKind: string }).errorKind
         : undefined;
     const code =
-      err && typeof err === "object" && typeof (err as { code?: unknown }).code === "string"
+      err &&
+      typeof err === "object" &&
+      typeof (err as { code?: unknown }).code === "string"
         ? (err as { code: string }).code
         : undefined;
     const errorData = structuredFailureData(err);

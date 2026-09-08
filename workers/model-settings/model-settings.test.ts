@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createTestDO } from "@workspace/runtime/worker/test-utils";
+import {
+  createTestDO,
+  createTestDirectAuthority,
+} from "@workspace/runtime/worker/test-utils";
+import type { DirectAuthorityAttestation } from "@vibestudio/rpc/internal";
 import type { WorkspaceConfig } from "@workspace/runtime/worker";
 import {
   DEFAULT_AGENT_MODEL_REF,
@@ -193,7 +197,85 @@ class CodexModelSettingsDO extends TestModelSettingsDO {
   }
 }
 
+function websiteCaller(method: string) {
+  const subject = "website:site-1" as const;
+  const userId = "user:test" as const;
+  const binding = { subject, generation: 0, documentId: "document-1" };
+  const baseAuthorization = createTestDirectAuthority({ callerKind: "panel", method });
+  const authorization: DirectAuthorityAttestation = {
+    ...baseAuthorization,
+    context: {
+      ...baseAuthorization.context,
+      authorizingOrigin: { kind: "website", principal: subject } as const,
+      executingCode: null,
+      subjectBinding: binding,
+        website: {
+          subject,
+          userId,
+        workspaceId: "test",
+        origin: "https://example.com",
+        binding,
+        connected: true,
+      },
+      initiatorChain: [userId, subject],
+      ownerChain: [userId],
+    },
+    grants: [
+      {
+        subject,
+        capability: `rpc:${method}`,
+        resource: { kind: "exact", key: "do:test:TestDO:test-key" },
+        effect: "allow",
+        issuedBy: userId,
+        createdAt: 0,
+        constraints: {
+          subjectGeneration: 0,
+          sourceWorkspaceId: "test",
+          lineageAtConsent: [],
+        },
+        provenance: "durable-test-host-attestation",
+      },
+    ],
+  };
+  return {
+    callerId: "website" as const,
+    callerKind: "panel" as const,
+    authorization,
+  };
+}
+
 describe("ModelSettingsDO", () => {
+  it("serves secret-free model projections to a website while keeping writes closed", async () => {
+    TestModelSettingsDO.config = { ...BASE_CONFIG };
+    const { callAs } = await createTestDO(TestModelSettingsDO);
+
+    const catalog = await callAs<ModelCatalog>(websiteCaller("listCatalog"), "listCatalog");
+    const settings = await callAs(websiteCaller("getSettings"), "getSettings");
+    const defaultModel = await callAs(
+      websiteCaller("getDefaultModel"),
+      "getDefaultModel",
+    );
+    const inspected = await callAs(
+      websiteCaller("inspectModels"),
+      "inspectModels",
+      ["openai:gpt-5"],
+    );
+
+    expect(catalog.models).toHaveLength(2);
+    expect(settings).toMatchObject({ catalog: { models: expect.any(Array) } });
+    expect(defaultModel).toMatchObject({ catalog: { models: expect.any(Array) } });
+    expect(inspected).toMatchObject({ models: [{ ref: "openai:gpt-5" }] });
+    expect(JSON.stringify({ catalog, settings, defaultModel, inspected })).not.toMatch(
+      /authorization|api[-_]?key|bearer\s|client[-_]?secret|access[-_]?token|refresh[-_]?token/iu,
+    );
+
+    await expect(
+      callAs(websiteCaller("setDefaultAgentConfig"), "setDefaultAgentConfig", {
+        model: "openai:gpt-5",
+      }),
+    ).rejects.toThrow(/receiver is closed to websites/);
+  });
+
   it("treats an absent local model as setup-required", () => {
     expect(
       localEntryToCatalogEntry(

@@ -24,11 +24,14 @@ development](../extensiondev/SKILL.md) for trusted Node services.
 
 | Task                                                           | Reference                                  |
 | -------------------------------------------------------------- | ------------------------------------------ |
+| Add a workspace from a folder, Git URL, or website link | [Workspace creation](../templates/references/workspace-creation.md) |
+| Publish a standalone workspace source | [Workspace authoring](../templates/references/template-authoring.md) |
 | Development loop                                               | [WORKFLOW.md](WORKFLOW.md)                 |
 | External dependencies, overrides, and patches                  | [DEPENDENCIES.md](DEPENDENCIES.md)         |
 | Build, inspect, polish a panel                                 | [PANEL_DEBUG_LOOP.md](PANEL_DEBUG_LOOP.md) |
 | Panel lifecycle, observation, failure diagnosis, host commands | [PANEL_API.md](PANEL_API.md)               |
 | Workers, DOs, service-backed data, agent workers               | [WORKERS.md](WORKERS.md)                   |
+| Build a workspace-enabled website                            | [WEBSITES.md](WEBSITES.md)                 |
 | Typed parent-child contracts                                   | [RPC.md](RPC.md)                           |
 | CDP/browser automation                                         | [BROWSER.md](BROWSER.md)                   |
 | Agent tool recipes                                             | [TOOLS.md](TOOLS.md)                       |

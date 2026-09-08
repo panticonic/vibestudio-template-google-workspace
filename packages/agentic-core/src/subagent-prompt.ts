@@ -40,7 +40,7 @@ export type SubagentCompletionMode = "tool" | "supervised-process";
  * child sees — instead of relying only on a later runtime reminder.
  */
 export function subagentFirstTaskPrompt(
-  subagent: Pick<SubagentIdentity, "task" | "mode">
+  subagent: Pick<SubagentIdentity, "task" | "mode">,
 ): string {
   if (subagent.mode !== "fork") return subagent.task;
   return `## Fork Assignment Boundary
@@ -58,7 +58,7 @@ ${subagent.task}
 
 export function subagentRuntimePrompt(
   subagent: SubagentIdentity,
-  options: { completionMode?: SubagentCompletionMode } = {}
+  options: { completionMode?: SubagentCompletionMode } = {},
 ): string {
   const forkPrefix =
     subagent.mode === "fork"
@@ -77,17 +77,16 @@ Assume the parent agent owns the main line of work. Your job is to focus narrowl
 - Finish with one concise final report. The launcher consumes the CLI's typed terminal result and settles the parent from it.
 - Use a successful final result only when the assigned task is complete enough for the parent to act on.
 - When blocked or unable to complete, clearly say so in the final report and include what you tried, the blocking condition, and whether partial work exists.
-- Do not print or imitate tool-call syntax. A normal-looking \`complete({...})\` string is only text; the supervised terminal result is the completion signal.`
+- Do not print or imitate tool-call syntax. Return the report through the launcher's ordinary typed result.`
       : `Completion:
-- Finish exactly once by calling \`complete({ report, outcome })\`.
-- Use \`outcome: "success"\` only when the assigned task is complete enough for the parent to act on.
-- Use \`outcome: "failed"\` when blocked or unable to complete; include what you tried, the blocking condition, and whether partial work exists.
-- Idle, turn closure, and a normal final assistant message are not terminal. Only \`complete\` ends this subagent run.`;
+- Finish the current assignment with one concise final report. A normal final reply is retained in this task channel and delivered to the parent.
+- When blocked or unable to complete, say so in the report and include what you tried, the blocking condition, and whether partial work exists.
+- Completion ends the current assignment, not this collaborator. The parent may send a later follow-up into this same retained context.`;
 
   const durableCompletion =
     options.completionMode === "supervised-process"
       ? "finishing your final report"
-      : "calling `complete`";
+      : "finishing your final report";
 
   const assignment = `## Durable Assigned Task
 
@@ -113,7 +112,7 @@ Execution ownership:
 
 Progress:
 - Use \`notify\` sparingly for meaningful parent-visible milestones, blockers, or verification results. Omit \`to\` and it reaches your parent; the assigned task's stated reporting expectations govern over this default.
-- Ordinary messages and \`notify\` updates are progress only. They do not finish the run.
+- Ordinary messages and \`notify\` updates are retained reports or progress. The parent may continue this same collaborator with a later follow-up.
 - Do not notify to acknowledge, thank, or restate what the parent already knows. If an exchange stops producing new information, stop messaging.
 
 ${completion}

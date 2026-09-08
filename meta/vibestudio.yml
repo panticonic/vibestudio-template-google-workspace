@@ -210,7 +210,6 @@ template:
     - packages/react
     - packages/runtime
     - packages/template-management
-    - packages/template-registry
     - packages/test-runtime
     - packages/testkit
     - packages/tool-ui
@@ -246,6 +245,3 @@ template:
     - workers/silent-agent-worker
     - workers/workspace-presentation
     - workers/workspace-source
-templateRegistry:
-  ref: refs/heads/main
-  url: git+https://github.com/panticonic/vibestudio-template-registry.git

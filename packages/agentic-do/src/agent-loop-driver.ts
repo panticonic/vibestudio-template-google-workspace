@@ -1476,11 +1476,27 @@ export class AgentLoopDriver {
     const encoded = await Promise.all(
       items.map(async (item) => {
         const selfRef = this.selfRef(loop.channelId);
+        const payload =
+          item.payloadKind === "message.completed" &&
+          (item.payload as { role?: unknown; tier?: unknown }).role ===
+            "assistant" &&
+          (item.payload as { tier?: unknown }).tier === "primary" &&
+          loop.state.config.finalResponseParticipantId
+            ? {
+                ...(item.payload as Record<string, unknown>),
+                to: [
+                  {
+                    kind: "participant",
+                    participantId: loop.state.config.finalResponseParticipantId,
+                  },
+                ],
+              }
+            : item.payload;
         const { event } = await encodeAgenticEventStoredValues(
           {
             kind: item.payloadKind,
             actor: selfRef,
-            payload: item.payload,
+            payload,
             createdAt: new Date(this.deps.now()).toISOString(),
           } as unknown as AgenticEvent,
           {

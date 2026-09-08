@@ -15,71 +15,117 @@ describe("executeSandbox", () => {
   let originalAsyncTracking: unknown;
 
   beforeEach(() => {
-    originalModuleMap = (globalThis as Record<string, unknown>)["__vibestudioModuleMap__"];
-    originalRequire = (globalThis as Record<string, unknown>)["__vibestudioRequire__"];
-    originalAsyncRequire = (globalThis as Record<string, unknown>)["__vibestudioRequireAsync__"];
-    originalPreload = (globalThis as Record<string, unknown>)["__vibestudioPreloadModules__"];
-    originalModuleLoaders = (globalThis as Record<string, unknown>)["__vibestudioModuleLoaders__"];
+    originalModuleMap = (globalThis as Record<string, unknown>)[
+      "__vibestudioModuleMap__"
+    ];
+    originalRequire = (globalThis as Record<string, unknown>)[
+      "__vibestudioRequire__"
+    ];
+    originalAsyncRequire = (globalThis as Record<string, unknown>)[
+      "__vibestudioRequireAsync__"
+    ];
+    originalPreload = (globalThis as Record<string, unknown>)[
+      "__vibestudioPreloadModules__"
+    ];
+    originalModuleLoaders = (globalThis as Record<string, unknown>)[
+      "__vibestudioModuleLoaders__"
+    ];
     originalNativeImportSpecifiers = (globalThis as Record<string, unknown>)[
       "__vibestudioNativeImportSpecifiers__"
     ];
-    originalLoadImport = (globalThis as Record<string, unknown>)["__vibestudioLoadImport__"];
-    originalAsyncTracking = (globalThis as Record<string, unknown>)["__vibestudioAsyncTracking__"];
+    originalLoadImport = (globalThis as Record<string, unknown>)[
+      "__vibestudioLoadImport__"
+    ];
+    originalAsyncTracking = (globalThis as Record<string, unknown>)[
+      "__vibestudioAsyncTracking__"
+    ];
 
     const moduleMap: Record<string, unknown> = {};
-    (globalThis as Record<string, unknown>)["__vibestudioModuleMap__"] = moduleMap;
-    (globalThis as Record<string, unknown>)["__vibestudioRequire__"] = (id: string) => {
+    (globalThis as Record<string, unknown>)["__vibestudioModuleMap__"] =
+      moduleMap;
+    (globalThis as Record<string, unknown>)["__vibestudioRequire__"] = (
+      id: string,
+    ) => {
       if (id in moduleMap) return moduleMap[id];
       throw new Error(`Module not found: ${id}`);
     };
-    delete (globalThis as Record<string, unknown>)["__vibestudioRequireAsync__"];
+    delete (globalThis as Record<string, unknown>)[
+      "__vibestudioRequireAsync__"
+    ];
     (globalThis as Record<string, unknown>)["__vibestudioModuleLoaders__"] = {};
-    (globalThis as Record<string, unknown>)["__vibestudioNativeImportSpecifiers__"] = new Set();
-    (globalThis as Record<string, unknown>)["__vibestudioPreloadModules__"] = async (
-      ids: string[]
-    ) =>
-      ids.map((id) => {
-        if (id in moduleMap) return moduleMap[id];
-        throw new Error(`Module not found: ${id}`);
-      });
+    (globalThis as Record<string, unknown>)[
+      "__vibestudioNativeImportSpecifiers__"
+    ] = new Set();
+    (globalThis as Record<string, unknown>)["__vibestudioPreloadModules__"] =
+      async (ids: string[]) =>
+        ids.map((id) => {
+          if (id in moduleMap) return moduleMap[id];
+          throw new Error(`Module not found: ${id}`);
+        });
   });
 
   afterEach(() => {
     if (originalModuleMap === undefined)
       delete (globalThis as Record<string, unknown>)["__vibestudioModuleMap__"];
-    else (globalThis as Record<string, unknown>)["__vibestudioModuleMap__"] = originalModuleMap;
+    else
+      (globalThis as Record<string, unknown>)["__vibestudioModuleMap__"] =
+        originalModuleMap;
     if (originalRequire === undefined)
       delete (globalThis as Record<string, unknown>)["__vibestudioRequire__"];
-    else (globalThis as Record<string, unknown>)["__vibestudioRequire__"] = originalRequire;
-    if (originalAsyncRequire === undefined)
-      delete (globalThis as Record<string, unknown>)["__vibestudioRequireAsync__"];
     else
-      (globalThis as Record<string, unknown>)["__vibestudioRequireAsync__"] = originalAsyncRequire;
+      (globalThis as Record<string, unknown>)["__vibestudioRequire__"] =
+        originalRequire;
+    if (originalAsyncRequire === undefined)
+      delete (globalThis as Record<string, unknown>)[
+        "__vibestudioRequireAsync__"
+      ];
+    else
+      (globalThis as Record<string, unknown>)["__vibestudioRequireAsync__"] =
+        originalAsyncRequire;
     if (originalPreload === undefined)
-      delete (globalThis as Record<string, unknown>)["__vibestudioPreloadModules__"];
-    else (globalThis as Record<string, unknown>)["__vibestudioPreloadModules__"] = originalPreload;
+      delete (globalThis as Record<string, unknown>)[
+        "__vibestudioPreloadModules__"
+      ];
+    else
+      (globalThis as Record<string, unknown>)["__vibestudioPreloadModules__"] =
+        originalPreload;
     if (originalModuleLoaders === undefined)
-      delete (globalThis as Record<string, unknown>)["__vibestudioModuleLoaders__"];
+      delete (globalThis as Record<string, unknown>)[
+        "__vibestudioModuleLoaders__"
+      ];
     else
       (globalThis as Record<string, unknown>)["__vibestudioModuleLoaders__"] =
         originalModuleLoaders;
     if (originalNativeImportSpecifiers === undefined)
-      delete (globalThis as Record<string, unknown>)["__vibestudioNativeImportSpecifiers__"];
+      delete (globalThis as Record<string, unknown>)[
+        "__vibestudioNativeImportSpecifiers__"
+      ];
     else
-      (globalThis as Record<string, unknown>)["__vibestudioNativeImportSpecifiers__"] =
-        originalNativeImportSpecifiers;
+      (globalThis as Record<string, unknown>)[
+        "__vibestudioNativeImportSpecifiers__"
+      ] = originalNativeImportSpecifiers;
     if (originalLoadImport === undefined)
-      delete (globalThis as Record<string, unknown>)["__vibestudioLoadImport__"];
-    else (globalThis as Record<string, unknown>)["__vibestudioLoadImport__"] = originalLoadImport;
+      delete (globalThis as Record<string, unknown>)[
+        "__vibestudioLoadImport__"
+      ];
+    else
+      (globalThis as Record<string, unknown>)["__vibestudioLoadImport__"] =
+        originalLoadImport;
     if (originalAsyncTracking === undefined)
-      delete (globalThis as Record<string, unknown>)["__vibestudioAsyncTracking__"];
+      delete (globalThis as Record<string, unknown>)[
+        "__vibestudioAsyncTracking__"
+      ];
     else
       (globalThis as Record<string, unknown>)["__vibestudioAsyncTracking__"] =
         originalAsyncTracking;
   });
 
   it("settles a rejected top-level result without waiting on unrelated tracked work", async () => {
-    const context = { id: 1, promises: new Set<Promise<unknown>>(), pauseCount: 0 };
+    const context = {
+      id: 1,
+      promises: new Set<Promise<unknown>>(),
+      pauseCount: 0,
+    };
     const tracking: AsyncTrackingAPI = {
       start: () => context,
       enter: () => undefined,
@@ -92,13 +138,20 @@ describe("executeSandbox", () => {
       pending: () => 0,
       activeContexts: () => [context.id],
     };
-    (globalThis as Record<string, unknown>)["__vibestudioAsyncTracking__"] = tracking;
+    (globalThis as Record<string, unknown>)["__vibestudioAsyncTracking__"] =
+      tracking;
 
     await expect(
-      executeSandbox('await Promise.resolve(); throw new Error("terminal eval failure");', {
-        syntax: "typescript",
-      })
-    ).resolves.toMatchObject({ success: false, error: "terminal eval failure" });
+      executeSandbox(
+        'await Promise.resolve(); throw new Error("terminal eval failure");',
+        {
+          syntax: "typescript",
+        },
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: "terminal eval failure",
+    });
   });
 
   it("settles a pending async eval when its signal is aborted", async () => {
@@ -113,6 +166,30 @@ describe("executeSandbox", () => {
     await expect(pending).resolves.toMatchObject({
       success: false,
       error: "User interrupted execution",
+    });
+  });
+
+  it("retains a structured guest callback failure when it aborts a pending eval", async () => {
+    const controller = new AbortController();
+    const pending = executeSandbox("return await new Promise(() => {});", {
+      syntax: "typescript",
+      signal: controller.signal,
+    });
+    const error = Object.assign(new Error("callback failed"), {
+      errorData: {
+        code: "guest_callback_error",
+        failureKind: "user-code",
+        message: "callback failed",
+      },
+    });
+
+    controller.abort(error);
+
+    await expect(pending).resolves.toMatchObject({
+      success: false,
+      error: "callback failed",
+      failureKind: "user-code",
+      failureCode: "guest_callback_error",
     });
   });
 
@@ -161,7 +238,9 @@ return undefined;`,
     // Confinement requires a realm that cannot compile code; node:vm stands in
     // for the codegen-free evaluator isolate.
     const guestContext = vm.createContext({});
-    tameRealmCodegen(vm.runInContext("globalThis", guestContext) as Record<string, unknown>);
+    tameRealmCodegen(
+      vm.runInContext("globalThis", guestContext) as Record<string, unknown>,
+    );
     const result = await executeSandbox(
       `return { processType: typeof process, fetchType: typeof fetch, answer: seed + 1 };`,
       {
@@ -169,24 +248,34 @@ return undefined;`,
         bindings: { seed: 41 },
         confinement: "private-global",
         compileFunction: (argNames, body) =>
-          vm.runInContext(`(function (${argNames.join(", ")}) {\n${body}\n})`, guestContext) as (
-            ...args: unknown[]
-          ) => unknown,
-      }
+          vm.runInContext(
+            `(function (${argNames.join(", ")}) {\n${body}\n})`,
+            guestContext,
+          ) as (...args: unknown[]) => unknown,
+      },
     );
 
     expect(result).toMatchObject({
       success: true,
-      returnValue: { processType: "undefined", fetchType: "undefined", answer: 42 },
+      returnValue: {
+        processType: "undefined",
+        fetchType: "undefined",
+        answer: 42,
+      },
     });
   });
 
   it("confines and freezes relative source module namespaces before publishing their exports", async () => {
     const guestContext = vm.createContext({ evaluatorSecret: "LEAKED" });
-    tameRealmCodegen(vm.runInContext("globalThis", guestContext) as Record<string, unknown>);
+    tameRealmCodegen(
+      vm.runInContext("globalThis", guestContext) as Record<string, unknown>,
+    );
     const moduleMap: Record<string, unknown> = {};
     const freezeModuleNamespace = vi.fn(<T>(value: T): T => {
-      if ((typeof value === "object" && value !== null) || typeof value === "function") {
+      if (
+        (typeof value === "object" && value !== null) ||
+        typeof value === "function"
+      ) {
         Object.freeze(value);
       }
       return value;
@@ -207,11 +296,12 @@ return undefined;`,
         },
         confinement: "private-global",
         compileFunction: (argNames, body) =>
-          vm.runInContext(`(function (${argNames.join(", ")}) {\n${body}\n})`, guestContext) as (
-            ...args: unknown[]
-          ) => unknown,
+          vm.runInContext(
+            `(function (${argNames.join(", ")}) {\n${body}\n})`,
+            guestContext,
+          ) as (...args: unknown[]) => unknown,
         freezeModuleNamespace,
-      }
+      },
     );
 
     expect(result).toMatchObject({ success: true, returnValue: "undefined" });
@@ -239,7 +329,7 @@ return undefined;`,
       {
         syntax: "typescript",
         deadline: { atMs: Date.now(), timeoutMs },
-      }
+      },
     );
 
     expect(result).toMatchObject({
@@ -251,7 +341,7 @@ return undefined;`,
   it("does not instrument synchronous code when no deadline is supplied", async () => {
     const result = await executeSandbox(
       "let n = 0; while (n < 3) n += 1; const f = (x) => x + 1; return f(n);",
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({ success: true, returnValue: 4 });
@@ -259,11 +349,14 @@ return undefined;`,
 
   it("deactivates checkpoints captured by functions that outlive a bounded run", async () => {
     const holder: { fn?: () => number } = {};
-    const result = await executeSandbox("holder.fn = () => 42; return 'stored';", {
-      syntax: "typescript",
-      bindings: { holder },
-      deadline: { atMs: Date.now() + 50, timeoutMs: 50 },
-    });
+    const result = await executeSandbox(
+      "holder.fn = () => 42; return 'stored';",
+      {
+        syntax: "typescript",
+        bindings: { holder },
+        deadline: { atMs: Date.now() + 50, timeoutMs: 50 },
+      },
+    );
     expect(result).toMatchObject({ success: true, returnValue: "stored" });
 
     await new Promise((resolve) => setTimeout(resolve, 55));
@@ -273,7 +366,7 @@ return undefined;`,
   it("awaits a trailing async IIFE as the eval result", async () => {
     const result = await executeSandbox(
       "(async () => { await Promise.resolve(); return 42; })();",
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({ success: true, returnValue: 42 });
@@ -282,7 +375,7 @@ return undefined;`,
   it("returns a trailing object literal like a notebook REPL", async () => {
     const result = await executeSandbox(
       "const path = 'probe.txt';\nconst actorId = 'agent:1';\n{ path, actorId, turnId: 'turn:1' }",
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
@@ -294,16 +387,19 @@ return undefined;`,
   it("returns any trailing expression like a notebook REPL", async () => {
     const result = await executeSandbox(
       "function factorial(n: number): number { return n <= 1 ? 1 : n * factorial(n - 1); }\nconst value = factorial(5);\nvalue;",
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({ success: true, returnValue: 120 });
   });
 
   it("does not replace an explicit return with an earlier expression", async () => {
-    const result = await executeSandbox("const value = 6 * 7;\nvalue;\nreturn 'explicit';", {
-      syntax: "typescript",
-    });
+    const result = await executeSandbox(
+      "const value = 6 * 7;\nvalue;\nreturn 'explicit';",
+      {
+        syntax: "typescript",
+      },
+    );
 
     expect(result).toMatchObject({ success: true, returnValue: "explicit" });
   });
@@ -311,7 +407,7 @@ return undefined;`,
   it("repairs transport-escaped whitespace outside literals", async () => {
     const result = await executeSandbox(
       String.raw`return { first: 1,\n second: 2, text: "keep,\\n literal" };`,
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
@@ -323,7 +419,7 @@ return undefined;`,
   it("repairs a missing call parenthesis before a line-ending semicolon", async () => {
     const result = await executeSandbox(
       "const list = [{repoPath: 'demo'}];\nconsole.log(JSON.stringify({count:list.length, repos:list.map(s=>s.repoPath)});\nreturn list.length;",
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({ success: true, returnValue: 1 });
@@ -340,27 +436,35 @@ return undefined;`,
          })
        }));
        return data;`,
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
       success: true,
-      returnValue: [{ title: "List", position: 0, cards: [{ title: "Card", position: 0 }] }],
+      returnValue: [
+        { title: "List", position: 0, cards: [{ title: "Card", position: 0 }] },
+      ],
     });
   });
 
   it("does not treat parentheses inside a regular-expression literal as unmatched calls", async () => {
-    const result = await executeSandbox('const value = /\\(/.test("("); return value;', {
-      syntax: "typescript",
-    });
+    const result = await executeSandbox(
+      'const value = /\\(/.test("("); return value;',
+      {
+        syntax: "typescript",
+      },
+    );
 
     expect(result).toMatchObject({ success: true, returnValue: true });
   });
 
   it("repairs a leaked tool-call JSON suffix after otherwise complete code", async () => {
-    const result = await executeSandbox('const value = 41;\nreturn value + 1;\n"}', {
-      syntax: "typescript",
-    });
+    const result = await executeSandbox(
+      'const value = 41;\nreturn value + 1;\n"}',
+      {
+        syntax: "typescript",
+      },
+    );
 
     expect(result).toMatchObject({ success: true, returnValue: 42 });
   });
@@ -388,7 +492,7 @@ return undefined;`,
         bindings: { files },
         moduleMap,
         require: (id) => moduleMap[id as keyof typeof moduleMap],
-      }
+      },
     );
 
     expect(result.success, result.error).toBe(true);
@@ -425,7 +529,7 @@ return fs.readFileSync("/tmp/link");`,
         syntax: "typescript",
         moduleMap,
         require: (id) => moduleMap[id as keyof typeof moduleMap],
-      }
+      },
     );
 
     expect(result.success, result.error).toBe(true);
@@ -447,7 +551,7 @@ return typeof write;`,
         syntax: "typescript",
         moduleMap,
         require: (id) => moduleMap[id as keyof typeof moduleMap],
-      }
+      },
     );
 
     expect(result.success, result.error).toBe(true);
@@ -473,7 +577,7 @@ return fs.readFileSync("/tmp/a");`,
         syntax: "javascript",
         moduleMap,
         require: (id) => moduleMap[id as keyof typeof moduleMap],
-      }
+      },
     );
 
     expect(result.success, result.error).toBe(true);
@@ -483,7 +587,7 @@ return fs.readFileSync("/tmp/a");`,
   it("does not alter semicolons in a valid for header", async () => {
     const result = await executeSandbox(
       "let total = 0; for (let i = 0; i < 3; i++) total += i; return total;",
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({ success: true, returnValue: 3 });
@@ -494,11 +598,13 @@ return fs.readFileSync("/tmp/a");`,
       'import { spawn } from "node:child_process"; return spawn;',
       {
         syntax: "typescript",
-      }
+      },
     );
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Node built-in module "node:child_process" is not available');
+    expect(result.error).toContain(
+      'Node built-in module "node:child_process" is not available',
+    );
     expect(result.error).toContain("@workspace/runtime");
     expect(result.error).not.toContain("npm:latest");
     expect(result).toMatchObject({
@@ -516,7 +622,7 @@ return fs.readFileSync("/tmp/a");`,
         loadImport: async () => {
           throw new Error("worker export uses an unsupported module feature");
         },
-      }
+      },
     );
 
     expect(result).toMatchObject({
@@ -543,7 +649,7 @@ return fs.readFileSync("/tmp/a");`,
             },
           });
         },
-      }
+      },
     );
 
     expect(result).toMatchObject({
@@ -559,20 +665,26 @@ return fs.readFileSync("/tmp/a");`,
   });
 
   it("keeps an unexpected managed-test package prompt caller-correctable", async () => {
-    const result = await executeSandbox('import "typescript"; return "unreachable";', {
-      syntax: "typescript",
-      imports: { typescript: "npm:latest" },
-      loadImport: async () => {
-        throw Object.assign(new Error("Unexpected authority prompt in system test"), {
-          errorKind: "application",
-          code: "EUNEXPECTEDTESTPROMPT",
-          errorData: {
-            code: "EUNEXPECTEDTESTPROMPT",
-            failureKind: "user-code",
-          },
-        });
+    const result = await executeSandbox(
+      'import "typescript"; return "unreachable";',
+      {
+        syntax: "typescript",
+        imports: { typescript: "npm:latest" },
+        loadImport: async () => {
+          throw Object.assign(
+            new Error("Unexpected authority prompt in system test"),
+            {
+              errorKind: "application",
+              code: "EUNEXPECTEDTESTPROMPT",
+              errorData: {
+                code: "EUNEXPECTEDTESTPROMPT",
+                failureKind: "user-code",
+              },
+            },
+          );
+        },
       },
-    });
+    );
 
     expect(result).toMatchObject({
       success: false,
@@ -587,19 +699,24 @@ return fs.readFileSync("/tmp/a");`,
       'import { answer } from "@workspace/example"; return answer;',
       {
         syntax: "typescript",
-        imports: { "@workspace/example": "workspace:packages/example/src/index.ts" },
-        loadImport: async () => {
-          throw Object.assign(new Error("Module is retained at another execution"), {
-            errorKind: "application",
-            code: "eval_module_execution_conflict",
-            errorData: {
-              code: "eval_module_execution_conflict",
-              moduleSpecifier: "@workspace/example",
-              failureKind: "user-code",
-            },
-          });
+        imports: {
+          "@workspace/example": "workspace:packages/example/src/index.ts",
         },
-      }
+        loadImport: async () => {
+          throw Object.assign(
+            new Error("Module is retained at another execution"),
+            {
+              errorKind: "application",
+              code: "eval_module_execution_conflict",
+              errorData: {
+                code: "eval_module_execution_conflict",
+                moduleSpecifier: "@workspace/example",
+                failureKind: "user-code",
+              },
+            },
+          );
+        },
+      },
     );
 
     expect(result).toMatchObject({
@@ -617,7 +734,10 @@ return fs.readFileSync("/tmp/a");`,
 
   it("loads a lazy panel-exposed module before workspace build fallback", async () => {
     const globals = globalThis as Record<string, unknown>;
-    const moduleMap = globals["__vibestudioModuleMap__"] as Record<string, unknown>;
+    const moduleMap = globals["__vibestudioModuleMap__"] as Record<
+      string,
+      unknown
+    >;
     const loaders = globals["__vibestudioModuleLoaders__"] as Record<
       string,
       () => Promise<unknown>
@@ -629,7 +749,8 @@ return fs.readFileSync("/tmp/a");`,
     };
     globals["__vibestudioRequireAsync__"] = async (id: string) => {
       const loaded = moduleMap[id] ?? (await loaders[id]?.());
-      if (loaded === undefined) throw new Error(`Module "${id}" has no generated loader`);
+      if (loaded === undefined)
+        throw new Error(`Module "${id}" has no generated loader`);
       moduleMap[id] = loaded;
       return loaded;
     };
@@ -641,20 +762,25 @@ return fs.readFileSync("/tmp/a");`,
         syntax: "typescript",
         imports: { "react/jsx-runtime": "latest" },
         loadImport,
-      }
+      },
     );
 
-    expect(result).toMatchObject({ success: true, returnValue: "host jsx runtime" });
+    expect(result).toMatchObject({
+      success: true,
+      returnValue: "host jsx runtime",
+    });
     expect(loadImport).not.toHaveBeenCalled();
   });
 
   it("tracks build-loaded refs independently in each module registry", async () => {
     const firstModuleMap: Record<string, unknown> = {};
     const secondModuleMap: Record<string, unknown> = {};
-    const loadImport = vi.fn(async (_specifier: string, ref: string | undefined) => ({
-      bundle: `module.exports = { label: ${JSON.stringify(ref ?? "latest")} };`,
-      format: "cjs" as const,
-    }));
+    const loadImport = vi.fn(
+      async (_specifier: string, ref: string | undefined) => ({
+        bundle: `module.exports = { label: ${JSON.stringify(ref ?? "latest")} };`,
+        format: "cjs" as const,
+      }),
+    );
     const runWithRef = (moduleMap: Record<string, unknown>, ref: string) =>
       executeSandbox('import { label } from "versioned-lib"; return label;', {
         syntax: "typescript",
@@ -683,7 +809,11 @@ return fs.readFileSync("/tmp/a");`,
       success: true,
       returnValue: "npm:2",
     });
-    expect(loadImport.mock.calls.map(([, ref]) => ref)).toEqual(["npm:1", "npm:2", "npm:2"]);
+    expect(loadImport.mock.calls.map(([, ref]) => ref)).toEqual([
+      "npm:1",
+      "npm:2",
+      "npm:2",
+    ]);
   });
 
   it("does not mask a lazy exposed-chunk failure with build fallback", async () => {
@@ -698,11 +828,14 @@ return fs.readFileSync("/tmp/a");`,
     globals["__vibestudioRequireAsync__"] = (id: string) => loaders[id]!();
     const loadImport = vi.fn();
 
-    const result = await executeSandbox('import "react/jsx-runtime"; return "unreachable";', {
-      syntax: "typescript",
-      imports: { "react/jsx-runtime": "latest" },
-      loadImport,
-    });
+    const result = await executeSandbox(
+      'import "react/jsx-runtime"; return "unreachable";',
+      {
+        syntax: "typescript",
+        imports: { "react/jsx-runtime": "latest" },
+        loadImport,
+      },
+    );
 
     expect(result).toMatchObject({
       success: false,
@@ -714,19 +847,23 @@ return fs.readFileSync("/tmp/a");`,
   });
 
   it("classifies an acquired package's initialization error as correctable user code", async () => {
-    const result = await executeSandbox('import "@workspace/panel-only"; return "unreachable";', {
-      syntax: "typescript",
-      imports: { "@workspace/panel-only": "workspace:*" },
-      loadImport: async () => ({
-        format: "cjs",
-        bundle:
-          'throw new Error("This package requires a panel runtime global that is unavailable here");',
-      }),
-    });
+    const result = await executeSandbox(
+      'import "@workspace/panel-only"; return "unreachable";',
+      {
+        syntax: "typescript",
+        imports: { "@workspace/panel-only": "workspace:*" },
+        loadImport: async () => ({
+          format: "cjs",
+          bundle:
+            'throw new Error("This package requires a panel runtime global that is unavailable here");',
+        }),
+      },
+    );
 
     expect(result).toMatchObject({
       success: false,
-      error: "This package requires a panel runtime global that is unavailable here",
+      error:
+        "This package requires a panel runtime global that is unavailable here",
       failureKind: "user-code",
       failureCode: "guest_execution_failed",
     });
@@ -739,16 +876,19 @@ return fs.readFileSync("/tmp/a");`,
         syntax: "typescript",
         imports: { "@workspace/runtime/panel": "workspace:*" },
         loadImport: async () => {
-          throw Object.assign(new Error("No export ./panel found for @workspace/runtime"), {
-            errorData: {
-              code: "package_export_not_found",
-              packageName: "@workspace/runtime",
-              subpath: "./panel",
-              conditions: ["worker", "workerd", "default"],
+          throw Object.assign(
+            new Error("No export ./panel found for @workspace/runtime"),
+            {
+              errorData: {
+                code: "package_export_not_found",
+                packageName: "@workspace/runtime",
+                subpath: "./panel",
+                conditions: ["worker", "workerd", "default"],
+              },
             },
-          });
+          );
         },
-      }
+      },
     );
 
     expect(result).toMatchObject({
@@ -773,9 +913,12 @@ return fs.readFileSync("/tmp/a");`,
   });
 
   it("classifies guest TypeErrors as correctable code failures", async () => {
-    const result = await executeSandbox("const cdp: any = {}; return cdp.evaluate();", {
-      syntax: "typescript",
-    });
+    const result = await executeSandbox(
+      "const cdp: any = {}; return cdp.evaluate();",
+      {
+        syntax: "typescript",
+      },
+    );
 
     expect(result).toMatchObject({
       success: false,
@@ -797,7 +940,7 @@ return fs.readFileSync("/tmp/a");`,
          safeActions: ["add-migration", "reset-storage"]
        };
        throw error;`,
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
@@ -822,7 +965,7 @@ return fs.readFileSync("/tmp/a");`,
          published: false
        };
        throw error;`,
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
@@ -857,7 +1000,7 @@ return fs.readFileSync("/tmp/a");`,
          recovery: "reacquire-page"
        };
        throw error;`,
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
@@ -881,7 +1024,7 @@ return fs.readFileSync("/tmp/a");`,
          vcsError: { code: "BuildGateFailed", errorData: { diagnostics: [] } }
        };
        throw error;`,
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
@@ -907,7 +1050,7 @@ return fs.readFileSync("/tmp/a");`,
          }
        };
        throw error;`,
-      { syntax: "typescript" }
+      { syntax: "typescript" },
     );
 
     expect(result).toMatchObject({
@@ -926,31 +1069,44 @@ return fs.readFileSync("/tmp/a");`,
           expect(specifier).toBe("lazy-package");
           expect(ref).toBeUndefined();
           expect(externals).toEqual([]);
-          return { bundle: "module.exports = { answer: 42 };", format: "cjs" as const };
+          return {
+            bundle: "module.exports = { answer: 42 };",
+            format: "cjs" as const,
+          };
         },
-      }
+      },
     );
 
     expect(result.success).toBe(true);
     expect(result.returnValue).toBe(42);
-    expect((globalThis as Record<string, unknown>)["__vibestudioLoadImport__"]).toBeUndefined();
+    expect(
+      (globalThis as Record<string, unknown>)["__vibestudioLoadImport__"],
+    ).toBeUndefined();
   });
 
   it("auto-loads an unscoped manifest-declared workspace unit", async () => {
-    const resolveWorkspaceImport = vi.fn(async (specifier: string) => specifier === "local-worker");
+    const resolveWorkspaceImport = vi.fn(
+      async (specifier: string) => specifier === "local-worker",
+    );
     const loadImport = Object.assign(
       vi.fn(async (specifier: string, ref: string | undefined) => {
         expect(specifier).toBe("local-worker");
         expect(ref).toBeUndefined();
-        return { bundle: "module.exports = { answer: 42 };", format: "cjs" as const };
+        return {
+          bundle: "module.exports = { answer: 42 };",
+          format: "cjs" as const,
+        };
       }),
-      { resolveWorkspaceImport }
+      { resolveWorkspaceImport },
     );
 
-    const result = await executeSandbox('import { answer } from "local-worker"; return answer;', {
-      syntax: "typescript",
-      loadImport,
-    });
+    const result = await executeSandbox(
+      'import { answer } from "local-worker"; return answer;',
+      {
+        syntax: "typescript",
+        loadImport,
+      },
+    );
 
     expect(result).toMatchObject({ success: true, returnValue: 42 });
     expect(resolveWorkspaceImport).toHaveBeenCalledWith("local-worker");
@@ -961,10 +1117,13 @@ return fs.readFileSync("/tmp/a");`,
     const resolveWorkspaceImport = vi.fn(async () => false);
     const loadImport = Object.assign(vi.fn(), { resolveWorkspaceImport });
 
-    const result = await executeSandbox('import pad from "left-pad"; return pad;', {
-      syntax: "typescript",
-      loadImport,
-    });
+    const result = await executeSandbox(
+      'import pad from "left-pad"; return pad;',
+      {
+        syntax: "typescript",
+        loadImport,
+      },
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Module "left-pad" not available');
@@ -989,11 +1148,13 @@ return fs.readFileSync("/tmp/a");`,
         moduleMap,
         loadImport,
         require: (id) => moduleMap[id as keyof typeof moduleMap],
-      }
+      },
     );
 
     expect(result).toMatchObject({ success: true, returnValue: 42 });
-    expect(moduleMap["@workspace-runtime" as keyof typeof moduleMap]).toBe(canonical);
+    expect(moduleMap["@workspace-runtime" as keyof typeof moduleMap]).toBe(
+      canonical,
+    );
     expect(loadImport).not.toHaveBeenCalled();
   });
 });

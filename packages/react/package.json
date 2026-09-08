@@ -11,6 +11,7 @@
     "./templates": "./src/templates.tsx"
   },
   "dependencies": {
+    "@vibestudio/credential-client": "workspace:*",
     "@vibestudio/types": "workspace:*",
     "@vibestudio/service-schemas": "workspace:*",
     "@vibestudio/shared": "workspace:*",

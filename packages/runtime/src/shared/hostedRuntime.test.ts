@@ -27,6 +27,7 @@ const WORKSPACE_RUNTIME_KEYS: Array<keyof WorkspaceRuntime> = [
   "gad",
   "blobstore",
   "workspace",
+  "workspaces",
   "credentials",
   "browserData",
   "git",
@@ -70,6 +71,10 @@ function recordingHost() {
           workingCounts: { applications: 0, workUnits: 0, changes: 0 },
           integrating: [],
         };
+      }
+      if (method === "hubControl.createWorkspace" || method === "hubControl.workspaceCreationReceipt") {
+        return { operationId: (args[0] as { operationId: string }).operationId,
+          state: "registered", workspaceId: "ws_created", name: "Example" };
       }
       if (method === "extensions.invokeProvider") return [];
       return undefined;
@@ -180,9 +185,11 @@ describe("createHostedRuntime", () => {
     const { host, calls } = recordingHost();
     const core = createHostedRuntime(host);
 
-    expect(new Set(Object.keys(core.blobstore))).toEqual(new Set(BLOBSTORE_MEMBERS));
     expect(new Set(Object.keys(core.blobstore))).toEqual(
-      new Set(portableExports["blobstore"]?.members ?? [])
+      new Set(BLOBSTORE_MEMBERS),
+    );
+    expect(new Set(Object.keys(core.blobstore))).toEqual(
+      new Set(portableExports["blobstore"]?.members ?? []),
     );
 
     const backing = new Uint8Array([9, 0, 255, 8]);
@@ -210,7 +217,7 @@ describe("createHostedRuntime", () => {
 
     const digest = "a".repeat(64);
     await expect(core.blobstore.getBytes(digest)).resolves.toEqual(
-      new Uint8Array([0, 255, 128, 16, 42, 99])
+      new Uint8Array([0, 255, 128, 16, 42, 99]),
     );
     await expect(core.blobstore.getBytes("b".repeat(64))).resolves.toBeNull();
 
@@ -229,9 +236,11 @@ describe("createHostedRuntime", () => {
     ) => Promise<unknown>;
 
     await expect(
-      untypedPutBytes(new Uint8Array([1]), { contentType: "image/png" })
+      untypedPutBytes(new Uint8Array([1]), { contentType: "image/png" }),
     ).rejects.toThrow(/accepts exactly one.*MIME metadata is not stored/);
-    expect(calls).not.toContainEqual(expect.objectContaining({ method: "blobstore.putBase64" }));
+    expect(calls).not.toContainEqual(
+      expect.objectContaining({ method: "blobstore.putBase64" }),
+    );
   });
 
   it("vcs.status dispatches the canonical semantic request through host.rpc", async () => {
@@ -285,7 +294,7 @@ describe("createHostedRuntime ⟷ portable surface parity", () => {
         // analogue of the old `services.blobstore === undefined` gap).
         expect(
           liveKeys.has(member),
-          `${name}.${member} is declared in runtimeSurface.portable.ts but not bound on the live client`
+          `${name}.${member} is declared in runtimeSurface.portable.ts but not bound on the live client`,
         ).toBe(true);
       }
     }
@@ -298,6 +307,7 @@ describe("createHostedRuntime ⟷ portable surface parity", () => {
     // curate a documentation subset of a larger live surface). Exact equality here
     // catches a member added to/removed from the client without a manifest update.
     const exactNamespaces = [
+      "workspaces",
       "workers",
       "credentials",
       "browserData",
@@ -319,6 +329,25 @@ describe("createHostedRuntime ⟷ portable surface parity", () => {
  * createServicesProxy — rich runtime clients override by identity; all
  * non-colliding service names use a dynamic callMain proxy. No hand-curated list.
  */
+it("routes workspace creation and receipt recovery through the same portable host client", async () => {
+  const { host, calls } = recordingHost();
+  const runtime = createHostedRuntime(host);
+  const input = {
+    operationId: "retained-operation-0001",
+    workspace: "Example",
+  };
+  await runtime.workspaces.create(input);
+  await runtime.workspaces.receipt({ operationId: input.operationId });
+  expect(calls).toEqual([
+    { target: "main", method: "hubControl.createWorkspace", args: [input] },
+    {
+      target: "main",
+      method: "hubControl.workspaceCreationReceipt",
+      args: [{ operationId: input.operationId }],
+    },
+  ]);
+});
+
 describe("createServicesProxy", () => {
   it("returns the SAME rich client object for a name present on the runtime (ergonomic override)", () => {
     const { host } = recordingHost();
@@ -350,7 +379,10 @@ describe("createServicesProxy", () => {
 
   it("caches fallback clients so repeated access is stable (===)", () => {
     const { host } = recordingHost();
-    const services = createServicesProxy(createHostedRuntime(host)) as Record<string, unknown>;
+    const services = createServicesProxy(createHostedRuntime(host)) as Record<
+      string,
+      unknown
+    >;
     expect(services["someUnknownService"]).toBe(services["someUnknownService"]);
   });
 });
@@ -375,7 +407,9 @@ describe("createAttachedHostsApi", () => {
       },
     });
     const child = await hosts.attach("attached-one");
-    await expect(child.services["eval"]!["get"]!({ runId: "eval-one" })).resolves.toEqual({
+    await expect(
+      child.services["eval"]!["get"]!({ runId: "eval-one" }),
+    ).resolves.toEqual({
       status: "running",
     });
     expect(calls).toEqual([

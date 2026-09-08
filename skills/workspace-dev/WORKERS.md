@@ -43,6 +43,7 @@ Generated from `runtimeSurface.worker.ts`. Use `await help()` at runtime for the
 | `gatewayFetch` | value |  | Gateway-origin fetch helper. It accepts relative paths and absolute URLs on the configured gateway origin, then authenticates that request; cross-origin targets are rejected. Use credentials.fetch for external egress. |
 | `openExternal` | callable |  | Call `await openExternal(url, options?)` from `@workspace/runtime` in server-side eval, panel/client eval, worker, or Durable Object code to open the system browser. The call itself owns the approval prompt and resumes after the user decides. |
 | `workers` | namespace | `listSources`, `create`, `createDurableObject`, `list`, `destroy`, `resetStorage`, `listStorageBackups`, `restoreStorageBackup`, `listServices`, `resolveService`, `resolveDurableObject`, `durableObjectService` | Worker discovery, lifecycle, and manifest-declared service resolution. Use create/list/destroy for regular worker instances; listSources() returns every launchable source with its real manifest entry point and Durable Object classes. |
+| `workspaces` | namespace | `create`, `receipt` | Create workspaces from exact inspected template pins and reconcile durable receipts. Available to panels, workers, eval and connected websites under ordinary caller authorization. Creation returns no routing credentials or authority over the new workspace. |
 | `credentials` | namespace | `store`, `connect`, `configureClient`, `requestCredentialInput`, `getClientConfigStatus`, `deleteClientConfig`, `listStoredCredentials`, `summarizeStoredCredentials`, `inspectStoredCredentials`, `revokeCredential`, `resolveCredential`, `fetch`, `hookForUrl`, `gitHttp`, `forAudience` | Typed credential lifecycle and credentialed network access. Use store(input) to persist a URL-bound credential, fetch(url, init?, { credentialId? }?) for credentialed HTTP and a standard Response, hookForUrl(url, { credentialId? }?) for a bound fetch function, gitHttp({ credentialId?, gitIntent? }) for smart-HTTP, and forAudience(descriptor) for a credential-bound handle. The underlying RPC transport is internal. |
 | `browserData` | namespace | `getBrowserEnvironment`, `listImportHosts`, `listImportAcquisitionOptions`, `beginImportAcquisition`, `releaseImportSource`, `listImportSources`, `previewImport`, `previewSensitiveImport`, `startImport`, `startSensitiveImport`, `observeSensitiveImport`, `cancelSensitiveImport`, `openBrowserPrivacyManager`, `cancelImport`, `getImportJob`, `listImportJobs`, `listOpenTabs`, `openTabsAsPanels`, `getSitePreferences`, `setSiteZoom`, `getBookmarks`, `addBookmark`, `updateBookmark`, `deleteBookmark`, `moveBookmark`, `searchBookmarks`, `getHistory`, `deleteHistoryEntry`, `deleteHistoryRange`, `clearAllHistory`, `searchHistory`, `searchHistoryForAutocomplete`, `recordHistoryVisit`, `updateHistoryTitle`, `getSearchEngines`, `setDefaultEngine`, `listDownloads`, `listDownloadRecords`, `upsertDownloadRecord`, `pauseDownload`, `resumeDownload`, `cancelDownload`, `openDownload`, `revealDownload`, `putPageFavicon`, `getPageFavicon`, `exportBookmarks` | Typed access to the manifest-declared browser-data provider: detection, import, secret-free summaries, approved sensitive reads, mutation, and export. |
 | `git` | namespace | `setSharedRemote`, `removeSharedRemote`, `setUpstream`, `removeUpstream`, `detachUpstream`, `setAutoPush`, `upstreamStatus`, `pushUpstream`, `pullUpstream`, `publishRepo`, `commitMapping`, `importProject` | Typed external Git operations routed through the workspace's configured gitInterop provider. Import and pull create unpublished semantic candidates; only ordinary VCS integration and explicit publication advance protected main. Declarations carry logical credential names resolved by the host, while credential-free remotes are anonymous-first. Pull dry-runs use isolated temporary state and do not mutate managed Git, semantic state, or the remote. |
@@ -52,6 +53,7 @@ Generated from `runtimeSurface.worker.ts`. Use `await help()` at runtime for the
 | `blobstore` | namespace | `has`, `stat`, `putText`, `getText`, `getRange`, `getRangeBytes`, `grep`, `putBase64`, `putRetained`, `retain`, `releaseRetention`, `getBase64`, `putTree`, `getTree`, `listTree`, `readFileAtTree`, `diffTrees`, `materializeTree`, `delete`, `list`, `putBytes`, `getBytes`, `readText` | Per-workspace content-addressable blob store: putText/putBase64 store, getText/readText/getRange/getRangeBytes/getBase64 fetch, grep searches; returns a sha256 digest. readText is a portable alias of getText and both return string \| null. Runtime-only putBytes(Uint8Array \| ArrayBuffer) and getBytes(digest) losslessly bridge the wire's base64 representation; MIME metadata is not stored. Persist large artifacts/screenshots and return the digest. Immutable file trees: putTree/getTree store and read tree objects, listTree/readFileAtTree walk a tree hash, diffTrees compares two trees. |
 | `webhooks` | namespace | `createSubscription`, `listSubscriptions`, `revokeSubscription`, `rotateSecret` | Ergonomic owner-scoped webhook lifecycle, identical in panels, workers, DOs, and agent eval: createSubscription(request), listSubscriptions(), rotateSecret(subscriptionId, secret?), and revokeSubscription(subscriptionId). Each subscription has an explicit maxBodyBytes budget: relay defaults to its 1,500,000-byte transport ceiling, while direct defaults to the operator-configured host ceiling (16 MiB by default). Delivery events currently include rawBodyBase64, so the host ceiling also bounds that in-memory expansion. Agent eval delegates ownership and target-source checks to its host-verified owning runtime. Secrets are redacted from listings. |
 | `extensions` | namespace | `use`, `invoke`, `invokeProvider`, `on` |  |
+| `templates` | namespace | `inspect`, `inspectAuthoring`, `authoringParts`, `publishAuthoring` | Exact source inspection and publication through the admitted template receiver. |
 | `notifications` | namespace | `show`, `dismiss` |  |
 | `services` | value |  | Portable dynamic service namespace. Rich runtime clients are available by name; other services dispatch through the caller-scoped main service boundary. The same client is available in panels, workers, Durable Objects, and eval. |
 | `hosts` | value |  | Portable owner-scoped attached-host access for development sessions. |
@@ -387,7 +389,7 @@ Canonical shape:
    together with its panel via `createProjects`).
 2. Store durable rows in the DO's SQLite database through `this.sql`.
 3. Expose narrow app methods with explicit
-   `@rpc({ principals, effect: { kind: "open" }, tier, sensitivity })`
+   `@rpc({ website, principals, effect: { kind: "open" }, tier, sensitivity })`
    contracts; the effect must be a literal object so the exact build can document it
    without executing provider code. Do not expose a
    raw SQL console to normal UI callers.
@@ -431,6 +433,7 @@ export class TodoStore extends DurableObjectBase {
   }
 
   @rpc({
+    website: { kind: "closed", reason: "Todo data is private to the installed app." },
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -457,6 +460,7 @@ export class TodoStore extends DurableObjectBase {
   }
 
   @rpc({
+    website: { kind: "closed", reason: "Todo data is private to the installed app." },
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -633,12 +637,16 @@ A method with no `@rpc` is private to the DO and cannot be invoked over the
 relay; forgetting `@rpc` fails loud ("not exposed"). Mark every method a caller
 should reach.
 
-### Layer 2 — `@rpc({ principals, effect, tier, sensitivity })` receiver policy
+### Layer 2 — `@rpc({ website, principals, effect, tier, sensitivity })` receiver policy
 
 The RPC relay is open between authenticated participants, so the recipient must
 gate. Every relay-reachable workspace method declares the authenticated principal
 families it accepts (`"host" | "user" | "code"`), its effect, reviewed tier, and
-sensitivity. Missing policy is default-deny. An unprotected workspace service
+sensitivity. Each receiver also makes the mandatory independent website choice:
+`eligible` with a rationale or `closed` with a concrete reason. Eligibility
+does not grant authority; connected websites must still satisfy the actual
+resource and disclosure contract. See [website authority](../capabilities/references/website-authority.md).
+Missing policy is default-deny. An unprotected workspace service
 method uses literal `effect: { kind: "open" }`; the live service declaration
 adds its independent target requirement. A provider-owned protected method uses
 a literal `userland-capability` effect matching `authority.provides`. Keep the
@@ -653,10 +661,10 @@ export class MyStoreDO extends DurableObjectBase {
     return { version: 1, name: "my-store-v1" } as const;
   }
 
-  @rpc({ principals: ["user", "code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
+  @rpc({ website: { kind: "closed", reason: "Workspace data is not exposed to websites." }, principals: ["user", "code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
   async addItem(label: string): Promise<{ id: string }> { ... }
 
-  @rpc({ principals: ["host"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
+  @rpc({ website: { kind: "closed", reason: "Host lifecycle traffic is not exposed to websites." }, principals: ["host"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
   async onWebhookDelivery(event: WebhookEvent): Promise<void> { ... }
 
   private bumpCounter(): void { ... }       // no @rpc — unreachable over RPC
@@ -674,6 +682,7 @@ RPC call:
 
 ```ts
 @rpc({
+  website: { kind: "closed", reason: "This integration is restricted to explicitly authorized workspace callers." },
   principals: ["code"],
   effect: { kind: "open" },
   tier: "open",
@@ -702,7 +711,7 @@ class), add an inline check ON TOP of the floor using the server-authenticated
 caller, which cannot be forged:
 
 ```ts
-@rpc({ principals: ["code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
+@rpc({ website: { kind: "closed", reason: "Internal agent callbacks are not exposed to websites." }, principals: ["code"], effect: { kind: "open" }, tier: "open", sensitivity: "write" })
 async onChannelOp(channelId: string): Promise<void> {
   await this.assertOwnEvalCaller(channelId); // only THIS agent's own EvalDO
   ...
@@ -813,6 +822,7 @@ Bind a Durable Object receiver to a provided unit-local name:
 
 ```ts
 @rpc({
+  website: { kind: "closed", reason: "This integration is restricted to explicitly authorized workspace callers." },
   principals: ["code"],
   effect: {
     kind: "userland-capability",

@@ -226,7 +226,8 @@ function Probe({
 describe("useChannelMessages", () => {
   it("reads pagination metadata from a client that is already replay-ready", async () => {
     let latest: UseChannelMessagesResult | undefined;
-    const client = createClient([], {
+    const retained = messageCompleted("retained", "Retained history");
+    const client = createClient([pubsubAgenticEvent(10, retained)], {
       connected: true,
       hasMoreBefore: true,
     });
@@ -241,6 +242,7 @@ describe("useChannelMessages", () => {
     );
 
     await waitFor(() => expect(latest!.replaySettled).toBe(true));
+    await waitFor(() => expect(latest!.messages.map(({ id }) => id)).toEqual(["retained"]));
     expect(latest!.hasMoreHistory).toBe(true);
   });
 

@@ -1,5 +1,8 @@
 import { bridgeTransport, type WorkspaceProvider } from "@vibestudio/rpc";
-import type { PanelEntityId, PanelSlotId } from "@vibestudio/shared/panel/idValues";
+import type {
+  PanelEntityId,
+  PanelSlotId,
+} from "@vibestudio/shared/panel/idValues";
 import { createPanelRuntime, type PanelApi } from "./createPanelRuntime.js";
 
 let current: PanelApi | undefined;
@@ -11,16 +14,28 @@ export let id: string;
 export let contextId: string;
 export let gatewayConfig: PanelApi["gatewayConfig"] = null;
 const listeners = new Set<() => void>();
-const changed = () => { for (const listener of listeners) listener(); };
+const changed = () => {
+  for (const listener of listeners) listener();
+};
 export const workspaceConnection = {
   get kind(): "installed" | "website" | "unavailable" {
-    return activeProvider || globalThis.vibestudio ? "website" : current ? "installed" : "unavailable";
+    return activeProvider || globalThis.vibestudio
+      ? "website"
+      : current
+        ? "installed"
+        : "unavailable";
   },
-  get connected(): boolean { return current !== undefined; },
-  get available(): boolean { return Boolean(current || globalThis.vibestudio); },
+  get connected(): boolean {
+    return current !== undefined;
+  },
+  get available(): boolean {
+    return Boolean(current || globalThis.vibestudio);
+  },
   subscribe(listener: () => void): () => void {
     listeners.add(listener);
-    return () => { listeners.delete(listener); };
+    return () => {
+      listeners.delete(listener);
+    };
   },
 };
 function bind(runtime: PanelApi | undefined): void {
@@ -31,16 +46,26 @@ function bind(runtime: PanelApi | undefined): void {
   changed();
 }
 function disconnected(): Error {
-  return Object.assign(new Error("Connect this website to a workspace before using workspace APIs"), {
-    code: "EWORKSPACE_DISCONNECTED",
-  });
+  return Object.assign(
+    new Error(
+      "Connect this website to a workspace before using workspace APIs",
+    ),
+    {
+      code: "EWORKSPACE_DISCONNECTED",
+    },
+  );
 }
 
 /** Explicit user action. No workspace method implicitly calls this or queues for connection. */
-export function connectWorkspace(provider: WorkspaceProvider | undefined = globalThis.vibestudio): Promise<PanelApi> {
+export function connectWorkspace(
+  provider: WorkspaceProvider | undefined = globalThis.vibestudio,
+): Promise<PanelApi> {
   if (current) return Promise.resolve(current);
   if (connecting) return connecting;
-  if (!provider) return Promise.reject(new Error("Open this page in a Vibestudio browser panel to connect"));
+  if (!provider)
+    return Promise.reject(
+      new Error("Open this page in a Vibestudio browser panel to connect"),
+    );
   const attempt = ++generation;
   connecting = (async () => {
     activeProvider = provider;
@@ -65,23 +90,33 @@ export function connectWorkspace(provider: WorkspaceProvider | undefined = globa
       parentEntityId: bootstrap.parentEntityId as PanelEntityId | null,
       initialTheme: bootstrap.theme,
       createTransport: () => bridgeTransport(provider),
-      environment: { document: globalThis.document, location: globalThis.location },
+      environment: {
+        document: globalThis.document,
+        location: globalThis.location,
+      },
     });
     bind(instance);
     return instance;
-  })().catch(error => {
-    if (attempt === generation) {
-      stopDisconnect?.();
-      stopDisconnect = undefined;
-      activeProvider = undefined;
-    }
-    throw error;
-  }).finally(() => { connecting = undefined; });
+  })()
+    .catch((error) => {
+      if (attempt === generation) {
+        stopDisconnect?.();
+        stopDisconnect = undefined;
+        activeProvider = undefined;
+      }
+      throw error;
+    })
+    .finally(() => {
+      connecting = undefined;
+    });
   return connecting;
 }
 
 export async function disconnectWorkspace(): Promise<void> {
-  if (current && !activeProvider) throw new Error("Installed panel lifetime is owned by its presentation host");
+  if (current && !activeProvider)
+    throw new Error(
+      "Installed panel lifetime is owned by its presentation host",
+    );
   ++generation;
   const provider = activeProvider ?? globalThis.vibestudio;
   stopDisconnect?.();
@@ -103,25 +138,37 @@ export function defaultMember<K extends keyof PanelApi>(key: K): PanelApi[K] {
       if (!current) throw disconnected();
       let owner: unknown = current;
       let value: unknown = current;
-      for (const part of path) { owner = value; value = Reflect.get(Object(value), part); }
+      for (const part of path) {
+        owner = value;
+        value = Reflect.get(Object(value), part);
+      }
       return { owner, value };
     };
     return new Proxy(() => {}, {
       apply(_target, _this, args) {
         const { owner, value } = resolve();
-        if (typeof value !== "function") throw new TypeError(`${path.join(".")} is not callable`);
+        if (typeof value !== "function")
+          throw new TypeError(`${path.join(".")} is not callable`);
         return Reflect.apply(value, owner, args);
       },
       get(_target, property) {
-        if (!current) return property === "then" ? undefined : view([...path, property]);
+        if (!current)
+          return property === "then" ? undefined : view([...path, property]);
         const value = Reflect.get(Object(resolve().value), property);
-        return value !== null && (typeof value === "object" || typeof value === "function")
-          ? view([...path, property]) : value;
+        return value !== null &&
+          (typeof value === "object" || typeof value === "function")
+          ? view([...path, property])
+          : value;
       },
-      ownKeys() { return current ? Reflect.ownKeys(Object(resolve().value)) : []; },
+      ownKeys() {
+        return current ? Reflect.ownKeys(Object(resolve().value)) : [];
+      },
       getOwnPropertyDescriptor(_target, property) {
         if (!current) return undefined;
-        const descriptor = Object.getOwnPropertyDescriptor(Object(resolve().value), property);
+        const descriptor = Object.getOwnPropertyDescriptor(
+          Object(resolve().value),
+          property,
+        );
         return descriptor ? { ...descriptor, configurable: true } : undefined;
       },
     });
@@ -129,10 +176,13 @@ export function defaultMember<K extends keyof PanelApi>(key: K): PanelApi[K] {
   return view([key]) as PanelApi[K];
 }
 
-declare global { var vibestudio: WorkspaceProvider | undefined; }
+declare global {
+  var vibestudio: WorkspaceProvider | undefined;
+}
 
 /** Called by the installed presentation entry before application modules run. */
 export function bindInstalledRuntime(instance: PanelApi): void {
-  if (current || connecting) throw new Error("A default runtime is already bound");
+  if (current || connecting)
+    throw new Error("A default runtime is already bound");
   bind(instance);
 }

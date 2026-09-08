@@ -65,13 +65,15 @@ describe("runtimeSurface manifests", () => {
   it("helpfulNamespace throws a helpful error for missing namespace members", () => {
     const wrapped = helpfulNamespace("workspace", { list: async () => [] });
     expect(() => (wrapped as Record<string, unknown>)["listSources"]).toThrow(
-      "workspace.listSources is not available. Known members on workspace: list. Call `await help()` for the live surface."
+      "workspace.listSources is not available. Known members on workspace: list. Call `await help()` for the live surface.",
     );
   });
 
   it("createHostedRuntime produces exactly the eval-importable surface (panel ≡ worker ≡ eval core)", () => {
     const rt = createHostedRuntime(fakeHost());
-    expect(new Set(Object.keys(rt))).toEqual(new Set(Object.keys(evalImportableSurface.exports)));
+    expect(new Set(Object.keys(rt))).toEqual(
+      new Set(Object.keys(evalImportableSurface.exports)),
+    );
   });
 
   it("createHostedRuntime, eval, panel, and worker all agree on the portable surface", () => {
@@ -79,19 +81,39 @@ describe("runtimeSurface manifests", () => {
     const portable = new Set(PORTABLE_KEYS);
     // createHostedRuntime output === the portable key set === eval importable keys.
     expect(new Set(Object.keys(rt))).toEqual(portable);
-    expect(new Set(Object.keys(evalImportableSurface.exports))).toEqual(portable);
+    expect(new Set(Object.keys(evalImportableSurface.exports))).toEqual(
+      portable,
+    );
     // panel & worker manifests each CONTAIN the full portable surface (panel adds
     // helpers + the panel/journal namespaces; worker adds handleRpcPost/destroy).
     for (const key of PORTABLE_KEYS) {
-      expect(panelRuntimeSurface.exports[key], `panel missing portable ${key}`).toBeDefined();
-      expect(workerRuntimeSurface.exports[key], `worker missing portable ${key}`).toBeDefined();
+      expect(
+        panelRuntimeSurface.exports[key],
+        `panel missing portable ${key}`,
+      ).toBeDefined();
+      expect(
+        workerRuntimeSurface.exports[key],
+        `worker missing portable ${key}`,
+      ).toBeDefined();
     }
   });
 
   it("expose and the approval-trio aliases are gone from every surface", () => {
-    for (const surface of [evalImportableSurface, panelRuntimeSurface, workerRuntimeSurface]) {
-      for (const gone of ["expose", "requestApproval", "revokeApproval", "listApprovals"]) {
-        expect(surface.exports[gone], `${gone} should be removed`).toBeUndefined();
+    for (const surface of [
+      evalImportableSurface,
+      panelRuntimeSurface,
+      workerRuntimeSurface,
+    ]) {
+      for (const gone of [
+        "expose",
+        "requestApproval",
+        "revokeApproval",
+        "listApprovals",
+      ]) {
+        expect(
+          surface.exports[gone],
+          `${gone} should be removed`,
+        ).toBeUndefined();
       }
     }
   });
@@ -113,7 +135,7 @@ describe("runtimeSurface manifests", () => {
       GATEWAY_URL: "http://server.test",
     });
     expect(new Set(Object.keys(runtime))).toEqual(
-      new Set(Object.keys(workerRuntimeSurface.exports))
+      new Set(Object.keys(workerRuntimeSurface.exports)),
     );
     runtime.destroy();
   });
@@ -128,7 +150,10 @@ describe("runtimeSurface manifests", () => {
       __vibestudioKind: "panel",
       __vibestudioInitialTheme: "light",
       __vibestudioEnv: {},
-      __vibestudioGatewayConfig: { serverUrl: "http://server.test", token: "tok" },
+      __vibestudioGatewayConfig: {
+        serverUrl: "http://server.test",
+        token: "tok",
+      },
       // Minimal shell bridge so createPanelTransport() doesn't throw on import.
       __vibestudioShell: {
         postEnvelope: async () => {},
@@ -152,14 +177,19 @@ describe("runtimeSurface manifests", () => {
     });
 
     it("the panel barrel's real value exports match its manifest", async () => {
-      const panel = (await import("../panel/installed.js")) as Record<string, unknown>;
+      const panel = (await import("../panel/installed.js")) as Record<
+        string,
+        unknown
+      >;
       // Module-namespace keys are the runtime VALUE exports (type-only re-exports
       // are erased), so this is the same execution-based guarantee the worker test
       // gives — drift between the panel's real exports and its manifest fails here.
       const realExports = new Set(Object.keys(panel));
       // `default` is never a documented surface member; ignore if a tool injects one.
       realExports.delete("default");
-      expect(realExports).toEqual(new Set(Object.keys(panelRuntimeSurface.exports)));
+      expect(realExports).toEqual(
+        new Set(Object.keys(panelRuntimeSurface.exports)),
+      );
     });
   });
 
@@ -171,7 +201,11 @@ describe("runtimeSurface manifests", () => {
   });
 
   it("credentials carries forAudience on every target surface", () => {
-    for (const surface of [panelRuntimeSurface, workerRuntimeSurface, evalImportableSurface]) {
+    for (const surface of [
+      panelRuntimeSurface,
+      workerRuntimeSurface,
+      evalImportableSurface,
+    ]) {
       expect(surface.exports["credentials"]?.members).toContain("forAudience");
     }
   });
@@ -185,7 +219,7 @@ describe("runtimeSurface manifests", () => {
           "configureClient",
           "getClientConfigStatus",
           "deleteClientConfig",
-        ])
+        ]),
       );
     }
   });

@@ -964,9 +964,10 @@ export function useAgenticChat({
                 parameters: z.object({
                   messageId: z.string().describe("The custom message id (custom.started messageId)")
                 }),
-                execute: async (args: unknown) => {
+                execute: async (args: unknown, ctx: MethodExecutionContext) => {
                   const { messageId } = args as { messageId?: string };
-                  if (!messageId) return { ok: false, error: "Missing messageId" };
+                  if (!messageId)
+                    return ctx.result({ ok: false, error: "Missing messageId" }, { isError: true });
                   const snapshot = cardInspectionRef.current;
                   const message = snapshot.messages.find(
                     (item) => item.custom?.messageId === messageId
@@ -975,11 +976,11 @@ export function useAgenticChat({
                     const known = snapshot.messages
                       .filter((item) => item.custom)
                       .map((item) => `${item.custom!.typeId}:${item.custom!.messageId}`);
-                    return {
+                    return ctx.result({
                       ok: false,
                       error: `No custom message "${messageId}" in this channel view.`,
                       knownCards: known
-                    };
+                    }, { isError: true });
                   }
                   return {
                     ok: true,
@@ -996,23 +997,26 @@ export function useAgenticChat({
                   participantId: z.string().describe("Agent participant id"),
                   model: z.string().describe("Model in provider:model format")
                 }),
-                execute: async (args: unknown) => {
+                execute: async (args: unknown, ctx: MethodExecutionContext) => {
                   const { participantId, model } = args as {
                     participantId?: unknown;
                     model?: unknown;
                   };
                   if (typeof participantId !== "string" || participantId.length === 0) {
-                    return { ok: false, error: "Missing participantId" };
+                    return ctx.result(
+                      { ok: false, error: "Missing participantId" },
+                      { isError: true }
+                    );
                   }
                   if (typeof model !== "string" || model.length === 0) {
-                    return { ok: false, error: "Missing model" };
+                    return ctx.result({ ok: false, error: "Missing model" }, { isError: true });
                   }
                   const persist = actionsRef.current?.onPersistAgentModel;
                   if (!persist)
-                    return {
+                    return ctx.result({
                       ok: false,
                       error: "Persist agent model is not available"
-                    };
+                    }, { isError: true });
                   await persist(channelName, participantId, model);
                   return { ok: true };
                 }
@@ -1131,7 +1135,7 @@ export default function App({ props, chat, scope }) {
                         .optional()
                         .describe("Props passed to the component as { props }")
                     }),
-                    execute: async (args: unknown) => {
+                    execute: async (args: unknown, ctx: MethodExecutionContext) => {
                       const {
                         id: requestedId,
                         code,
@@ -1149,7 +1153,10 @@ export default function App({ props, chat, scope }) {
                       if (trimmedPath) {
                         await methodRuntime.loadSourceFile(trimmedPath);
                       } else if (!code) {
-                        return { ok: false, error: "Missing code or path" };
+                        return ctx.result(
+                          { ok: false, error: "Missing code or path" },
+                          { isError: true }
+                        );
                       }
                       if (imports && Object.keys(imports).length > 0) {
                         const { executeSandbox } = await import("@workspace/eval/sandbox");
@@ -1161,7 +1168,11 @@ export default function App({ props, chat, scope }) {
                         });
                       }
                       const client = core.clientRef.current;
-                      if (!client) return { ok: false, error: "Not connected" };
+                      if (!client)
+                        return ctx.result(
+                          { ok: false, error: "Not connected" },
+                          { isError: true }
+                        );
                       const id = requestedId?.trim() || crypto.randomUUID();
                       const source = trimmedPath
                         ? { type: "file" as const, path: trimmedPath }
@@ -1235,7 +1246,7 @@ Use package imports available to inline_ui plus relative imports for local helpe
                         .optional()
                         .describe("When true, remove the current action bar.")
                     }),
-                    execute: async (args: unknown) => {
+                    execute: async (args: unknown, ctx: MethodExecutionContext) => {
                       const { path, imports, props, maxHeight, clear } = args as {
                         path?: string;
                         imports?: Record<string, string>;
@@ -1247,13 +1258,18 @@ Use package imports available to inline_ui plus relative imports for local helpe
                         await methodRuntime.clearActionBar();
                         return { ok: true, cleared: true };
                       }
-                      if (!path) return { ok: false, error: "Missing path" };
-                      return methodRuntime.loadActionBarFromFile({
+                      if (!path)
+                        return ctx.result(
+                          { ok: false, error: "Missing path" },
+                          { isError: true }
+                        );
+                      const result = await methodRuntime.loadActionBarFromFile({
                         path,
                         imports,
                         props,
                         maxHeight
                       });
+                      return result.ok ? result : ctx.result(result, { isError: true });
                     }
                   }
                 }

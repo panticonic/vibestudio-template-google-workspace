@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge, Box, Flex, IconButton, Popover, Text } from "@radix-ui/themes";
 import { ChevronDownIcon, ExternalLinkIcon, InfoCircledIcon } from "@radix-ui/react-icons";
 import type { ChatMessage } from "@workspace/agentic-core";
@@ -9,17 +9,14 @@ import { SubagentTranscriptContent } from "./SubagentTranscript";
 import { useChildTranscript } from "../hooks/useChildTranscript";
 import { toolPresentation } from "./ActionMessage";
 import { CopyIconButton } from "./shared/CopyButton";
-import { executionStatusLabel, executionStatusTone, isLiveStatus } from "./shared/invocationStatus";
 
 /**
  * SubagentRunCard — how a spawned child run appears in its parent's transcript.
  * Routed here from `MessageList.renderItem` for a durable subagent task card.
  *
- * The card's summary line comes from the durable task card itself (terminal
- * summary / status). Detailed activity is the child's canonical task
- * transcript, observed on its task channel and drawn by the same
- * `MessageList` as the parent chat — there is no relayed copy of child
- * activity in the parent's log.
+ * The retained card opens the child's canonical conversation. Activity and
+ * results belong to that transcript; finishing a turn does not retire the
+ * collaborator or require a second completion record in the parent log.
  */
 
 function compactId(value: string): string {
@@ -147,38 +144,18 @@ export function SubagentRunCard({ msg }: { msg: ChatMessage }) {
   const forkState = actions?.forkState;
   const childTranscript = actions?.childTranscript;
   const [open, setOpen] = useState(false);
-  const [observedTerminal, setObservedTerminal] = useState<ChatMessage["task"] | null>(null);
 
   const task = msg.task;
   const subagent = task?.subagent;
-  const recordedStatus = task?.execution.status ?? "pending";
-  const recordedIsLive = isLiveStatus(recordedStatus);
-  const runId = subagent?.runId ?? "";
   const canObserve = Boolean(childTranscript && subagent?.taskChannelId);
   const observed = useChildTranscript({
     connection: childTranscript ?? null,
     channelId: subagent?.taskChannelId ?? null,
     contextId: subagent?.contextId ?? null,
-    // Live cards observe until they see the canonical terminal fact. Historical
-    // terminal cards therefore own no stream; expanding a card observes only
-    // for as long as the user is reading its transcript.
-    enabled: canObserve && (open || (recordedIsLive && !observedTerminal)),
+    // Retained collaborators can receive future work. A collapsed history
+    // card does not need a permanent subscription to wait for a terminal.
+    enabled: canObserve && open,
   });
-  const terminalTask = useMemo(
-    () =>
-      observed.messages
-        .map((message) => message.task)
-        .find(
-          (candidate) => candidate?.id === runId && !isLiveStatus(candidate.execution.status)
-        ) ?? null,
-    [observed.messages, runId]
-  );
-  useEffect(() => {
-    setObservedTerminal(null);
-  }, [runId]);
-  useEffect(() => {
-    if (terminalTask) setObservedTerminal(terminalTask);
-  }, [terminalTask]);
   const activities = useMemo(
     () => latestSubagentActivities(observed.messages, subagent?.childParticipantId),
     [observed.messages, subagent?.childParticipantId]
@@ -186,23 +163,13 @@ export function SubagentRunCard({ msg }: { msg: ChatMessage }) {
 
   if (!task || !subagent) return null;
 
-  const effectiveTask = observedTerminal ?? task;
-  const status = effectiveTask.execution.status;
-  const isLive = isLiveStatus(status);
-  const description = effectiveTask.execution.description.trim();
+  const description = task.execution.description.trim();
   const label = subagent.label || task.title || "Subagent";
   const canOpenPanel = Boolean(forkState && subagent.taskChannelId && subagent.contextId);
-  const previews: SubagentActivityPreview[] = isLive
-    ? activities.length > 0
+  const previews: SubagentActivityPreview[] =
+    activities.length > 0
       ? activities
-      : [
-          observed.error
-            ? { prefix: "Updates paused", content: "Open the card to retry the live transcript" }
-            : observed.loading
-              ? { prefix: "Starting", content: "Connecting to the child transcript" }
-              : { prefix: "Starting", content: "No child activity recorded yet" },
-        ]
-    : [{ content: description || "No summary yet" }];
+      : [{ content: description || "Open the subagent conversation" }];
   const preview = previews[0]!;
 
   const detailRows = (
@@ -228,7 +195,7 @@ export function SubagentRunCard({ msg }: { msg: ChatMessage }) {
   return (
     <Box className="message-row message-row-agent">
       <Box
-        className={`message-card-subagent subagent-status-${status}${open ? " subagent-card-open" : ""}`}
+        className={`message-card-subagent${open ? " subagent-card-open" : ""}`}
         data-testid="subagent-run-card"
       >
         <div className="subagent-summary">
@@ -240,10 +207,6 @@ export function SubagentRunCard({ msg }: { msg: ChatMessage }) {
               aria-label={open ? "Collapse run details" : "Expand run details"}
               onClick={() => setOpen((value) => !value)}
             >
-              <span
-                className={`subagent-status-dot subagent-status-dot-${status}`}
-                aria-hidden="true"
-              />
               <span
                 className={`subagent-expand-chevron${open ? " subagent-expand-chevron-open" : ""}`}
                 aria-hidden="true"
@@ -271,13 +234,8 @@ export function SubagentRunCard({ msg }: { msg: ChatMessage }) {
               )}
             </button>
             <Flex align="center" gap="2" className="subagent-card-actions">
-              <Badge
-                className="subagent-status-badge"
-                size="1"
-                variant="soft"
-                color={executionStatusTone(status)}
-              >
-                {executionStatusLabel(status)}
+              <Badge className="subagent-status-badge" size="1" variant="soft" color="gray">
+                Conversation
               </Badge>
               {detailRows.length > 0 && <IdentifiersPopover rows={detailRows} />}
               <IconButton
@@ -309,7 +267,10 @@ export function SubagentRunCard({ msg }: { msg: ChatMessage }) {
               {previews.length > 1 ? (
                 <span className="subagent-activity-history" aria-label="Recent child activity">
                   {previews.slice(1).map((item, index) => (
-                    <span className="subagent-activity-history-item" key={`${item.prefix}-${item.content}`}>
+                    <span
+                      className="subagent-activity-history-item"
+                      key={`${item.prefix}-${item.content}`}
+                    >
                       {index > 0 ? <span aria-hidden="true"> · </span> : null}
                       {item.prefix ? `${item.prefix} ` : ""}
                       {item.content}

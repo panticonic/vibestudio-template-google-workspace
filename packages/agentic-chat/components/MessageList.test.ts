@@ -21,8 +21,12 @@ const hookState = vi.hoisted(() => {
     removeEventListener() {},
   };
   const contentElement = {};
-  const scrollRef = Object.assign((_node: unknown) => {}, { current: scrollElement });
-  const contentRef = Object.assign((_node: unknown) => {}, { current: contentElement });
+  const scrollRef = Object.assign((_node: unknown) => {}, {
+    current: scrollElement,
+  });
+  const contentRef = Object.assign((_node: unknown) => {}, {
+    current: contentElement,
+  });
   return {
     scrollRef,
     contentRef,
@@ -60,7 +64,15 @@ function makeMessage(overrides: Record<string, unknown>) {
 
 function makeParticipant(id: string, metadata: Record<string, unknown>) {
   return {
-    [id]: { id, metadata: { name: "AI Chat", type: "agent", handle: "agent", ...metadata } },
+    [id]: {
+      id,
+      metadata: {
+        name: "AI Chat",
+        type: "agent",
+        handle: "agent",
+        ...metadata,
+      },
+    },
   };
 }
 
@@ -95,7 +107,11 @@ describe("MessageList typing indicators (roster-based)", () => {
     render(
       React.createElement(MessageList, {
         messages: [],
-        participants: makeParticipant("user-1", { typing: true, name: "User", type: "panel" }),
+        participants: makeParticipant("user-1", {
+          typing: true,
+          name: "User",
+          type: "panel",
+        }),
         selfId: "user-1",
         allParticipants: {},
       } as never)
@@ -108,8 +124,16 @@ describe("MessageList typing indicators (roster-based)", () => {
     render(
       React.createElement(MessageList, {
         messages: [
-          makeMessage({ content: "intermediate step", complete: true, tier: "secondary" }),
-          makeMessage({ content: "final answer", complete: true, tier: "primary" }),
+          makeMessage({
+            content: "intermediate step",
+            complete: true,
+            tier: "secondary",
+          }),
+          makeMessage({
+            content: "final answer",
+            complete: true,
+            tier: "primary",
+          }),
         ],
         participants: {},
         selfId: null,
@@ -151,7 +175,10 @@ describe("MessageList typing indicators (roster-based)", () => {
               id: "tool-2",
               name: "Edit",
               arguments: { file_path: "src/config.ts" },
-              execution: { status: "complete", description: "Edit src/config.ts" },
+              execution: {
+                status: "complete",
+                description: "Edit src/config.ts",
+              },
             },
             complete: true,
           }),
@@ -291,7 +318,11 @@ describe("MessageList typing indicators (roster-based)", () => {
   });
 
   it("switches the live agent to the local model before persisting and sending retry", async () => {
-    const calls: Array<{ participantId: string; method: string; args: unknown }> = [];
+    const calls: Array<{
+      participantId: string;
+      method: string;
+      args: unknown;
+    }> = [];
     const callMethod = vi.fn(async (participantId: string, method: string, args: unknown) => {
       calls.push({ participantId, method, args });
       if (method === "getAgentSettings") return { model: "openai-codex:gpt-5.3" };
@@ -325,7 +356,9 @@ describe("MessageList typing indicators (roster-based)", () => {
       } as never)
     );
 
-    const retryButton = await screen.findByRole("button", { name: /retry with local model/i });
+    const retryButton = await screen.findByRole("button", {
+      name: /retry with local model/i,
+    });
     calls.length = 0;
 
     fireEvent.click(retryButton);
@@ -384,7 +417,11 @@ describe("MessageList typing indicators (roster-based)", () => {
   );
 
   it("does not mark local retry ready or send retry when live model switching fails", async () => {
-    const calls: Array<{ participantId: string; method: string; args: unknown }> = [];
+    const calls: Array<{
+      participantId: string;
+      method: string;
+      args: unknown;
+    }> = [];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const callMethod = vi.fn(async (participantId: string, method: string, args: unknown) => {
       calls.push({ participantId, method, args });
@@ -420,7 +457,9 @@ describe("MessageList typing indicators (roster-based)", () => {
       } as never)
     );
 
-    const retryButton = await screen.findByRole("button", { name: /retry with local model/i });
+    const retryButton = await screen.findByRole("button", {
+      name: /retry with local model/i,
+    });
     calls.length = 0;
 
     fireEvent.click(retryButton);
@@ -480,7 +519,9 @@ describe("MessageList typing indicators (roster-based)", () => {
       )
     );
 
-    const startButton = await screen.findByRole("button", { name: /new chat without history/i });
+    const startButton = await screen.findByRole("button", {
+      name: /new chat without history/i,
+    });
     fireEvent.click(startButton);
 
     await waitFor(() => expect(onNewConversation).toHaveBeenCalledTimes(1));
@@ -576,7 +617,10 @@ describe("MessageList typing indicators (roster-based)", () => {
               id: "tool-1",
               name: "mcp__workspace__ListDirectory",
               arguments: { path: "packages/agentic-chat", recursive: true },
-              execution: { status: "complete", description: "Listed agentic-chat package files" },
+              execution: {
+                status: "complete",
+                description: "Listed agentic-chat package files",
+              },
             },
             complete: true,
           }),
@@ -716,7 +760,11 @@ describe("MessageList typing indicators (roster-based)", () => {
           makeMessage({
             id: "typing-1",
             contentType: "typing",
-            senderMetadata: { name: "Agent One", type: "agent", handle: "agent-1" },
+            senderMetadata: {
+              name: "Agent One",
+              type: "agent",
+              handle: "agent-1",
+            },
             complete: false,
           }),
         ],
@@ -1004,9 +1052,9 @@ describe("SubagentRunCard", () => {
       })
     );
 
-    expect(screen.getByText("Starting")).toBeTruthy();
-    expect(screen.getByText("No child activity recorded yet")).toBeTruthy();
-    expect(screen.getByText("Pending")).toBeTruthy();
+    expect(screen.getByText("Open the subagent conversation")).toBeTruthy();
+    expect(screen.getByText("Conversation")).toBeTruthy();
+    expect(screen.queryByText("Pending")).toBeNull();
     fireEvent.click(screen.getByLabelText("Expand run details"));
 
     fireEvent.click(screen.getByLabelText("Run identifiers"));
@@ -1055,9 +1103,7 @@ describe("SubagentRunCard", () => {
       }) as ChatMessage,
     ];
 
-    expect(
-      latestSubagentActivities(messages, "child-participant")
-    ).toEqual([
+    expect(latestSubagentActivities(messages, "child-participant")).toEqual([
       {
         prefix: "Using",
         content: "Verify · operation: build, target: rich-storage",
@@ -1103,9 +1149,7 @@ describe("ordinary task presentation", () => {
         status: "complete",
         description: "Committed the Flowboard UX upgrade.",
         result: {
-          protocolContent: [
-            { type: "text", text: "Committed the Flowboard UX upgrade." },
-          ],
+          protocolContent: [{ type: "text", text: "Committed the Flowboard UX upgrade." }],
           details: { sourceEventId: "workspace-event:abc123" },
         },
         isError: false,

@@ -19,32 +19,36 @@ describe("git-bridge activation surface", () => {
     } as never);
 
     expect(Object.keys(api.providerContracts.gitInterop)).toEqual(
-      GIT_INTEROP_PROVIDER_METHOD_NAMES
+      GIT_INTEROP_PROVIDER_METHOD_NAMES,
     );
     const manifest = JSON.parse(
-      readFileSync(new URL("./package.json", import.meta.url), "utf8")
+      readFileSync(new URL("./package.json", import.meta.url), "utf8"),
     ) as {
       vibestudio: {
         extension: { providerContracts: { gitInterop: { methods: string[] } } };
       };
     };
-    expect(manifest.vibestudio.extension.providerContracts.gitInterop.methods).toEqual(
-      GIT_INTEROP_PROVIDER_METHOD_NAMES
-    );
+    expect(
+      manifest.vibestudio.extension.providerContracts.gitInterop.methods,
+    ).toEqual(GIT_INTEROP_PROVIDER_METHOD_NAMES);
     expect(api).not.toHaveProperty("pushUpstream");
     expect(api).not.toHaveProperty("publishRepo");
     expect(api).toHaveProperty("suggestTemplateContribution");
-    expect(api).toHaveProperty("suggestRegistryEntry");
+    expect(api).not.toHaveProperty("suggestRegistryEntry");
   });
 
   it("routes notification actions directly through the owning Git engine", async () => {
     vi.spyOn(UpstreamEngine.prototype, "activate").mockResolvedValue(undefined);
-    const push = vi.spyOn(UpstreamEngine.prototype, "pushUpstream").mockResolvedValue({
-      exported: 0,
-      headCommit: null,
-      outcome: "already-at-remote",
-    });
-    const autoPush = vi.spyOn(UpstreamEngine.prototype, "setAutoPush").mockResolvedValue({});
+    const push = vi
+      .spyOn(UpstreamEngine.prototype, "pushUpstream")
+      .mockResolvedValue({
+        exported: 0,
+        headCommit: null,
+        outcome: "already-at-remote",
+      });
+    const autoPush = vi
+      .spyOn(UpstreamEngine.prototype, "setAutoPush")
+      .mockResolvedValue({});
     const rpc = { call: vi.fn(async () => ({ ok: true })) };
     const api = await activate({
       name: "@workspace-extensions/git-bridge",
