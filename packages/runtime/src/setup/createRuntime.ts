@@ -20,6 +20,7 @@ import type {
 import type { PanelBootObservation } from "@vibestudio/shared/panel/observation";
 
 export interface RuntimeDeps {
+  onRecovery?: import("@vibestudio/rpc").RpcClientRecoveryOptions["onRecovery"];
   selfId: PanelEntityId;
   environment?: import("../panel/runtimeEnvironment.js").PanelRuntimeEnvironment;
   createTransport: (lifetime: AbortSignal) => EnvelopeRpcTransport;

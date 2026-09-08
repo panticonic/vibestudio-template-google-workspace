@@ -1,5 +1,6 @@
 export * from "../shared/portable.js";
 export { isRpcConnectionLost } from "@vibestudio/rpc";
+export type { WorkspaceProvider, RuntimeConnectionInfo, WebsiteMethodPolicy } from "@vibestudio/rpc";
 export { FORM_FILL_TYPES } from "@vibestudio/browser-data/form-fill-types";
 export type { FormFillType } from "@vibestudio/browser-data/form-fill-types";
 export type {
@@ -102,6 +103,7 @@ export const git = defaultMember("git");
 export const vcs = defaultMember("vcs");
 export const webhooks = defaultMember("webhooks");
 export const extensions = defaultMember("extensions");
+export const templates = defaultMember("templates");
 export const notifications = defaultMember("notifications");
 export const services = defaultMember("services");
 export const hosts = defaultMember("hosts");

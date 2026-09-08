@@ -26,6 +26,7 @@ import {
 } from "@vibestudio/shared/theme";
 
 export interface BaseRuntimeDeps {
+  onRecovery?: import("@vibestudio/rpc").RpcClientRecoveryOptions["onRecovery"];
   selfId: string;
   environment?: import("../panel/runtimeEnvironment.js").PanelRuntimeEnvironment;
   /** Primary envelope transport (single WS for panels, WS for workers) */
@@ -42,6 +43,7 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
   const rpc = createRpcClient({
     selfId: deps.selfId,
     transport: primaryTransport,
+    onRecovery: deps.onRecovery,
     authorityAcquisition: "wait",
     publishExposures: true,
     lifetime: rpcLifetime.signal,

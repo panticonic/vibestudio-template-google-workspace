@@ -179,6 +179,7 @@ export const git = runtimeMember("git");
 export const vcs = runtimeMember("vcs");
 export const webhooks = runtimeMember("webhooks");
 export const extensions = runtimeMember("extensions");
+export const templates = runtimeMember("templates");
 export const notifications = runtimeMember("notifications");
 export const workers = runtimeMember("workers");
 export const openExternal = runtimeMember("openExternal");

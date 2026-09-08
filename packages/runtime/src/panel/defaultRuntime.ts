@@ -1,9 +1,6 @@
 import { bridgeTransport, type WorkspaceProvider } from "@vibestudio/rpc";
 import type { PanelEntityId, PanelSlotId } from "@vibestudio/shared/panel/idValues";
-import { initRuntime } from "../setup/initRuntime.js";
-import { createPanelTransport } from "./transport.js";
-import { createPanelApi, createPanelRuntime, type PanelApi } from "./createPanelRuntime.js";
-import { installPanelErrorDiagnosticLauncher } from "./errorDebugChat.js";
+import { createPanelRuntime, type PanelApi } from "./createPanelRuntime.js";
 
 let current: PanelApi | undefined;
 let activeProvider: WorkspaceProvider | undefined;
@@ -16,6 +13,9 @@ export let gatewayConfig: PanelApi["gatewayConfig"] = null;
 const listeners = new Set<() => void>();
 const changed = () => { for (const listener of listeners) listener(); };
 export const workspaceConnection = {
+  get kind(): "installed" | "website" | "unavailable" {
+    return activeProvider || globalThis.vibestudio ? "website" : current ? "installed" : "unavailable";
+  },
   get connected(): boolean { return current !== undefined; },
   get available(): boolean { return Boolean(current || globalThis.vibestudio); },
   subscribe(listener: () => void): () => void {
@@ -81,6 +81,7 @@ export function connectWorkspace(provider: WorkspaceProvider | undefined = globa
 }
 
 export async function disconnectWorkspace(): Promise<void> {
+  if (current && !activeProvider) throw new Error("Installed panel lifetime is owned by its presentation host");
   ++generation;
   const provider = activeProvider ?? globalThis.vibestudio;
   stopDisconnect?.();
@@ -130,11 +131,8 @@ export function defaultMember<K extends keyof PanelApi>(key: K): PanelApi[K] {
 
 declare global { var vibestudio: WorkspaceProvider | undefined; }
 
-// Only the installed presentation adapter reads injected globals. The explicit
-// factory and disconnected website import never inspect or require host secrets.
-if (globalThis.__vibestudioEntityId) {
-  const { runtime, config } = initRuntime({ createTransport: createPanelTransport });
-  bind(createPanelApi(runtime, config));
-  installPanelErrorDiagnosticLauncher({ slotId: config.slotId ?? config.entityId,
-    contextId: config.contextId, panelRuntime: runtime.panelRuntime });
+/** Called by the installed presentation entry before application modules run. */
+export function bindInstalledRuntime(instance: PanelApi): void {
+  if (current || connecting) throw new Error("A default runtime is already bound");
+  bind(instance);
 }

@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": {
-      "vibestudio-panel": "./src/panel/index.ts",
+      "vibestudio-panel": "./src/panel/installed.ts",
       "worker": "./src/worker/index.ts",
       "workerd": "./src/worker/index.ts",
       "default": "./src/panel/index.ts"
@@ -16,7 +16,7 @@
       "default": "./src/worker/index.ts"
     },
     "./panel": {
-      "vibestudio-panel": "./src/panel/index.ts",
+      "vibestudio-panel": "./src/panel/installed.ts",
       "default": "./src/panel/index.ts"
     },
     "./hosted": "./src/shared/hostedRuntime.ts",
@@ -49,6 +49,7 @@
     "@vibestudio/types": "workspace:*",
     "@workspace/agentic-protocol": "workspace:*",
     "@workspace/cdp-client": "workspace:*",
+    "@workspace/template-management": "workspace:*",
     "sql.js": "^1.14.1",
     "zod": "^3.25.76"
   }

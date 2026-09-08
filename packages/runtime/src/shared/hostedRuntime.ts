@@ -1,3 +1,4 @@
+import { createTemplateManagementClient, type TemplateManagementClient } from "@workspace/template-management";
 /**
  * createHostedRuntime — the ONE shared assembly of the portable workspace
  * runtime surface, derived from a per-target `RuntimeHost`. Panel, worker, and
@@ -116,6 +117,7 @@ export interface WorkspaceRuntime {
   readonly vcs: VcsClient;
   readonly webhooks: WebhookIngressClient;
   readonly extensions: ExtensionsClient;
+  readonly templates: TemplateManagementClient;
   readonly notifications: NotificationClient;
   readonly workers: WorkerdClient;
   readonly doTargetId: typeof doTargetId;
@@ -317,6 +319,7 @@ export function createHostedRuntime(host: RuntimeHost): WorkspaceRuntime {
   );
   const webhooks = helpfulNamespace("webhooks", createWebhookIngressClient(rpc));
   const extensions = helpfulNamespace("extensions", createExtensionsClient(rpc));
+  const templates = helpfulNamespace("templates", createTemplateManagementClient((name, method, args) => extensions.invoke(name, method, args)));
   const notifications = helpfulNamespace("notifications", createNotificationClient(rpc));
   const git = helpfulNamespace("git", createGitClient(rpc));
   const callMain = createMainCaller(rpc);
@@ -343,6 +346,7 @@ export function createHostedRuntime(host: RuntimeHost): WorkspaceRuntime {
     vcs,
     webhooks,
     extensions,
+    templates,
     notifications,
     workers: host.workers,
     doTargetId,

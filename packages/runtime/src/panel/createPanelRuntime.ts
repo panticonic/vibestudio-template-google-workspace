@@ -87,6 +87,7 @@ const {
   vcs,
   webhooks,
   extensions,
+  templates,
   notifications,
   services,
   hosts,
@@ -174,7 +175,7 @@ const panel = helpfulNamespace("panel", {
 
 const agentApi = bootstrapRuntime.agentApi;
 const adblock = helpfulNamespace("adblock", createAdBlockApi(rpc));
-return { id, contextId, rpc, fs, gatewayConfig, gatewayFetch, callMain, parent, getParent, getParentWithContract, gad, blobstore, images, workspace, runtime, credentials, browserData, git, vcs, webhooks, extensions, notifications, services, hosts, doTargetId, createDurableObjectServiceClient, openExternal, createPanelSlot, openPanel, getPanelHandle, panelTree, workers, panel, agentApi, adblock, destroy: bootstrapRuntime.destroy };
+return { id, contextId, rpc, fs, gatewayConfig, gatewayFetch, callMain, parent, getParent, getParentWithContract, gad, blobstore, images, workspace, runtime, credentials, browserData, git, vcs, webhooks, extensions, templates, notifications, services, hosts, doTargetId, createDurableObjectServiceClient, openExternal, createPanelSlot, openPanel, getPanelHandle, panelTree, workers, panel, agentApi, adblock, destroy: bootstrapRuntime.destroy };
 }
 export function createPanelRuntime(deps: RuntimeDeps & { env?: Record<string, string> }) {
   return createPanelApi(createRuntime(deps), deps);

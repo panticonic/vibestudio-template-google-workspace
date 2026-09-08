@@ -13,6 +13,7 @@ import type { RuntimeFs } from "../types.js";
 import type { EnvelopeRpcTransport } from "@vibestudio/rpc";
 
 export interface InitRuntimeOptions {
+  onRecovery?: import("@vibestudio/rpc").RpcClientRecoveryOptions["onRecovery"];
   /** Function to create the RPC transport */
   createTransport: (lifetime: AbortSignal) => EnvelopeRpcTransport;
   /** Optional function to set up globals before runtime initialization */
@@ -42,6 +43,7 @@ export function initRuntime(options: InitRuntimeOptions): InitRuntimeResult {
     environment: injectedPanelEnvironment(),
     selfId: config.entityId,
     createTransport: options.createTransport,
+    onRecovery: options.onRecovery,
     entityId: config.entityId,
     slotId: config.slotId,
     contextId: config.contextId,

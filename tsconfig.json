@@ -172,8 +172,8 @@
       "@workspace/about-shared/template-review": [
         "./packages/about-shared/templateReview.tsx"
       ],
-      "@workspace/template-management/react": [
-        "./packages/template-management/src/react.ts"
+      "@workspace/react/templates": [
+        "./packages/react/src/templates.tsx"
       ],
       "@workspace/agentic-chat": ["./packages/agentic-chat/index.ts"],
       "@workspace/agentic-chat/features": [

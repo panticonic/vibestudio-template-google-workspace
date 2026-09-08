@@ -152,7 +152,7 @@ describe("runtimeSurface manifests", () => {
     });
 
     it("the panel barrel's real value exports match its manifest", async () => {
-      const panel = (await import("../panel/index.js")) as Record<string, unknown>;
+      const panel = (await import("../panel/installed.js")) as Record<string, unknown>;
       // Module-namespace keys are the runtime VALUE exports (type-only re-exports
       // are erased), so this is the same execution-based guarantee the worker test
       // gives — drift between the panel's real exports and its manifest fails here.

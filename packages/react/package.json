@@ -7,11 +7,15 @@
     "./auto-mount": "./src/autoMount.ts",
     "./hooks": "./src/hooks.ts",
     "./responsive": "./src/responsive.ts",
-    "./theme": "./src/theme.ts"
+    "./theme": "./src/theme.ts",
+    "./templates": "./src/templates.tsx"
   },
   "dependencies": {
     "@vibestudio/types": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
     "@workspace/runtime": "workspace:*",
+    "@workspace/template-management": "workspace:*",
     "@radix-ui/react-icons": "^1.3.2",
     "@radix-ui/themes": "^3.3.0"
   },
