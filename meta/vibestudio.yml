@@ -170,6 +170,61 @@ template:
   description: Connect Google Workspace and add a Gmail agent.
   files:
     - .gitattributes
+    - docs/upstream/vscode-terminal/License.txt
+    - docs/upstream/vscode-terminal/README.md
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/bufferMarkCapability.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/capabilities.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/commandDetection/promptInputModel.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/commandDetection/terminalCommand.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/commandDetectionCapability.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/cwdDetectionCapability.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/naiveCwdDetectionCapability.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/partialCommandDetectionCapability.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/promptTypeDetectionCapability.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/shellEnvDetectionCapability.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/capabilities/terminalCapabilityStore.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/environmentVariable.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/environmentVariableCollection.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/environmentVariableShared.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/terminal.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/terminalRecorder.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/terminalStrings.ts
+    - docs/upstream/vscode-terminal/src/vs/platform/terminal/common/xterm/shellIntegrationAddon.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/terminal.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/terminalEscapeSequences.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/terminalInstance.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/terminalResizeDebouncer.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/terminalStatusList.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/terminalUri.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/xterm-private.d.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/xterm/decorationAddon.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/xterm/decorationStyles.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/xterm/lineDataEventAddon.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/xterm/markNavigationAddon.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/xterm/xtermAddonImporter.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/cgmanifest.json
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/Microsoft.PowerShell.PSReadLine.dll
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/Microsoft.PowerShell.Pager.dll
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/PSReadLine.format.ps1xml
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/PSReadLine.psd1
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/PSReadLine.psm1
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/cgmanifest.json
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/net6plus/Microsoft.PowerShell.PSReadLine.Polyfiller.dll
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/psreadline/netstd/Microsoft.PowerShell.PSReadLine.Polyfiller.dll
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-env.zsh
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-profile.zsh
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/terminal.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/terminalColorRegistry.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/terminalContextKey.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
+    - docs/upstream/vscode-terminal/src/vs/workbench/contrib/terminal/common/terminalStrings.ts
     - .ignore
     - package.json
     - tsconfig.json
