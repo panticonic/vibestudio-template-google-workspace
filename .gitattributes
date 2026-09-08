@@ -1,3 +1,0 @@
-# Source snapshots and generated manifests have identical bytes on every OS.
-# Git detects binary files automatically and leaves their contents unchanged.
-* text=auto eol=lf

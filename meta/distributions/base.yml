@@ -1,0 +1,208 @@
+template:
+  name: Base
+  description: A self-contained foundation for an agentic workspace.
+  repositories:
+    - about/help
+    - about/new
+    - about/testbench
+    - extensions/claude-code
+    - extensions/file-tools
+    - extensions/git-bridge
+    - extensions/image-service
+    - extensions/pdf-ingest
+    - extensions/shell
+    - extensions/templates
+    - extensions/test-runner
+    - panels/chat
+    - panels/terminal
+    - projects/default
+    - skills/agentic-development
+    - skills/agents
+    - skills/api-integrations
+    - skills/architecture
+    - skills/capabilities
+    - skills/extensiondev
+    - skills/gad-context
+    - skills/messaging
+    - skills/provenance-orientation
+    - skills/sandbox
+    - skills/templates
+    - skills/terminal
+    - skills/vibestudio-vcs
+    - skills/web-research
+    - skills/workspace-dev
+    - workers/agent-worker
+    - workers/missions
+    - workers/model-settings
+    - workers/pubsub-channel
+    - workers/quickfire-service
+    - workers/silent-agent-worker
+    - workers/workspace-presentation
+    - workers/workspace-source
+  files: []
+systemEpoch: 0
+defaultRepo: projects/default
+defaultAgentConfig:
+  model: openai-codex:gpt-5.6-sol
+initPanels:
+  - source: about/new
+extensions:
+  - source: extensions/git-bridge
+  - source: extensions/image-service
+  - source: extensions/pdf-ingest
+  - source: extensions/file-tools
+  - source: extensions/shell
+  - source: extensions/templates
+  - source: extensions/test-runner
+  - source: extensions/claude-code
+providers:
+  evalEngine:
+    source: "@workspace/eval"
+  evalRuntime:
+    source: "@workspace/runtime"
+  cdpClient:
+    source: "@workspace/cdp-client"
+  gitInterop:
+    extension: extensions/git-bridge
+  claudeCode:
+    extension: extensions/claude-code
+services:
+  - source: workers/workspace-source
+    name: gad.workspace
+    title: Workspace source
+    action: manage your workspace files, history, and setup
+    description: Manages your workspace's files, version history, and initial setup.
+    notability: everyday
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.workspace-source.v1
+      - vibestudio.gad.workspace.v1
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+        - session
+        - mission
+    durableObject:
+      className: GadWorkspaceDO
+  - source: workers/pubsub-channel
+    name: channel
+    title: Conversations
+    action: send and receive messages in your conversations
+    description: Access your workspace's conversations, including sending messages and reading replies.
+    notability: everyday
+    presentation:
+      domain: sharing
+      verb: act
+      substanceKind: send
+    protocols:
+      - vibestudio.channel.v1
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+        - session
+        - mission
+    durableObject:
+      className: PubSubChannel
+      context: creator
+  - source: workers/workspace-presentation
+    name: workspace.presentation
+    title: Workspace presentation
+    action: manage panel titles, search, and launcher usage
+    description: Manage how panels, search results, and the app launcher are organized.
+    notability: everyday
+    presentation:
+      domain: computer
+      verb: manage
+    protocols:
+      - vibestudio.workspace-presentation.v1
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+    durableObject:
+      className: WorkspacePresentationDO
+  - source: workers/model-settings
+    name: models
+    title: AI model settings
+    action: read or change which AI models your workspace uses
+    description: Read or change the AI model and provider settings for this workspace.
+    notability: everyday
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.models.v1
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+        - session
+        - mission
+    durableObject:
+      className: ModelSettingsDO
+  - source: workers/quickfire-service
+    name: quickfire
+    title: Command conversations
+    action: manage panel-bound command conversations
+    description: Owns durable Quickfire conversations attached to panel slots.
+    notability: everyday
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.quickfire.v1
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+    durableObject:
+      className: QuickfireSessionsDO
+  - source: workers/missions
+    name: missions
+    title: Automated tasks
+    action: manage automated tasks
+    description: Launch automated tasks immediately, then inspect and control their running definitions.
+    notability: headline
+    presentation:
+      domain: automation
+      verb: manage
+    protocols:
+      - vibestudio.missions.v1
+    authority:
+      binding: declared
+      principals:
+        - host
+        - user
+        - code
+    durableObject:
+      className: MissionsDO
+singletonObjects:
+  - source: workers/workspace-source
+    className: GadWorkspaceDO
+    key: workspace
+  - source: workers/workspace-presentation
+    className: WorkspacePresentationDO
+    key: workspace-presentation
+  - source: workers/model-settings
+    className: ModelSettingsDO
+    key: workspace-model-settings
+  - source: workers/quickfire-service
+    className: QuickfireSessionsDO
+    key: workspace-quickfire
+  - source: workers/missions
+    className: MissionsDO
+    key: workspace-missions
