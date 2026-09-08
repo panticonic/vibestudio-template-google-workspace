@@ -148,6 +148,13 @@ export class TemplatePublishEngine {
     for (const part of snapshots) {
       for (const file of part.snapshot.files) {
         const relative = `${part.subdir}/${file.path}`;
+        if (
+          part.repoPath === "meta" &&
+          part.subdir === "meta" &&
+          relative === MANIFEST_PATH
+        ) {
+          continue;
+        }
         if (occupiedPaths.has(relative)) {
           throw new Error(`Template publication maps multiple files to ${relative}`);
         }
@@ -344,6 +351,13 @@ export class TemplatePublishEngine {
         for (const part of snapshots) {
           for (const file of part.snapshot.files) {
             const relative = `${part.subdir}/${file.path}`;
+            if (
+              part.repoPath === "meta" &&
+              part.subdir === "meta" &&
+              relative === MANIFEST_PATH
+            ) {
+              continue;
+            }
             const fileDestination = safeJoin(checkout, relative);
             await fsp.mkdir(path.dirname(fileDestination), { recursive: true });
             await fsp.writeFile(fileDestination, file.bytes);

@@ -331,7 +331,11 @@ export async function inspectTemplateAuthoring(
     packageOwners.set(value.name, repoPath);
   }
 
-  const included = new Set(requestedParts);
+  // The authored manifest replaces meta/vibestudio.yml, while the exact meta
+  // repository supplies its declared companions (including distributions).
+  // Binding meta into the same protected-main receipt prevents a source
+  // publication from mixing those files across workspace revisions.
+  const included = new Set([META_REPOSITORY, ...requestedParts]);
   const required = new Set<string>();
   const runtime = runtimeReferences(observation.runtimeTop as WorkspaceConfig);
   let changed = true;
@@ -365,7 +369,7 @@ export async function inspectTemplateAuthoring(
   const includedParts = [...included].sort(compareUtf16CodeUnits);
   const manifest = projectManifest(
     observation.runtimeTop as WorkspaceConfig,
-    new Set(includedParts),
+    new Set(includedParts.filter((repoPath) => repoPath !== META_REPOSITORY)),
     { name, description },
     selectableParts.every((repoPath) => included.has(repoPath) || inherited.has(repoPath))
   );

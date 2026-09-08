@@ -86,6 +86,30 @@ function protectedSnapshot(
   };
 }
 
+function metaSnapshot(): ProtectedRepositorySnapshot {
+  const source = [
+    ["vibestudio.yml", "original manifest\n"],
+    ["distributions/base.yml", "template:\n  name: Base\n"],
+  ] as const;
+  const files = source.map(([file, fileContent]) => {
+    const bytes = Buffer.from(fileContent);
+    return {
+      path: file,
+      contentHash: sha256Hex(bytes),
+      size: bytes.byteLength,
+      mode: 0o644,
+      bytes,
+    };
+  });
+  return {
+    repositoryId: "repository:meta",
+    repoPath: "meta",
+    eventId: "event:main",
+    treeDigest: `v1-sha256:${sha256Hex(Buffer.from("meta tree"))}`,
+    files,
+  };
+}
+
 function publicationInput(
   overrides: Partial<Parameters<TemplatePublishEngine["publish"]>[0]> = {},
 ): Parameters<TemplatePublishEngine["publish"]>[0] {
@@ -273,6 +297,59 @@ function engine(snapshot = protectedSnapshot()) {
 }
 
 describe("TemplatePublishEngine", () => {
+  it("retains protected meta companions and replaces only the authored manifest", async () => {
+    const fixture = engine();
+    fixture.bridge.readProtectedRepositories.mockResolvedValueOnce([
+      metaSnapshot(),
+      protectedSnapshot(),
+    ]);
+    const input = publicationInput({
+      parts: [
+        { repoPath: "meta", subdir: "meta" },
+        { repoPath: "panels/news", subdir: "panels/news" },
+      ],
+    });
+    const result = await fixture.engine.publish(input);
+    const tree = state.trees.get(result.commit)!;
+
+    expect(fixture.bridge.readProtectedRepositories).toHaveBeenCalledWith(
+      ["meta", "panels/news"],
+      "event:main",
+      "publish-news-v1",
+    );
+    expect(tree.map((entry) => entry.path)).toContain(
+      "meta/distributions/base.yml",
+    );
+    const publishedManifest = tree.find(
+      (entry) => entry.path === "meta/vibestudio.yml",
+    );
+    expect(publishedManifest?.type).toBe("blob");
+    expect(
+      publishedManifest?.type === "blob"
+        ? publishedManifest.bytes.toString()
+        : null,
+    ).toBe(input.manifest);
+  });
+
+  it("does not let an arbitrary part shadow the authored manifest", async () => {
+    const fixture = engine();
+    const shadow = protectedSnapshot();
+    shadow.files = [
+      {
+        ...shadow.files[0]!,
+        path: "vibestudio.yml",
+      },
+    ];
+    fixture.bridge.readProtectedRepositories.mockResolvedValueOnce([shadow]);
+
+    await expect(
+      fixture.engine.publish(
+        publicationInput({
+          parts: [{ repoPath: "panels/news", subdir: "meta" }],
+        }),
+      ),
+    ).rejects.toThrow("maps multiple files to meta/vibestudio.yml");
+  });
   it("publishes into a repository that was created but is still empty", async () => {
     resolveOrCreateRepo.mockResolvedValueOnce({
       destination: {
