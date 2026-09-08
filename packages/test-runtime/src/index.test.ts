@@ -3,8 +3,14 @@ import {
   expect as vitestExpect,
   it as vitestIt,
 } from "vitest";
+import type {
+  RpcClient,
+  RpcContextHandler,
+  WebsiteMethodPolicy,
+} from "@vibestudio/rpc";
 import {
   describe,
+  exposeTestRunner,
   expect,
   it,
   runTests,
@@ -46,4 +52,46 @@ vitestDescribe("portable test runtime", () => {
       });
     },
   );
+
+  vitestIt("registers the sealed runner with an explicit closed website policy", async () => {
+    let exposure:
+      | { method: string; handler: RpcContextHandler; website: WebsiteMethodPolicy }
+      | undefined;
+    const rpc: Pick<RpcClient, "expose"> = {
+      expose(method, handler, website) {
+        exposure = { method, handler: handler as RpcContextHandler, website };
+      },
+    };
+    exposeTestRunner(rpc, "workerd");
+
+    vitestExpect(exposure).toMatchObject({
+      method: "tests.run",
+      handler: vitestExpect.any(Function),
+      website: {
+        kind: "closed",
+        reason: "Workspace test execution is private to the owning test runner.",
+      },
+    });
+    setCurrentTestFile("exposed.test.ts");
+    it("runs through the exposed handler", () => {});
+    const observations: Array<unknown> = [];
+    exposeTestRunner(rpc, "workerd", (result) => observations.push(result));
+    const result = await exposure!.handler({
+      args: [
+        {
+          protocol: "workspace-test-execution-request.v1",
+          artifactKey: "exposed-artifact",
+          executionDigest: "b".repeat(64),
+          testName: "runs through the exposed handler",
+          limits: { timeoutMs: 1_000, memoryMb: 64 },
+        },
+      ],
+    } as never);
+    vitestExpect(result).toMatchObject({
+      status: "passed",
+      passed: 1,
+      runtime: "workerd",
+    });
+    vitestExpect(observations).toEqual([undefined, result]);
+  });
 });

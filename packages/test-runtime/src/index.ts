@@ -1,3 +1,5 @@
+import type { RpcClient } from "@vibestudio/rpc";
+
 export type SandboxTestRuntime = "browser" | "workerd";
 
 export interface TestExecutionRequest {
@@ -568,4 +570,26 @@ export async function runTests(
     durationMs: performance.now() - started,
     files,
   };
+}
+
+const TEST_RUNNER_WEBSITE_POLICY = {
+  kind: "closed",
+  reason: "Workspace test execution is private to the owning test runner.",
+} as const;
+
+export function exposeTestRunner(
+  rpc: Pick<RpcClient, "expose">,
+  runtime: SandboxTestRuntime,
+  observe?: (result: TestExecutionResult | undefined) => void,
+): void {
+  rpc.expose<[TestExecutionRequest], TestExecutionResult>(
+    "tests.run",
+    async (request) => {
+      observe?.(undefined);
+      const result = await runTests(request.args[0], runtime);
+      observe?.(result);
+      return result;
+    },
+    TEST_RUNNER_WEBSITE_POLICY,
+  );
 }
