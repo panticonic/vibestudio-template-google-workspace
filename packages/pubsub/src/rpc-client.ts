@@ -67,6 +67,7 @@ import { z } from "zod";
 import { pendingReviewNotice } from "@vibestudio/shared/authority/reviewPending";
 import type { PubSubClient } from "./client.js";
 import type { RecoveryCoordinator } from "@vibestudio/shell-core/recoveryCoordinator";
+import { isRpcConnectionLost } from "@vibestudio/rpc";
 import { iterateChannelReplayAfterPages } from "./channel-replay.js";
 import { readChannelSubscriptionRecords } from "@vibestudio/service-schemas/channel";
 import { Validator } from "@cfworker/json-schema";
@@ -2041,7 +2042,7 @@ export function connectViaRpc<T extends ParticipantMetadata = ParticipantMetadat
           // A pre-ACK opener owns its failure and schedules/retries recovery
           // from its rejection path. Post-ACK termination has no awaiting
           // opener, so the reader must request replacement itself.
-          if (acknowledged) requestSubscriptionRecovery();
+          if (acknowledged && !isRpcConnectionLost(failure)) requestSubscriptionRecovery();
         }
         throw failure;
       } finally {
@@ -2135,7 +2136,7 @@ export function connectViaRpc<T extends ParticipantMetadata = ParticipantMetadat
         subscribeAckResolve = null;
         subscribeAckReject = null;
         rejectReady(pubsubError);
-      } else {
+      } else if (!isRpcConnectionLost(pubsubError)) {
         requestSubscriptionRecovery();
       }
       handleError(pubsubError);
@@ -2210,6 +2211,10 @@ export function connectViaRpc<T extends ParticipantMetadata = ParticipantMetadat
   async function listMembers(): Promise<ChannelMember[]> {
     const result = await callChannel<{ members: ChannelMember[] }>("listMembers");
     return result.members;
+  }
+
+  async function getParticipants(): Promise<Array<{ participantId: string; metadata: T }>> {
+    return callChannel("getParticipants");
   }
 
   async function listInvitesForMe(): Promise<ChannelInvite[]> {
@@ -2781,6 +2786,7 @@ export function connectViaRpc<T extends ParticipantMetadata = ParticipantMetadat
   return {
     publish,
     updateMetadata,
+    getParticipants,
     setTyping,
     ready,
     close,

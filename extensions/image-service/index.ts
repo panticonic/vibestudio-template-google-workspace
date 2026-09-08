@@ -1,9 +1,6 @@
+import { loadPhoton } from "./image/photon.js";
 import { Buffer } from "node:buffer";
-import {
-  resizeImage,
-  formatDimensionNote,
-  type ImageResizeOptions,
-} from "./image/image-resize.js";
+import { resizeImage, formatDimensionNote, type ImageResizeOptions } from "./image/image-resize.js";
 import { convertImage } from "./image/image-convert.js";
 import { detectMimeFromBytes } from "./image/mime.js";
 
@@ -19,7 +16,11 @@ function toUint8Array(value: unknown): Uint8Array {
     }
     if ("buffer" in obj && (obj as { buffer?: unknown }).buffer instanceof ArrayBuffer) {
       const view = obj as { buffer: ArrayBuffer; byteOffset?: number; byteLength?: number };
-      return new Uint8Array(view.buffer, view.byteOffset ?? 0, view.byteLength ?? view.buffer.byteLength);
+      return new Uint8Array(
+        view.buffer,
+        view.byteOffset ?? 0,
+        view.byteLength ?? view.buffer.byteLength
+      );
     }
   }
   if (Array.isArray(value)) return new Uint8Array(value as number[]);
@@ -42,7 +43,7 @@ export async function activate(ctx: { log: { info(message: string): void } }) {
       const data = toUint8Array(rawData);
       const result = await resizeImage(
         { type: "image", mimeType, data: Buffer.from(data).toString("base64") },
-        options,
+        options
       );
       const out: {
         data: string;
@@ -71,7 +72,7 @@ export async function activate(ctx: { log: { info(message: string): void } }) {
       const result = await convertImage(toUint8Array(rawData), sourceMimeType, targetMimeType);
       if (!result) {
         throw new Error(
-          `image-service.convert: failed to convert ${sourceMimeType} to ${targetMimeType}`,
+          `image-service.convert: failed to convert ${sourceMimeType} to ${targetMimeType}`
         );
       }
       return {
@@ -80,6 +81,25 @@ export async function activate(ctx: { log: { info(message: string): void } }) {
       };
     },
 
+    async getMetadata(rawData: unknown) {
+      const bytes = toUint8Array(rawData);
+      const mimeType = detectMimeFromBytes(bytes);
+      if (!mimeType || !["image/png", "image/jpeg", "image/webp"].includes(mimeType))
+        throw new Error("Unsupported image format");
+      const photon = await loadPhoton();
+      if (!photon) throw new Error("Image decoder is unavailable");
+      const image = photon.PhotonImage.new_from_byteslice(bytes);
+      try {
+        return {
+          mimeType,
+          width: image.get_width(),
+          height: image.get_height(),
+          byteLength: bytes.byteLength,
+        };
+      } finally {
+        image.free();
+      }
+    },
     async detectMimeType(rawData: unknown) {
       return detectMimeFromBytes(toUint8Array(rawData));
     },

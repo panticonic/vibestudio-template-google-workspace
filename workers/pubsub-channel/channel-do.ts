@@ -948,7 +948,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Adopt this concrete channel's durable queues for one server generation. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -962,7 +962,7 @@ export class PubSubChannel extends DurableObjectBase {
     return adoption;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1007,7 +1007,7 @@ export class PubSubChannel extends DurableObjectBase {
     return { processed: true };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1018,6 +1018,7 @@ export class PubSubChannel extends DurableObjectBase {
     if (!input.workerId || input.limit < 1) {
       throw new Error("claimReadyWork: invalid claim request");
     }
+    this.deliveryProjection.cursor();
     this.adoptDurableWorkWorkerGeneration(input.workerId);
     const claims = this.ctx.storage.transactionSync(() => {
       this.materializeDueMaintenance(input.now);
@@ -1132,7 +1133,7 @@ export class PubSubChannel extends DurableObjectBase {
           relationshipRevision,
           deliveryId,
         );
-        const delivery: ChannelDeliveryInput = {
+        const delivery: Omit<ChannelDeliveryInput, "envelope"> & { envelopeId: string } = {
           deliveryId,
           channelId: this.objectKey,
           channelRef: {
@@ -1143,9 +1144,7 @@ export class PubSubChannel extends DurableObjectBase {
           participantId,
           subscriptionRevision: Number(row["subscription_revision"]),
           eventSequence: Number(row["event_sequence"]),
-          envelope: JSON.parse(
-            String(row["envelope_json"]),
-          ) as RpcChannelMessage,
+          envelopeId: String(row["event_id"]),
           agenticContext:
             row["active_invocation_route"] === "direct"
               ? (JSON.parse(
@@ -1174,7 +1173,7 @@ export class PubSubChannel extends DurableObjectBase {
     return claims;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1245,7 +1244,7 @@ export class PubSubChannel extends DurableObjectBase {
     return this.ctx.storage.transactionSync(() => {
       const row = this.sql
         .exec(
-          `SELECT claimed_by, claim_generation, state, created_at, envelope_json
+          `SELECT claimed_by, claim_generation, state, created_at, event_kind
              FROM channel_delivery_mailbox
             WHERE delivery_id = ?`,
           request.itemId,
@@ -1273,32 +1272,16 @@ export class PubSubChannel extends DurableObjectBase {
           ),
         );
       }
-      if (typeof row["envelope_json"] === "string") {
-        try {
-          const envelope = JSON.parse(String(row["envelope_json"])) as {
-            event?: { payload?: { kind?: unknown } };
-          };
-          const kind = envelope.event?.payload?.kind;
-          if (
-            kind === "invocation.completed" ||
-            kind === "invocation.failed" ||
-            kind === "invocation.cancelled" ||
-            kind === "invocation.abandoned"
-          ) {
-            this.recordDeliveryLatency(
-              "result-to-caller-settlement",
-              Math.max(0, Date.now() - Number(row["created_at"])),
-            );
-          }
-        } catch {
-          // Malformed envelopes are classified by the delivery consumer. The
-          // latency observer never becomes an alternate validation path.
-        }
+      const kind = row["event_kind"];
+      if (kind === "invocation.completed" || kind === "invocation.failed" ||
+          kind === "invocation.cancelled" || kind === "invocation.abandoned") {
+        this.recordDeliveryLatency("result-to-caller-settlement",
+          Math.max(0, Date.now() - Number(row["created_at"])));
       }
       this.sql.exec(
         `UPDATE channel_delivery_mailbox
             SET state = ?, claimed_by = NULL,
-                envelope_json = NULL, agentic_context_json = NULL,
+                agentic_context_json = NULL,
                 terminal_outcome_json = ?
           WHERE delivery_id = ?
             AND claimed_by = ?
@@ -1315,7 +1298,7 @@ export class PubSubChannel extends DurableObjectBase {
     });
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1554,7 +1537,7 @@ export class PubSubChannel extends DurableObjectBase {
     }
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -2450,7 +2433,7 @@ export class PubSubChannel extends DurableObjectBase {
 
   /** Durable per-channel human presence, including offline members who have no
    * roster row. Status is server-derived from real activity and session count. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: {
       kind: "userland-capability",
@@ -2527,7 +2510,7 @@ export class PubSubChannel extends DurableObjectBase {
    * Open or replay one durable participant relationship. This finite RPC is
    * the only membership operation used by executable entities.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -2672,7 +2655,7 @@ export class PubSubChannel extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -2709,7 +2692,7 @@ export class PubSubChannel extends DurableObjectBase {
     );
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -2720,7 +2703,7 @@ export class PubSubChannel extends DurableObjectBase {
     await this.detachParticipant(input.participantId);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -2741,7 +2724,7 @@ export class PubSubChannel extends DurableObjectBase {
    * Subscribe a participant to this channel. Inserts the participant first,
    * then builds replay, so an initial roster snapshot includes the subscriber.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3002,7 +2985,7 @@ export class PubSubChannel extends DurableObjectBase {
     );
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: {
       kind: "userland-capability",
@@ -3023,7 +3006,7 @@ export class PubSubChannel extends DurableObjectBase {
    * can prove that accepted structured deliveries were drained before retiring
    * the participant runtime.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3182,8 +3165,8 @@ export class PubSubChannel extends DurableObjectBase {
    * GAD validates agentic payloads at append-time inside the txn; policies
    * annotate (never mutate) the envelope.
    */
-  @rpc({
-    principals: ["code"],
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+    principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -3256,8 +3239,8 @@ export class PubSubChannel extends DurableObjectBase {
   /** Update recipient visibility without appending another channel message.
    * Receipts are a monotone projection and reach live external clients only
    * as disposable presentation signals; replay reads the durable snapshot. */
-  @rpc({
-    principals: ["code"],
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+    principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -3311,7 +3294,7 @@ export class PubSubChannel extends DurableObjectBase {
    * role assistant for an agent), carrying the same addressing fields
    * (`to`/`mentions`) a participant's message would.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3384,7 +3367,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Policy fold state (replaces getConversationState — WS2 §4.4). */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3442,7 +3425,7 @@ export class PubSubChannel extends DurableObjectBase {
    * Broadcast envelopes that were durably appended to GAD outside this DO
    * (trajectory publication fan-out). Folds each into the policy caches.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3470,7 +3453,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Mark a message as errored (durable `error` channel event). */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3504,7 +3487,7 @@ export class PubSubChannel extends DurableObjectBase {
     );
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3517,7 +3500,7 @@ export class PubSubChannel extends DurableObjectBase {
   /** Return one durable envelope by its stable envelope id, or null when that
    * id belongs to another log (for example a VCS commit id). This is a pure,
    * lineage-aware lookup used by panels, agents, and diagnostic evals. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3528,8 +3511,8 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Send a non-durable signal message. */
-  @rpc({
-    principals: ["code"],
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+    principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -3561,8 +3544,8 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Replace a participant's metadata entirely. */
-  @rpc({
-    principals: ["code"],
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+    principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -3576,7 +3559,7 @@ export class PubSubChannel extends DurableObjectBase {
     await this.updateParticipantMetadata(participantId, metadata);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: {
       kind: "userland-capability",
@@ -3644,8 +3627,8 @@ export class PubSubChannel extends DurableObjectBase {
     await this.publishPresenceEvent(participantId, "update", stored);
   }
 
-  @rpc({
-    principals: ["code"],
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+    principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -3656,7 +3639,7 @@ export class PubSubChannel extends DurableObjectBase {
     this.setParticipantTypingState(participantId, typing);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: {
       kind: "userland-capability",
@@ -3692,7 +3675,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Get all participants with DO identity when available. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3771,7 +3754,7 @@ export class PubSubChannel extends DurableObjectBase {
    * host-verified `userId` (WP4). Idempotent: re-adding refreshes the handle
    * snapshot without a second invite.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3897,7 +3880,7 @@ export class PubSubChannel extends DurableObjectBase {
 
   /** Remove a member from this channel (WP7 §3, §10.3 — a user may remove
    *  themselves; mutual trust means anyone may, no ACL). History stays visible. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: {
       kind: "userland-capability",
@@ -3938,7 +3921,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** List this channel's durable members (WP7 §3). Ordered by add time. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3970,7 +3953,7 @@ export class PubSubChannel extends DurableObjectBase {
    * identity is host-verified and the indexed lookup is exact; no client-supplied
    * user id and no channel enumeration participate in discovery.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3991,7 +3974,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Remove the calling user's invite from the canonical workspace inbox. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4095,6 +4078,7 @@ export class PubSubChannel extends DurableObjectBase {
         }
         await this.inviteIndex.call<void>("putChannelMembership", {
           channelId: this.objectKey,
+          channelTargetId: this.rpcSelfId,
           userId,
           memberId,
           handle: String(row["handle"]),
@@ -4131,7 +4115,7 @@ export class PubSubChannel extends DurableObjectBase {
     }
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4141,7 +4125,7 @@ export class PubSubChannel extends DurableObjectBase {
     return this.getStateValue("contextId");
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4156,7 +4140,7 @@ export class PubSubChannel extends DurableObjectBase {
    * immutable participant set. Repeated identical initialization is safe;
    * any drift is a programming error rather than an implicit policy update.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4204,7 +4188,7 @@ export class PubSubChannel extends DurableObjectBase {
     return normalizedConfig;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4234,8 +4218,8 @@ export class PubSubChannel extends DurableObjectBase {
     return newConfig;
   }
 
-  @rpc({
-    principals: ["host", "code"],
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+    principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "read",
@@ -4251,7 +4235,7 @@ export class PubSubChannel extends DurableObjectBase {
   // Registry reads: direct passthrough to GAD's channel_message_types
   // projection (hydrated — published `source` payloads are blob-spilled).
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4261,7 +4245,7 @@ export class PubSubChannel extends DurableObjectBase {
     return this.channelLog.listMessageTypes();
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4271,7 +4255,7 @@ export class PubSubChannel extends DurableObjectBase {
     return this.channelLog.getMessageType(typeId);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4299,7 +4283,7 @@ export class PubSubChannel extends DurableObjectBase {
     return null;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: { kind: "open" },
     tier: "open",
@@ -4352,7 +4336,7 @@ export class PubSubChannel extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: { kind: "open" },
     tier: "open",
@@ -4391,7 +4375,7 @@ export class PubSubChannel extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: { kind: "open" },
     tier: "open",
@@ -4401,7 +4385,7 @@ export class PubSubChannel extends DurableObjectBase {
     return { rows: await this.channelLog.inspectEnvelope(envelopeId) };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: {
       kind: "userland-capability",
@@ -4427,7 +4411,7 @@ export class PubSubChannel extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: { kind: "open" },
     tier: "open",
@@ -4440,7 +4424,7 @@ export class PubSubChannel extends DurableObjectBase {
     return this.inspectAgentReadOnly(participantId, methodName);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: {
       kind: "userland-capability",
@@ -4524,7 +4508,7 @@ export class PubSubChannel extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user"],
     effect: {
       kind: "userland-capability",
@@ -4579,8 +4563,8 @@ export class PubSubChannel extends DurableObjectBase {
 
   // ── Method calls (calls.ts — pending_calls is a declared cache) ──────────
 
-  @rpc({
-    principals: ["code"],
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
+    principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
     sensitivity: "write",
@@ -4610,7 +4594,7 @@ export class PubSubChannel extends DurableObjectBase {
     );
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4701,7 +4685,7 @@ export class PubSubChannel extends DurableObjectBase {
     return { id };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4773,7 +4757,7 @@ export class PubSubChannel extends DurableObjectBase {
    * caller before appending the terminal. Server-driven expiry remains the
    * separate `timeoutMethodCall` authority below.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4789,7 +4773,7 @@ export class PubSubChannel extends DurableObjectBase {
     if (pending) await this.calls.abortProviderCall(pending);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4808,7 +4792,7 @@ export class PubSubChannel extends DurableObjectBase {
     );
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -4832,7 +4816,7 @@ export class PubSubChannel extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -5063,7 +5047,7 @@ export class PubSubChannel extends DurableObjectBase {
    * provenance at task-channel creation (B1, WS-5) — until that lands a task
    * channel reads as `root`/`fork`.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5079,7 +5063,7 @@ export class PubSubChannel extends DurableObjectBase {
    * {@link getProvenance} reports `kind:"task"` instead of `root`. Durable state
    * keys, mirroring how fork provenance is stamped at `postClone`.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5351,7 +5335,7 @@ export class PubSubChannel extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5744,7 +5728,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Rename a direct child fork (durable `channel.fork_renamed` on this log). */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5780,7 +5764,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Archive a direct child fork (durable `channel.fork_archived` latch). */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: {
       kind: "userland-capability",
@@ -5834,7 +5818,7 @@ export class PubSubChannel extends DurableObjectBase {
    * current durable head. Archived forks remain available to administrative
    * callers; active UI surfaces filter them.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5890,7 +5874,7 @@ export class PubSubChannel extends DurableObjectBase {
    * plumbing: the pending fork marker only makes the operation one-shot and
    * crash-resumable for the matching fork id.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5981,7 +5965,7 @@ export class PubSubChannel extends DurableObjectBase {
    * fork (WS2 §4.5). Also lands the clone's fork provenance + pending seed
    * marker from the parent fork op (`forkInit`).
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6105,7 +6089,7 @@ export class PubSubChannel extends DurableObjectBase {
   // by contrast, are durable and coalesced through each fork's outbox directly
   // to the root, so reconnecting clients can reconcile without replaying logs.
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6166,7 +6150,7 @@ export class PubSubChannel extends DurableObjectBase {
   }
 
   /** Root endpoint for a coalesced head advance reported by the exact channel. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6213,7 +6197,7 @@ export class PubSubChannel extends DurableObjectBase {
     );
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6365,7 +6349,7 @@ export class PubSubChannel extends DurableObjectBase {
 
   // ── State introspection ─────────────────────────────────────────────────
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",

@@ -284,7 +284,7 @@ export function pickFallbackModel(catalog: ModelCatalog): {
 export class ModelSettingsDO extends DurableObjectBase {
   protected createTables(): void {}
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code", "session", "mission"],
     effect: { kind: "open" },
     tier: "open",
@@ -294,7 +294,7 @@ export class ModelSettingsDO extends DurableObjectBase {
     return this.assembleCatalog();
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code", "session", "mission"],
     effect: { kind: "open" },
     tier: "open",
@@ -308,7 +308,7 @@ export class ModelSettingsDO extends DurableObjectBase {
     return this.resolveSettings(catalog, config);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code", "session", "mission"],
     effect: { kind: "open" },
     tier: "open",
@@ -318,7 +318,7 @@ export class ModelSettingsDO extends DurableObjectBase {
     return this.getSettings();
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code", "session", "mission"],
     effect: { kind: "open" },
     tier: "open",
@@ -347,7 +347,7 @@ export class ModelSettingsDO extends DurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",

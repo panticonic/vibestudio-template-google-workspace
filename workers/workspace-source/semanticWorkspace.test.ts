@@ -17,7 +17,7 @@ import {
   SemanticWorkspace,
   type SemanticDispatchRequest,
   type SemanticDispatchResult,
-} from "./semanticWorkspace.js";
+} from "./semanticWorkspace.testHost.js";
 import { SemanticVcsStore } from "./semanticVcsStore.js";
 
 const timestamp = "2026-07-15T00:00:00.000Z";
@@ -996,21 +996,15 @@ describe("SemanticWorkspace repository counteractions", () => {
         ],
       },
     });
-    if (editDispatch.kind !== "effects-pending") throw new Error("edit did not request content");
-    expect(editDispatch.effects).toHaveLength(1);
-    expect(editDispatch.effects[0]).toMatchObject({ kind: "observe-content" });
-    const observation = editDispatch.effects[0]!;
-    const resumed = semantic.acknowledgeEffect({
-      effectId: observation.effectId,
-      payloadDigest: observation.payloadDigest,
-      receipt: {
-        files: [
-          {
-            contentHash: nonAsciiContentHash,
-            base64: btoa(String.fromCharCode(...nonAsciiBytes)),
-          },
-        ],
-      },
+    if (editDispatch.kind !== "host-read") throw new Error("edit did not request content");
+    expect(editDispatch.request).toMatchObject({
+      kind: "read-merge-content",
+      operation: "edit",
+      contentHashes: [nonAsciiContentHash],
+    });
+    const resumed = semantic.acknowledgeHostRead({
+      request: editDispatch.request,
+      files: [{ contentHash: nonAsciiContentHash, text: nonAsciiText }],
     });
     const edited = completedResult<{
       workingHead: { kind: "application"; applicationId: string };

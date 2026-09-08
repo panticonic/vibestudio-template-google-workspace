@@ -996,7 +996,7 @@ export class GadWorkspaceDO extends DurableObjectBase {
       : { wakeAt: Math.max(recoveryAt, Date.now() + 100) };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1009,7 +1009,7 @@ export class GadWorkspaceDO extends DurableObjectBase {
     return this.adoptDurableWorkWorkerGeneration(workerId);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1070,7 +1070,7 @@ export class GadWorkspaceDO extends DurableObjectBase {
     return claims;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1110,7 +1110,7 @@ export class GadWorkspaceDO extends DurableObjectBase {
     });
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1156,7 +1156,7 @@ export class GadWorkspaceDO extends DurableObjectBase {
     return result;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -1565,9 +1565,9 @@ export class GadWorkspaceDO extends DurableObjectBase {
           },
         );
         if (ensured.kind !== "complete") {
-          if (ensured.kind === "host-read") {
+          if (ensured.kind === "host-read" || ensured.kind === "host-content") {
             throw new Error(
-              "Workspace initialization emitted an unsupported host read",
+              "Workspace initialization emitted unsupported transient preparation",
             );
           }
           return this.workspaceSourcePendingInspection(
@@ -1998,6 +1998,14 @@ export class GadWorkspaceDO extends DurableObjectBase {
   }): unknown {
     this.ensureReady();
     return this.semanticWorkspace().acknowledgeHostRead(input.acknowledgement);
+  }
+
+  @schemaRpc()
+  vcsSemanticContentAck(input: {
+    acknowledgement: { request: GadJsonRecord; contentHashes: string[] };
+  }): unknown {
+    this.ensureReady();
+    return this.semanticWorkspace().acknowledgeContent(input.acknowledgement);
   }
 
   @schemaRpc()
@@ -6878,6 +6886,13 @@ export class GadWorkspaceDO extends DurableObjectBase {
       input?.channelId,
       "putChannelMembership",
     );
+    const channelTargetId =
+      typeof input?.channelTargetId === "string"
+        ? input.channelTargetId.trim()
+        : "";
+    if (!channelTargetId) {
+      throw new Error("putChannelMembership: channelTargetId is required");
+    }
     this.assertInviteChannelAuthority(channelId, "putChannelMembership");
     const memberId = `user:${userId}`;
     if (input?.memberId !== memberId) {
@@ -6931,6 +6946,7 @@ export class GadWorkspaceDO extends DurableObjectBase {
           {
             userId,
             channelId,
+            channelTargetId,
             memberId,
             handle,
             addedBy,

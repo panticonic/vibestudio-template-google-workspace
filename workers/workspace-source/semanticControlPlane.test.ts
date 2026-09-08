@@ -365,6 +365,7 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     const { call, callAs, sql } = await createTestDO(GadWorkspaceDO);
     await callAs(channelCaller("channel-b"), "putChannelMembership", {
       channelId: "channel-b",
+      channelTargetId: "do:workers/pubsub-channel:PubSubChannel:channel-b",
       userId: "usr_bob",
       memberId: "user:usr_bob",
       handle: "bob",
@@ -374,6 +375,7 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     });
     await callAs(channelCaller("channel-a"), "putChannelMembership", {
       channelId: "channel-a",
+      channelTargetId: "do:workers/pubsub-channel:PubSubChannel:channel-a",
       userId: "usr_bob",
       memberId: "user:usr_bob",
       handle: "bob",
@@ -383,6 +385,8 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     });
     await callAs(channelCaller("channel-private"), "putChannelMembership", {
       channelId: "channel-private",
+      channelTargetId:
+        "do:workers/pubsub-channel:PubSubChannel:channel-private",
       userId: "usr_charlie",
       memberId: "user:usr_charlie",
       handle: "charlie",
@@ -394,6 +398,7 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     await expect(
       callAs(channelCaller("channel-other"), "putChannelMembership", {
         channelId: "channel-b",
+        channelTargetId: "do:workers/pubsub-channel:PubSubChannel:channel-b",
         userId: "usr_bob",
         memberId: "user:usr_bob",
         handle: "bob",
@@ -405,6 +410,7 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     await expect(
       callAs(channelCaller("channel-b"), "putChannelMembership", {
         channelId: "channel-b",
+        channelTargetId: "do:workers/pubsub-channel:PubSubChannel:channel-b",
         userId: "usr_bob",
         memberId: "user:usr_bob",
         handle: "bob",
@@ -446,6 +452,7 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     await expect(
       callAs(channelCaller("channel-b"), "putChannelMembership", {
         channelId: "channel-b",
+        channelTargetId: "do:workers/pubsub-channel:PubSubChannel:channel-b",
         userId: "usr_bob",
         memberId: "user:usr_bob",
         handle: "bob",
@@ -499,6 +506,7 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     await expect(
       callAs(channelCaller("bad"), "putChannelMembership", {
         channelId: "bad",
+        channelTargetId: "do:workers/pubsub-channel:PubSubChannel:bad",
         userId: "user:usr_bob",
         memberId: "user:usr_bob",
         handle: "bob",
@@ -603,6 +611,7 @@ describe("GadWorkspaceDO unified log and semantic VCS schema", () => {
     const { callAs } = await createTestDO(GadWorkspaceDO);
     await callAs(channelCaller("channel-jokes"), "putChannelMembership", {
       channelId: "channel-jokes",
+      channelTargetId: "do:workers/pubsub-channel:PubSubChannel:channel-jokes",
       userId: "usr_bob",
       memberId: "user:usr_bob",
       handle: "bob",

@@ -102,6 +102,7 @@ export type VerifyToolDetails =
       };
       truncatedDiagnostics: number;
       truncatedDiagnosticText: number;
+      failureKind?: "user-code";
       failure?: AgentToolFailure;
     }
   | {
@@ -201,6 +202,12 @@ export function createVerifyTool(
         );
         const bounded = boundBuildReport(report);
         const failed = report.status !== "ok";
+        const sourceFailure =
+          report.status === "failed" &&
+          report.diagnostics.some((diagnostic) => diagnostic.severity === "error") &&
+          report.diagnostics
+            .filter((diagnostic) => diagnostic.severity === "error")
+            .every((diagnostic) => diagnostic.source !== "infrastructure");
         const receipt = buildVerificationReceipt(
           command.target,
           exactContextId,
@@ -255,6 +262,7 @@ export function createVerifyTool(
             },
             truncatedDiagnostics: bounded.truncatedDiagnostics,
             truncatedDiagnosticText: bounded.truncatedDiagnosticText,
+            ...(sourceFailure ? { failureKind: "user-code" as const } : {}),
             ...(failure ? { failure } : {}),
           },
           isError: failed,

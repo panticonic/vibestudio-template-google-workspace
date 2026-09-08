@@ -9,8 +9,6 @@ const SNAPSHOT_LIMITS = {
   leafTextCharacters: 160,
 } as const;
 
-let dataMode: AgentDataMode = "live";
-const customStateProviders = new Map<string, () => unknown>();
 
 declare global {
   interface Window {
@@ -117,11 +115,23 @@ export function snapshotDocument(document: Document) {
   };
 }
 
-export const agentApi = {
+export function createAgentApi(environment: {
+  document?: Document;
+  location?: Pick<Location, "href" | "pathname" | "search" | "hash">;
+  modeChanged?: (mode: AgentDataMode) => void;
+} = {}) {
+let dataMode: AgentDataMode = "live";
+const customStateProviders = new Map<string, () => unknown>();
+const documentOf = () => {
+  if (!environment.document) throw new Error("This runtime has no document surface");
+  return environment.document;
+};
+const agentApi = {
   snapshot() {
-    return snapshotDocument(document);
+    return snapshotDocument(documentOf());
   },
   tree() {
+    const document = documentOf();
     return document.body ? boundedStructure(document.body).structure : null;
   },
   state() {
@@ -130,6 +140,8 @@ export const agentApi = {
     );
   },
   routes() {
+    const location = environment.location;
+    if (!location) throw new Error("This runtime has no document location");
     return {
       href: location.href,
       pathname: location.pathname,
@@ -139,8 +151,7 @@ export const agentApi = {
   },
   setMode(mode: AgentDataMode) {
     dataMode = mode;
-    window.__vibestudioAgentMode = mode;
-    window.dispatchEvent(new CustomEvent("vibestudio:agentModeChanged", { detail: mode }));
+    environment.modeChanged?.(mode);
     return { mode };
   },
   getMode() {
@@ -152,12 +163,16 @@ export const agentApi = {
   },
 };
 
+return agentApi;
+}
+
 export function exposeAgentApi(
-  expose: (method: string, handler: (...args: any[]) => unknown | Promise<unknown>) => void
+  agentApi: ReturnType<typeof createAgentApi>,
+  expose: (method: string, handler: (...args: any[]) => unknown | Promise<unknown>, website: import("@vibestudio/rpc").WebsiteMethodPolicy) => void
 ): void {
-  expose("_agent.snapshot", () => agentApi.snapshot());
-  expose("_agent.tree", () => agentApi.tree());
-  expose("_agent.state", () => agentApi.state());
-  expose("_agent.routes", () => agentApi.routes());
-  expose("_agent.setMode", (mode) => agentApi.setMode(mode as AgentDataMode));
+  expose("_agent.snapshot", () => agentApi.snapshot(), { kind: "closed", reason: "Document snapshots and agent controls are private to the owning workspace." });
+  expose("_agent.tree", () => agentApi.tree(), { kind: "closed", reason: "Document snapshots and agent controls are private to the owning workspace." });
+  expose("_agent.state", () => agentApi.state(), { kind: "closed", reason: "Document snapshots and agent controls are private to the owning workspace." });
+  expose("_agent.routes", () => agentApi.routes(), { kind: "closed", reason: "Document snapshots and agent controls are private to the owning workspace." });
+  expose("_agent.setMode", (mode) => agentApi.setMode(mode as AgentDataMode), { kind: "closed", reason: "Document snapshots and agent controls are private to the owning workspace." });
 }

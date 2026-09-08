@@ -68,11 +68,13 @@ runtime entity.
 
 Every eval call runs in the current workspace and context. Contexts are
 workspace-local branches, not a way to load source from another workspace.
-Quickfire remains attached to the workspace of its target panel. The transport
-layer can represent a workspace-qualified RPC target, but cross-workspace
-application forwarding is deliberately closed pending a product decision about
-exported receiver trust versus per-invocation isolation. Do not document or
-invent a forwarding API.
+Quickfire remains attached to the workspace of its target panel. An ordinary
+RPC call may select one exact destination workspace through its call options;
+omission always means the current workspace and never searches elsewhere.
+Cross-workspace calls require the receiver method's explicit `crossWorkspace`
+exposure plus the source's outgoing and destination's incoming governing
+policies. Those hard policies are checked before ordinary service/capability
+authority and cannot be enabled by mutable workspace code or an approval.
 
 ## Component essentials
 

@@ -1804,8 +1804,11 @@ class WorkerCdpPage {
     for (const modifier of parts) await this.keyDown(modifier);
     await this.keyDown(main);
     const def = KEY_DEFS[main];
+    // Shift changes text; it does not make Enter/Space into non-text shortcuts.
+    // Consult held modifiers too, including ones established by keyboard.down().
+    const shortcutModifiers = this.keyboardModifiers() & ~MODIFIER_BITS["Shift"]!;
     const text =
-      parts.length === 0 ? (def?.text ?? (main.length === 1 ? main : undefined)) : undefined;
+      shortcutModifiers === 0 ? (def?.text ?? (main.length === 1 ? main : undefined)) : undefined;
     if (text) {
       await this.connection.send("Input.dispatchKeyEvent", {
         type: "char",

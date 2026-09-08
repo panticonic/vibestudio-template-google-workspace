@@ -9,5 +9,21 @@ describe("templates authority manifest", () => {
     ]);
     expect(JSON.stringify(manifest)).not.toContain("context.boundary");
     expect(JSON.stringify(manifest)).not.toContain("workspace.storage.delete");
+    expect(manifest.vibestudio.authority.requests).toEqual(
+      expect.arrayContaining([
+        {
+          capability: "network.response.read",
+          resource: { kind: "origin", origin: "https://github.com" },
+          tier: "gated",
+          evidence: "bounded-dynamic",
+        },
+        {
+          capability: "network.response.read",
+          resource: { kind: "prefix", prefix: "" },
+          tier: "gated",
+          evidence: "intentional-broad",
+        },
+      ]),
+    );
   });
 });

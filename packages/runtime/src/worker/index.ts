@@ -170,6 +170,7 @@ export const getParent = runtimeMember("getParent");
 export const getParentWithContract = runtimeMember("getParentWithContract");
 export const gad = runtimeMember("gad");
 export const blobstore = runtimeMember("blobstore");
+export const images = runtimeMember("images");
 export const workspace = runtimeMember("workspace");
 export const runtime = runtimeMember("runtime");
 export const credentials = runtimeMember("credentials");
@@ -327,7 +328,7 @@ export function createWorkerRuntime(env: WorkerEnv): WorkerRuntime {
   // gatewayFetch is for the configured gateway, not general egress. Keep the
   // same origin guard as server-side eval so an absolute URL can still name a
   // gateway route, but a gateway bearer can never be sent to another origin.
-  const initialGatewayFetch = createGatewayFetch({ ...initialGatewayConfig, relativeOnly: true });
+  const initialGatewayFetch = createGatewayFetch(initialGatewayConfig);
   const callMain = createMainCaller(rpc);
 
   let panelRuntime!: PanelRuntimeApi;
@@ -472,3 +473,5 @@ export function handleWorkerRpc(
   }
   return null;
 }
+
+export type * from "../shared/images.js";

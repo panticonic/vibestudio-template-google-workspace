@@ -28,13 +28,32 @@ async function api() {
 }
 
 describe("@workspace-extensions/image-service", () => {
+  it("validates pixels and reports metadata without converting the original", async () => {
+    const service = await api();
+    const bytes = await photonPng();
+    await expect(service.getMetadata(bytes)).resolves.toEqual({
+      mimeType: "image/png",
+      width: 1,
+      height: 1,
+      byteLength: bytes.byteLength,
+    });
+    await expect(service.getMetadata(new Uint8Array([1, 2]))).rejects.toThrow("Unsupported");
+  });
   it("detects supported image magic bytes", async () => {
     const service = await api();
 
-    await expect(service.detectMimeType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).resolves.toBe("image/png");
-    await expect(service.detectMimeType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]))).resolves.toBe("image/jpeg");
-    await expect(service.detectMimeType(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]))).resolves.toBe("image/gif");
-    await expect(service.detectMimeType(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" />'))).resolves.toBe("image/svg+xml");
+    await expect(
+      service.detectMimeType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    ).resolves.toBe("image/png");
+    await expect(
+      service.detectMimeType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]))
+    ).resolves.toBe("image/jpeg");
+    await expect(
+      service.detectMimeType(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]))
+    ).resolves.toBe("image/gif");
+    await expect(
+      service.detectMimeType(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" />'))
+    ).resolves.toBe("image/svg+xml");
     await expect(service.detectMimeType(new Uint8Array([0x00, 0x01, 0x02]))).resolves.toBeNull();
   });
 
@@ -44,9 +63,9 @@ describe("@workspace-extensions/image-service", () => {
     Reflect.deleteProperty(globalThis, "Buffer");
     try {
       const service = await api();
-      await expect(
-        service.detectMimeType({ __bin: true, data: TINY_PNG_BASE64 })
-      ).resolves.toBe("image/png");
+      await expect(service.detectMimeType({ __bin: true, data: TINY_PNG_BASE64 })).resolves.toBe(
+        "image/png"
+      );
       await expect(service.resize(input, "image/png", undefined)).resolves.toMatchObject({
         mimeType: "image/png",
         width: 1,

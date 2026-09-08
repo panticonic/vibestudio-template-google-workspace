@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { ledgerTest } from "../../../../tests/helpers/ledgerTest.js";
 import { createPanelRuntime } from "./panelRuntime.js";
 
 function readyHostReport() {
@@ -437,7 +436,7 @@ function runtimeFocusHarness() {
 }
 
 describe("panel runtime topology composition", () => {
-  ledgerTest("execution.panel", async () => {
+  it("ledger:execution.panel", async () => {
     const { runtime, call } = runtimeHarness();
 
     await expect(

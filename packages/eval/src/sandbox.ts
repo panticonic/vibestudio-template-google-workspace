@@ -291,6 +291,12 @@ export interface CompileResult<T> {
   error?: string;
   /** Developer-facing stack for the source-loading/compilation boundary. */
   errorStack?: string;
+  /** Structured boundary category preserved from source/import RPC failures. */
+  errorKind?: string;
+  /** Structured boundary code preserved for retry and recovery policy. */
+  code?: string;
+  /** Structured boundary details preserved without parsing error copy. */
+  errorData?: unknown;
   /** Runtime diagnostics scoped to this compiled component instance. */
   runtime?: { console: ReturnType<typeof createConsoleCapture> };
 }
@@ -1853,7 +1859,7 @@ export async function executeSandbox(
       throwIfAborted(signal);
       return {
         safeReturnValue: safeSerialize(
-          returnValue ?? result.exports["default"],
+          returnValue === undefined ? result.exports["default"] : returnValue,
         ),
         exports: result.exports,
       };
@@ -2048,10 +2054,22 @@ export async function compileComponent<
       ...(consoleCapture ? { runtime: { console: consoleCapture } } : {}),
     };
   } catch (err) {
+    const errorKind =
+      err && typeof err === "object" && typeof (err as { errorKind?: unknown }).errorKind === "string"
+        ? (err as { errorKind: string }).errorKind
+        : undefined;
+    const code =
+      err && typeof err === "object" && typeof (err as { code?: unknown }).code === "string"
+        ? (err as { code: string }).code
+        : undefined;
+    const errorData = structuredFailureData(err);
     return {
       success: false,
       error: err instanceof Error ? err.message : String(err),
       ...(err instanceof Error && err.stack ? { errorStack: err.stack } : {}),
+      ...(errorKind ? { errorKind } : {}),
+      ...(code ? { code } : {}),
+      ...(errorData === undefined ? {} : { errorData }),
       ...(consoleCapture ? { runtime: { console: consoleCapture } } : {}),
     };
   }

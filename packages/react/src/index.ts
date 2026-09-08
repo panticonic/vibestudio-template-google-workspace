@@ -36,3 +36,5 @@ export {
   useViewportHeight,
   type VibestudioHostPlatform,
 } from "./responsive.js";
+
+export { GeneratedImage, useGeneratedImage, type GeneratedImageProps } from "./GeneratedImage.js";

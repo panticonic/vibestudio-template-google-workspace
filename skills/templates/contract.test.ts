@@ -32,6 +32,9 @@ describe("templates skill public contract", () => {
     expect(prose).toContain("exact immutable `pin`");
     expect(prose).toContain("creating a new standalone workspace");
     expect(prose).toContain("ordinary VCS compare and merge operations");
+    expect(skill).toContain(
+      'extensions.invoke("@workspace-extensions/templates", "catalog", [])'
+    );
     expect(invariants).toContain("inspect resolves once to an exact pin");
     expect(invariants).toContain("workspace creation consumes the exact inspected pin");
     expect(invariants).toContain("source integration into an existing workspace uses ordinary VCS comparison and merge");

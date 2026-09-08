@@ -30,10 +30,12 @@ Contexts branch inside one workspace; they do not make another workspace's
 source available. Quickfire follows the workspace of its target panel.
 Personal and System are private per-user workspaces, and native client code is
 owned by that user's System workspace. `about/new` and other workspace-local
-pages load from the local workspace. Cross-workspace application RPC
-forwarding is closed pending a decision on exported receiver trust versus
-per-invocation isolation; the transport's ability to carry a qualified target
-does not make forwarding available.
+pages load from the local workspace. Cross-workspace application RPC uses an
+explicit destination and an exposed receiver method. Source outgoing and
+destination incoming policies are hard admission boundaries; ordinary
+operation authority is checked afterward. A qualified target alone grants no
+access, and an approval cannot override either workspace policy. See
+[workspace RPC](../workspace-dev/RPC.md) for the integration contract.
 
 Durable conversations and tool activity live in canonical trajectory/channel
 logs. Managed source, applications, integration decisions, and publication live

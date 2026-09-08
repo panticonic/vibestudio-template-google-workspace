@@ -204,10 +204,10 @@ describe("panel error diagnostic chat launcher", () => {
 
   it("opens a child chat with a redacted agent debugging prompt", async () => {
     const rpcCall = createRpcCall();
-    const { _initPanelHandleBridge } = await import("./handle.js");
+    const { createPanelHandleApi } = await import("./handle.js");
     const { openPanelErrorDiagnosticChat } =
       await import("./errorDebugChat.js");
-    _initPanelHandleBridge({ call: rpcCall, on: vi.fn() } as never, {
+    const panelRuntime = createPanelHandleApi({ call: rpcCall, on: vi.fn() } as never, {
       selfId: "panel:tree/spectrolite",
       selfRpcTargetId: "panel:nav-spectrolite-entity",
     });
@@ -222,7 +222,7 @@ describe("panel error diagnostic chat launcher", () => {
         userAgent: "vitest",
         timestamp: "2026-06-15T00:00:00.000Z",
       },
-      { slotId: "panel:tree/spectrolite", contextId: "ctx-fallback" },
+      { slotId: "panel:tree/spectrolite", contextId: "ctx-fallback", panelRuntime },
     );
 
     expect(result).toMatchObject({

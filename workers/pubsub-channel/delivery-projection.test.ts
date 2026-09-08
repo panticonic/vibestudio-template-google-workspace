@@ -285,25 +285,42 @@ describe("ChannelDeliveryProjection", () => {
     expect(projection.detachRecoveryBoundary(AGENT_ID, 1)).toBe(1);
   });
 
-  it("re-derives terminal redelivery bytes from the canonical event", () => {
+  it("re-derives terminal redelivery references from the canonical event", () => {
     const canonical = message(2);
     projection.fold(relationship(1, 1));
     projection.fold(canonical);
     sql.exec(
       `UPDATE channel_delivery_mailbox
-          SET state = 'terminal-completed', envelope_json = NULL, agentic_context_json = NULL
+          SET state = 'terminal-completed', agentic_context_json = NULL
         WHERE event_sequence = 2`
     );
 
     expect(projection.redeliverEventTo(canonical, AGENT_ID)).toBe(true);
     const row = sql
-      .exec(`SELECT state, envelope_json FROM channel_delivery_mailbox WHERE event_sequence = 2`)
+      .exec(`SELECT state, event_id, event_sequence FROM channel_delivery_mailbox WHERE event_sequence = 2`)
       .toArray()[0]!;
     expect(row["state"]).toBe("ready");
-    expect(JSON.parse(String(row["envelope_json"]))).toMatchObject({
-      kind: "log",
-      event: { id: 2, messageId: canonical.messageId },
-    });
+    expect(row).toMatchObject({ event_sequence: 2, event_id: canonical.messageId });
+  });
+
+  it("keeps arbitrarily large image payloads in the canonical log rather than mailbox cells", () => {
+    projection.fold(relationship(1, 1));
+    const exec = sql.exec.bind(sql);
+    sql.exec = (query, ...bindings) => {
+      if (bindings.some((value) => typeof value === "string" && value.length > 1_000_000)) {
+        throw new Error("SQLITE_TOOBIG");
+      }
+      return exec(query, ...bindings);
+    };
+    const canonical = message(2);
+    (canonical.payload as { payload: { blocks: unknown[] } }).payload.blocks = [
+      { type: "image", mimeType: "image/png", data: "A".repeat(3_000_000) },
+    ];
+    expect(projection.fold(canonical).inserted).toBe(1);
+    const row = sql.exec("SELECT * FROM channel_delivery_mailbox WHERE event_sequence = 2").toArray()[0]!;
+    expect(row).toMatchObject({ event_id: canonical.messageId, event_sequence: 2, source_message_id: "message-2", event_kind: "message.completed" });
+    expect(JSON.stringify(row).length).toBeLessThan(2_000);
+    expect(row).not.toHaveProperty("envelope_json");
   });
 
   it("delivers to a durable member without any activation-local transport", () => {

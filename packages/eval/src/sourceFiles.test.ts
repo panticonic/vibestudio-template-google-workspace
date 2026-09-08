@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileComponent, executeSandbox, loadSourceFileBundle } from "./index";
 
+function missing(path: string): Error & { code: string } {
+  return Object.assign(new Error(`Missing ${path}`), { code: "ENOENT" });
+}
+
+function filesystemError(path: string, code: "EISDIR" | "ENOTDIR"): Error & { code: string } {
+  return Object.assign(new Error(`${code}: ${path}`), { code });
+}
+
 describe("source file bundles", () => {
   let originalModuleMap: unknown;
   let originalRequire: unknown;
@@ -45,7 +53,7 @@ describe("source file bundles", () => {
 
     const bundle = await loadSourceFileBundle("src/main.ts", async (path) => {
       const code = files[path];
-      if (code === undefined) throw new Error(`Missing ${path}`);
+      if (code === undefined) throw missing(path);
       return code;
     });
 
@@ -55,6 +63,77 @@ describe("source file bundles", () => {
       "src/math.ts",
       "src/nested/base.ts",
     ]);
+  });
+
+  it("stops relative candidate search on a structured transport failure", async () => {
+    const lost = Object.assign(new Error("Workspace session closed"), {
+      errorKind: "transport",
+      code: "CONNECTION_LOST",
+      errorData: { reconnectable: true },
+    });
+    const calls: string[] = [];
+    await expect(
+      loadSourceFileBundle(
+        "src/main.ts",
+        async (path) => {
+          calls.push(path);
+          if (path === "src/main.ts") {
+            return `import { label } from "./catalog"; export default label;`;
+          }
+          if (path === "src/catalog") throw missing(path);
+          throw lost;
+        },
+      ),
+    ).rejects.toBe(lost);
+    expect(calls).toEqual(["src/main.ts", "src/catalog", "src/catalog.tsx"]);
+  });
+
+  it("resolves a directory import through its index after file candidates", async () => {
+    const files: Record<string, string> = {
+      "src/main.ts": `import { label } from "./catalog"; export default label;`,
+      "src/catalog/index.ts": `export const label = "ready";`,
+    };
+    const bundle = await loadSourceFileBundle("src/main.ts", async (path) => {
+      if (path === "src/catalog") throw filesystemError(path, "EISDIR");
+      const code = files[path];
+      if (code === undefined) throw missing(path);
+      return code;
+    });
+    expect(bundle.resolutions["src/main.ts\n./catalog"]).toBe("src/catalog/index.ts");
+  });
+
+  it("continues after an ENOTDIR candidate failure", async () => {
+    const code = `import { label } from "./catalog"; export default label;`;
+    const bundle = await loadSourceFileBundle("src/main.ts", async (path) => {
+      if (path === "src/main.ts") return code;
+      if (path === "src/catalog") throw filesystemError(path, "ENOTDIR");
+      if (path === "src/catalog.tsx") return `export const label = "ready";`;
+      throw missing(path);
+    });
+    expect(bundle.resolutions["src/main.ts\n./catalog"]).toBe("src/catalog.tsx");
+  });
+
+  it("preserves structured import failures in compile results", async () => {
+    const lost = Object.assign(new Error("Workspace session closed"), {
+      errorKind: "transport",
+      code: "CONNECTION_LOST",
+      errorData: { reconnectable: true },
+    });
+    const code = `import { label } from "./catalog"; export default function App() { return label; }`;
+    const result = await compileComponent(code, {
+      sourcePath: "src/App.tsx",
+      loadSourceFile: async (path) => {
+        if (path === "src/App.tsx") return code;
+        throw lost;
+      },
+    });
+    expect(result).toMatchObject({
+      success: false,
+      error: "Workspace session closed",
+      errorKind: "transport",
+      code: "CONNECTION_LOST",
+      errorData: { reconnectable: true },
+    });
   });
 
   it("executes eval files with relative imports", async () => {
@@ -84,7 +163,7 @@ describe("source file bundles", () => {
         if (path === "packages/app/package.json") {
           return JSON.stringify({ dependencies: { "math-lib": "^1.2.3" } });
         }
-        throw new Error(`Missing ${path}`);
+        throw missing(path);
       },
       loadImport: async (specifier, ref) => {
         loadCalls.push({ specifier, ref });
@@ -110,7 +189,7 @@ describe("source file bundles", () => {
         if (path === "packages/app/package.json") {
           return JSON.stringify({ dependencies: { "math-lib": "^1.2.3" } });
         }
-        throw new Error(`Missing ${path}`);
+        throw missing(path);
       },
       loadImport: async (specifier, ref) => {
         loadCalls.push({ specifier, ref });
@@ -137,7 +216,7 @@ describe("source file bundles", () => {
         if (path === "packages/app/package.json") {
           return JSON.stringify({ dependencies: {} });
         }
-        throw new Error(`Missing ${path}`);
+        throw missing(path);
       },
       loadImport: async () => {
         throw new Error("should not be called");
@@ -178,7 +257,7 @@ describe("source file bundles", () => {
         if (path === "packages/app/package.json") {
           return JSON.stringify({ devDependencies: { vitest: "^3.2.4" } });
         }
-        throw new Error(`Missing ${path}`);
+        throw missing(path);
       },
       loadImport: async (specifier, ref) => {
         loadCalls.push({ specifier, ref });
@@ -203,7 +282,7 @@ describe("source file bundles", () => {
         if (path === "packages/app/package.json") {
           return JSON.stringify({ imports: { "#labels": "./src/labels.ts" } });
         }
-        throw new Error(`Missing ${path}`);
+        throw missing(path);
       },
     });
 
@@ -222,7 +301,7 @@ describe("source file bundles", () => {
         if (path === "packages/app/tsconfig.json") {
           return JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@/*": ["src/*"] } } });
         }
-        throw new Error(`Missing ${path}`);
+        throw missing(path);
       },
     });
 
@@ -283,7 +362,7 @@ export default function App() { return label; }`;
         if (path === "packages/app/package.json") {
           return JSON.stringify({ dependencies: { "label-lib": "2" } });
         }
-        throw new Error(`Missing ${path}`);
+        throw missing(path);
       },
       loadImport: async (specifier, ref) => {
         loadCalls.push({ specifier, ref });

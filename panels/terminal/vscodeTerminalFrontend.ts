@@ -52,7 +52,8 @@ export async function createVscodeTerminalFrontend(
 
 /**
  * Ported from VS Code's `XtermTerminal` layer, with VS Code workbench services replaced by
- * local browser adapters. The upstream source lives under `vscode-upstream/`; this class keeps
+ * local browser adapters. The upstream reference snapshot lives under
+ * `../../docs/upstream/vscode-terminal/`; this class keeps
  * the same ownership model: raw xterm plus a managed addon store, renderer recovery, clipboard,
  * search, serialize, unicode, and optional GPU/image/ligature support.
  */

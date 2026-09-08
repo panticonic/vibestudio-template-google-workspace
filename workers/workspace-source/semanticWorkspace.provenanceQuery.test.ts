@@ -19,7 +19,7 @@ import {
   SemanticWorkspace,
   type SemanticDispatchRequest,
   type SemanticDispatchResult,
-} from "./semanticWorkspace.js";
+} from "./semanticWorkspace.testHost.js";
 import { SemanticVcsStore } from "./semanticVcsStore.js";
 
 const timestamp = "2026-08-14T00:00:00.000Z";
@@ -213,21 +213,16 @@ async function fixture() {
     },
   });
   const observedCapDispatch = ((): SemanticDispatchResult => {
-    if (capDispatch.kind !== "effects-pending") throw new Error("text edit did not request bytes");
-    const observation = capDispatch.effects.find((effect) => effect.kind === "observe-content");
-    if (!observation) return capDispatch;
+    if (capDispatch.kind !== "host-read") throw new Error("text edit did not request bytes");
     const baseText = "export const backoffMs = 5_000;\n";
-    return semantic.acknowledgeEffect({
-      effectId: observation.effectId,
-      payloadDigest: observation.payloadDigest,
-      receipt: {
-        files: [
-          {
-            contentHash: sha256Hex(new TextEncoder().encode(baseText)),
-            base64: btoa(baseText),
-          },
-        ],
-      },
+    return semantic.acknowledgeHostRead({
+      request: capDispatch.request,
+      files: [
+        {
+          contentHash: sha256Hex(new TextEncoder().encode(baseText)),
+          text: baseText,
+        },
+      ],
     });
   })();
   const capped = pending<{

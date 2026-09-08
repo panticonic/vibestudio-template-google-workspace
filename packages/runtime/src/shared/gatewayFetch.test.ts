@@ -1,163 +1,146 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGatewayFetch } from "./gatewayFetch.js";
 
-describe("createGatewayFetch", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+describe("explicit gateway transport", () => {
+  afterEach(() => vi.unstubAllGlobals());
 
-  function captureFetch() {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string | URL, init?: RequestInit) => {
-        calls.push({ url: String(url), init });
-        return new Response("ok");
-      }),
+  it("uses authenticated HTTP only when configured with its host credential", async () => {
+    const fetch = vi.fn(async () => new Response("ok"));
+    vi.stubGlobal("fetch", fetch);
+    const gateway = createGatewayFetch({
+      serverUrl: "https://gateway.test",
+      token: "secret",
+    });
+    await gateway("/a/../route");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://gateway.test/route",
+      expect.objectContaining({ headers: expect.any(Headers) }),
     );
-    return calls;
-  }
-
-  it("prefixes relative paths and attaches the bearer", async () => {
-    const calls = captureFetch();
-    const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T" });
-    await gw("/some/route");
-    expect(calls[0]!.url).toBe("http://gw.test/some/route");
-    expect(new Headers(calls[0]!.init!.headers).get("Authorization")).toBe("Bearer T");
+    expect(
+      (fetch.mock.calls[0] as unknown as [string, RequestInit])[1].headers,
+    ).toEqual(new Headers({ Authorization: "Bearer secret" }));
   });
 
-  it("defaults to the configured gateway origin", async () => {
-    captureFetch();
-    const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T" });
-    await expect(gw("https://elsewhere.test/x")).rejects.toThrow(/only gateway-relative/);
+  it.each([
+    "https://other.test/x",
+    "//other.test/x",
+    "https://user:password@gateway.test/x",
+  ])("rejects foreign or credential-bearing destinations: %s", async (path) => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const gateway = createGatewayFetch({
+      serverUrl: "https://gateway.test",
+      token: "secret",
+    });
+    await expect(gateway(path)).rejects.toThrow(/only gateway-relative/);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  describe("gateway-origin mode", () => {
-    it("allows gateway-relative paths", async () => {
-      const calls = captureFetch();
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T", relativeOnly: true });
-      await gw("/build/artifact");
-      expect(calls[0]!.url).toBe("http://gw.test/build/artifact");
-    });
-
-    it("allows absolute URLs on the configured gateway origin", async () => {
-      const calls = captureFetch();
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T", relativeOnly: true });
-      await gw("http://gw.test/build/artifact");
-      expect(calls[0]!.url).toBe("http://gw.test/build/artifact");
-    });
-
-    it("rejects absolute URLs on another origin (no bearer exfiltration)", async () => {
-      captureFetch();
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T", relativeOnly: true });
-      await expect(gw("https://evil.test/steal")).rejects.toThrow(/only gateway-relative/);
-    });
-
-    it("rejects protocol-relative URLs that resolve to a foreign origin", async () => {
-      captureFetch();
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T", relativeOnly: true });
-      await expect(gw("//evil.test/steal")).rejects.toThrow(/only gateway-relative/);
-    });
-
-    it("does not let `..` escape the gateway origin", async () => {
-      const calls = captureFetch();
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T", relativeOnly: true });
-      await gw("/a/../../b");
-      expect(new URL(calls[0]!.url).origin).toBe("http://gw.test");
-    });
+  it("allows absolute same-origin gateway URLs", async () => {
+    const stream = vi.fn(async () => new Response("ok"));
+    await createGatewayFetch({
+      rpc: { stream },
+      serverUrl: "https://gateway.test",
+    })("https://gateway.test/build?key=1");
+    expect(stream).toHaveBeenCalledWith(
+      "main",
+      "gateway.fetch",
+      [expect.objectContaining({ path: "/build?key=1" })],
+      { signal: undefined, body: null },
+    );
   });
 
-  describe("panel tunnel (shell bridge)", () => {
-    function stubPanel(
-      stream = vi.fn((_envelope: unknown, _signal?: unknown) =>
-        Promise.resolve(new Response("tunneled")),
-      ),
-    ) {
-      vi.stubGlobal("__vibestudioShell", { stream });
-      vi.stubGlobal("__vibestudioEntityId", "panel:p1");
-      return stream;
+  it("runs the same RPC client with or without panel globals and never sends a bearer", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    for (const shell of [
+      undefined,
+      {
+        stream: vi.fn(() => {
+          throw new Error("wrong transport");
+        }),
+      },
+    ]) {
+      vi.stubGlobal("__vibestudioShell", shell);
+      const stream = vi.fn(async () => new Response("tunneled"));
+      const response = await createGatewayFetch({ rpc: { stream } })(
+        "api/route",
+      );
+      expect(await response.text()).toBe("tunneled");
+      expect(stream).toHaveBeenCalledWith(
+        "main",
+        "gateway.fetch",
+        [{ path: "/api/route", method: "GET", headers: {} }],
+        { signal: undefined, body: null },
+      );
     }
+    expect(fetch).not.toHaveBeenCalled();
+  });
 
-    it("tunnels over the bridge stream() instead of an authenticated HTTP fetch", async () => {
-      const calls = captureFetch();
-      const stream = stubPanel();
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T" });
-
-      const res = await gw("/some/route");
-
-      expect(await res.text()).toBe("tunneled");
-      // No direct HTTP request — the bearer never rides any wire.
-      expect(calls).toHaveLength(0);
-      expect(stream).toHaveBeenCalledTimes(1);
-      const envelope = stream.mock.calls[0]![0] as unknown as {
-        target: string;
-        delivery: { caller: unknown };
-        message: { type: string; method: string; args: Array<Record<string, unknown>> };
-      };
-      expect(envelope.target).toBe("main");
-      expect(envelope.delivery.caller).toEqual({ callerId: "panel:p1", callerKind: "panel" });
-      expect(envelope.message.type).toBe("stream-request");
-      expect(envelope.message.method).toBe("gateway.fetch");
-      expect(envelope.message.args[0]).toMatchObject({ path: "/some/route", method: "GET" });
+  it("preserves streaming uploads and cancellation without buffering or descriptor bodies", async () => {
+    const stream = vi.fn(async () => new Response("ok"));
+    const abort = new AbortController();
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode("payload"));
+        c.close();
+      },
     });
-
-    it("keeps the relativeOnly guard before tunneling", async () => {
-      stubPanel();
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T", relativeOnly: true });
-      await expect(gw("https://evil.test/steal")).rejects.toThrow(/only gateway-relative/);
+    await createGatewayFetch({ rpc: { stream } })("/upload", {
+      method: "POST",
+      body,
+      signal: abort.signal,
     });
+    const args = stream.mock.calls[0] as unknown as [
+      string,
+      string,
+      unknown[],
+      { body: ReadableStream<Uint8Array>; signal: AbortSignal },
+    ];
+    expect(args[2]).toEqual([{ path: "/upload", method: "POST", headers: {} }]);
+    expect(args[3].body).toBe(body);
+    expect(args[3].signal).toBe(abort.signal);
+    expect(await new Response(args[3].body).text()).toBe("payload");
+  });
 
-    it("streams a POST body as the third stream() arg — never base64 in the descriptor (§1.6)", async () => {
-      captureFetch();
-      const stream = vi.fn(
-        (_envelope: unknown, _signal?: unknown, _body?: ReadableStream<Uint8Array> | null) =>
-          Promise.resolve(new Response("tunneled")),
-      );
-      stubPanel(stream as never);
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T" });
-
-      await gw("/api/upload", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: '{"hello":"upload"}',
-      });
-
-      expect(stream).toHaveBeenCalledTimes(1);
-      const [envelope, , body] = stream.mock.calls[0]! as unknown as [
-        { message: { args: Array<Record<string, unknown>> } },
-        unknown,
-        ReadableStream<Uint8Array> | null,
-      ];
-      // The descriptor carries NO body field of any kind.
-      const descriptor = envelope.message.args[0]!;
-      expect(descriptor).not.toHaveProperty("body");
-      expect(descriptor).not.toHaveProperty("bodyBase64");
-      expect(descriptor["method"]).toBe("POST");
-      // The body rides as a ReadableStream for the transport's bulk-channel pump.
-      expect(body).toBeInstanceOf(ReadableStream);
-      const reader = body!.getReader();
-      const { value } = await reader.read();
-      expect(new TextDecoder().decode(value)).toBe('{"hello":"upload"}');
+  it("preserves automatically generated multipart boundaries", async () => {
+    const stream = vi.fn(async () => new Response("ok"));
+    const body = new FormData();
+    body.set("field", "value");
+    await createGatewayFetch({ rpc: { stream } })("/upload", {
+      method: "POST",
+      body,
     });
+    const args = stream.mock.calls[0] as unknown as [
+      string,
+      string,
+      [{ headers: Record<string, string> }],
+      { body: ReadableStream<Uint8Array> },
+    ];
+    const parsed = await new Response(args[3].body, {
+      headers: args[2][0].headers,
+    }).formData();
+    expect(parsed.get("field")).toBe("value");
+  });
 
-    it("a GET tunnels with a null body (no upload stream opened)", async () => {
-      captureFetch();
-      const stream = vi.fn(
-        (_envelope: unknown, _signal?: unknown, _body?: ReadableStream<Uint8Array> | null) =>
-          Promise.resolve(new Response("tunneled")),
-      );
-      stubPanel(stream as never);
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T" });
-      await gw("/some/route");
-      expect(stream.mock.calls[0]![2]).toBeNull();
-    });
+  it("rejects network destinations without a configured gateway URL", async () => {
+    const stream = vi.fn(async () => new Response("ok"));
+    const gateway = createGatewayFetch({ rpc: { stream } });
+    for (const path of [
+      "https://other.test/x",
+      "//other.test/x",
+      "data:hello",
+      "\\evil.test",
+      "/x\n",
+    ]) {
+      await expect(gateway(path)).rejects.toThrow(/only gateway-relative/);
+    }
+    expect(stream).not.toHaveBeenCalled();
+  });
 
-    it("fails loud when the host has not wired stream()", async () => {
-      captureFetch();
-      vi.stubGlobal("__vibestudioShell", {}); // bridge present, stream() not wired
-      vi.stubGlobal("__vibestudioEntityId", "panel:p1");
-      const gw = createGatewayFetch({ serverUrl: "http://gw.test", token: "T" });
-      await expect(gw("/x")).rejects.toThrow(/stream\(\) is unavailable/);
-    });
+  it("rejects missing RPC support rather than falling back to HTTP", () => {
+    expect(() => createGatewayFetch({ rpc: {} as never })).toThrow(
+      /transport is unavailable/,
+    );
   });
 });

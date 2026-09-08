@@ -593,6 +593,7 @@ export function useAgenticChat({
   });
   const debug = useChatDebug();
   const inlineUi = useInlineUi({
+    client: core.client,
     messages: features.inlineUi ? core.messages : NO_INLINE_UI_MESSAGES,
     loadSourceFile,
     loadImport: importLoader

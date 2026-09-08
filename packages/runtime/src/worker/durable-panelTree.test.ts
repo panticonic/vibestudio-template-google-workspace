@@ -219,7 +219,7 @@ describe("PanelDurableObjectBase panelTree handles", () => {
     class PanelTreeProbeDO extends PanelDurableObjectBase {
       protected createTables(): void {}
 
-      @rpc({
+      @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
         principals: ["host", "user", "code"],
         effect: { kind: "open" },
         tier: "open",
@@ -307,7 +307,7 @@ describe("PanelDurableObjectBase panelTree handles", () => {
     class PanelTreeProbeDO extends PanelDurableObjectBase {
       protected createTables(): void {}
 
-      @rpc({
+      @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
         principals: ["host", "user", "code"],
         effect: { kind: "open" },
         tier: "open",
@@ -439,7 +439,7 @@ describe("PanelDurableObjectBase panelTree handles", () => {
     class PanelTreeProbeDO extends PanelDurableObjectBase {
       protected createTables(): void {}
 
-      @rpc({
+      @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
         principals: ["host", "user", "code"],
         effect: { kind: "open" },
         tier: "open",
@@ -555,7 +555,7 @@ describe("PanelDurableObjectBase panelTree handles", () => {
     class PanelAliasProbeDO extends PanelDurableObjectBase {
       protected createTables(): void {}
 
-      @rpc({
+      @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
         principals: ["host", "user", "code"],
         effect: { kind: "open" },
         tier: "open",
@@ -650,7 +650,7 @@ describe("PanelDurableObjectBase panelTree handles", () => {
     class ParentProbeDO extends PanelDurableObjectBase {
       protected createTables(): void {}
 
-      @rpc({
+      @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
         principals: ["host", "user", "code"],
         effect: { kind: "open" },
         tier: "open",

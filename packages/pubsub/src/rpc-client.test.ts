@@ -19,9 +19,9 @@ import {
   invocationCompletedPayload,
   invocationFailedPayload,
 } from "@workspace/agentic-protocol";
+import { RpcBoundaryError } from "@vibestudio/rpc";
 import { createRecoveryCoordinator } from "@vibestudio/shell-core/recoveryCoordinator";
 import { encodeEventWatchRecord } from "@vibestudio/shared/events";
-import { ledgerTest } from "../../../tests/helpers/ledgerTest.js";
 import { z } from "zod";
 
 const CHANNEL = "test-channel";
@@ -287,6 +287,12 @@ function createMockRpc() {
     controller?.close();
   }
 
+  function failSubscription(error: unknown): void {
+    const controller = streamController;
+    streamController = null;
+    controller?.error(error);
+  }
+
   return {
     rpc,
     emit,
@@ -295,6 +301,7 @@ function createMockRpc() {
     streamSignals,
     priorSignalStatesAtOpen,
     closeSubscription,
+    failSubscription,
   };
 }
 
@@ -2149,7 +2156,7 @@ describe("connectViaRpc", () => {
       await client.close();
     });
 
-    ledgerTest("channel.reconnect.authority-neutral", async () => {
+    it("ledger:channel.reconnect.authority-neutral", async () => {
       let recover!: () => Promise<void>;
       const registerResubscribeHandler = vi.fn((_id: string, handler: () => Promise<void>) => {
         recover = handler;
@@ -2318,6 +2325,35 @@ describe("connectViaRpc", () => {
       await client.close();
     });
 
+    it("waits for host recovery after typed transport loss, then replaces once", async () => {
+      const coordinator = createRecoveryCoordinator();
+      const mock = createMockRpc();
+      const client = connectViaRpc({
+        rpc: mock.rpc as any,
+        channel: CHANNEL,
+        recoveryCoordinator: coordinator,
+      });
+
+      await emitReplayAndReady(mock.emit, []);
+      await client.ready();
+      mock.failSubscription(
+        new RpcBoundaryError(
+          "Workspace server is temporarily unavailable",
+          "transport",
+          "CONNECTION_LOST",
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mock.rpc.stream).toHaveBeenCalledTimes(1);
+
+      await coordinator.run("resubscribe");
+      expect(mock.rpc.stream).toHaveBeenCalledTimes(2);
+      await Promise.resolve();
+      expect(mock.rpc.stream).toHaveBeenCalledTimes(2);
+      await client.close();
+    });
+
     it("keeps ready pending across a transient first-subscription failure and resolves on recovery", async () => {
       const coordinator = createRecoveryCoordinator();
       const mock = createMockRpc();
@@ -2379,6 +2415,30 @@ describe("connectViaRpc", () => {
   });
 
   describe("channel membership, invitations, and presence", () => {
+    it("reads participants from the exact channel target without rediscovery", async () => {
+      const client = connectViaRpc({
+        rpc: mockRpc as any,
+        channel: CHANNEL,
+        channelTargetId: DO_TARGET,
+      });
+      mockRpc.call.mockClear();
+      mockRpc.call.mockResolvedValue([
+        { participantId: "do:workers/agent:Agent:scribe", metadata: { handle: "scribe" } },
+      ]);
+
+      await expect(client.getParticipants()).resolves.toEqual([
+        { participantId: "do:workers/agent:Agent:scribe", metadata: { handle: "scribe" } },
+      ]);
+      expect(mockRpc.call).toHaveBeenCalledWith(DO_TARGET, "getParticipants", []);
+      expect(mockRpc.call).not.toHaveBeenCalledWith(
+        "main",
+        "workers.resolveService",
+        expect.anything()
+      );
+
+      await client.close();
+    });
+
     it("unwraps the typed channel management responses", async () => {
       const client = connectViaRpc({ rpc: mockRpc as any, channel: CHANNEL });
       await Promise.resolve();

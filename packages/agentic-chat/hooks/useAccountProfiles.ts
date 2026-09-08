@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isRpcConnectionLost } from "@vibestudio/rpc";
 
 /** Prefix of channel-stamped human participant ids (WP6 §4). */
 export const USER_PARTICIPANT_PREFIX = "user:";
@@ -49,14 +50,13 @@ export interface AccountRpc {
  */
 export async function resolveAccountProfiles(
   rpc: AccountRpc,
-  userIds: readonly string[]
+  userIds: readonly string[],
 ): Promise<Map<string, AccountProfile>> {
   const profiles = new Map<string, AccountProfile>();
   if (userIds.length === 0) return profiles;
-  const result = (await rpc.call("main", "account.resolveProfiles", [[...userIds]])) as Record<
-    string,
-    AccountProfile
-  > | null;
+  const result = (await rpc.call("main", "account.resolveProfiles", [
+    [...userIds],
+  ])) as Record<string, AccountProfile> | null;
   for (const [userId, profile] of Object.entries(result ?? {})) {
     profiles.set(userId, profile);
   }
@@ -75,9 +75,11 @@ const PROFILE_REFRESH_INTERVAL_MS = 30_000;
  */
 export function useAccountProfiles(
   rpc: AccountRpc | undefined,
-  participantIds: readonly string[]
+  participantIds: readonly string[],
 ): Map<string, AccountProfile> {
-  const [profiles, setProfiles] = useState<Map<string, AccountProfile>>(new Map());
+  const [profiles, setProfiles] = useState<Map<string, AccountProfile>>(
+    new Map(),
+  );
 
   // Stable, order-insensitive key so effect re-runs track the SET of user ids.
   const userIdsKey = useMemo(() => {
@@ -85,7 +87,7 @@ export function useAccountProfiles(
       ...new Set(
         participantIds
           .map((id) => userIdFromParticipantId(id))
-          .filter((id): id is string => id !== null)
+          .filter((id): id is string => id !== null),
       ),
     ].sort();
     return ids.join("\n");
@@ -115,11 +117,16 @@ export function useAccountProfiles(
         setProfiles(next);
       } catch (err) {
         // Rendering falls back to channel-carried metadata; never throw in UI.
-        console.warn("[useAccountProfiles] Failed to resolve profiles:", err);
+        if (!isRpcConnectionLost(err)) {
+          console.warn("[useAccountProfiles] Failed to resolve profiles:", err);
+        }
       }
     };
     void refresh();
-    const timer = setInterval(() => void refresh(), PROFILE_REFRESH_INTERVAL_MS);
+    const timer = setInterval(
+      () => void refresh(),
+      PROFILE_REFRESH_INTERVAL_MS,
+    );
     return () => {
       cancelled = true;
       clearInterval(timer);

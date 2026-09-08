@@ -84,6 +84,7 @@ describe("QuickfireSessionsDO", () => {
 
     expect(session).toMatchObject({
       slotId: "slot-a",
+      channelTargetId: `do:workers/pubsub-channel:PubSubChannel:${session.channelId}`,
       contextId: "ctx-panel",
       state: "fresh",
     });
@@ -135,6 +136,7 @@ describe("QuickfireSessionsDO", () => {
 
     expect(resumed).toMatchObject({
       channelId: first.channelId,
+      channelTargetId: first.channelTargetId,
       state: "resumed",
     });
     expect(

@@ -10,7 +10,6 @@
  */
 import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
-import { ledgerTest } from "../../../tests/helpers/ledgerTest.js";
 import { createTestDO } from "@workspace/runtime/worker/test-utils";
 import { ids, type AgentTurnMetadata } from "@workspace/agent-loop";
 import { logIdForChannel } from "@vibestudio/trajectory-identity";
@@ -226,7 +225,7 @@ class TestVessel extends AgentVesselBase {
   lifecycleRegistrations = 0;
   lifecycleClears = 0;
 
-  @rpc({
+  @rpc({ website: {"kind":"eligible","rationale":"Explicit receiver exposure for this test fixture."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -1245,7 +1244,7 @@ describe("AgentVesselBase automation ingress", () => {
 });
 
 describe("AgentVesselBase finite channel delivery", () => {
-  it("returns the retained outcome after a response-loss retry", async () => {
+  it("admits large canonical events and retains the outcome after a response-loss retry", async () => {
     const vessel = await makePromptProbe();
     vessel.useDeliveredDecisionContext = true;
     const clientCreationsBeforeDelivery = vessel.channelClientCreations;
@@ -1265,7 +1264,7 @@ describe("AgentVesselBase finite channel delivery", () => {
             {
               blockId: "delivery-message:block",
               type: "text",
-              content: "hello",
+              content: "A".repeat(3_000_000),
             },
           ],
           outcome: "completed",
@@ -1315,6 +1314,14 @@ describe("AgentVesselBase finite channel delivery", () => {
       },
     };
 
+    const sql = (vessel as unknown as { sql: { exec: (...args: any[]) => any } }).sql;
+    const exec = sql.exec.bind(sql);
+    sql.exec = (query, ...bindings) => {
+      if (String(query).includes("channel_delivery_admissions") && bindings.some((value) => typeof value === "string" && value.length > 1_000_000)) {
+        throw new Error("SQLITE_TOOBIG");
+      }
+      return exec(query, ...bindings);
+    };
     await expect(vessel.acceptChannelDelivery(input)).resolves.toMatchObject({
       deliveryId: input.deliveryId,
       disposition: "processed",
@@ -1323,6 +1330,10 @@ describe("AgentVesselBase finite channel delivery", () => {
       deliveryId: input.deliveryId,
       disposition: "duplicate",
     });
+    await expect(vessel.acceptChannelDelivery({ ...input, eventSequence: 2 })).rejects.toThrow("mismatched duplicate");
+    const admission = sql.exec("SELECT * FROM channel_delivery_admissions WHERE delivery_id = ?", input.deliveryId).toArray()[0];
+    expect(admission).not.toHaveProperty("envelope_json");
+    expect(JSON.stringify(admission).length).toBeLessThan(2_000);
     expect(vessel.channelClientCreations).toBe(clientCreationsBeforeDelivery);
   });
 });
@@ -1462,6 +1473,7 @@ describe("AgentVesselBase activation-local inspection", () => {
     const vessel = await makeVessel();
 
     expect(rpcMethodAuthority(vessel, "readAgentInspection")).toMatchObject({
+ website: {"kind":"eligible","rationale":"Explicit website receiver policy for this fixture."} as const,
       principals: ["host", "code"],
       effect: { kind: "open" },
       tier: "open",
@@ -3740,6 +3752,67 @@ describe("AgentVesselBase.runDeferredSpawn", () => {
     });
   });
 
+  it("keeps a successful child live until its semantic work is committed", async () => {
+    const probe = await makeChildCompletionProbe();
+    probe.respondToVcs(
+      "status",
+      semanticStatus(
+        "ctx-1",
+        "event:base",
+        { kind: "application", applicationId: "application:dirty" },
+        false,
+      ),
+      semanticStatus(
+        "ctx-1",
+        "event:child-commit",
+        { kind: "event", eventId: "event:child-commit" },
+        true,
+      ),
+    );
+
+    await expect(
+      probe.completeOwnRunForTest("Implemented the change.", "success"),
+    ).rejects.toMatchObject({
+      code: "IntegrationIncomplete",
+      errorData: {
+        operation: "complete-subagent",
+        runId: "child-run-1",
+        workingChangeCount: 1,
+      },
+    });
+    expect(probe.ownTerminalWakeForTest()).toBeNull();
+
+    await expect(
+      probe.completeOwnRunForTest("Implemented and committed the change.", "success"),
+    ).resolves.toMatchObject({ terminate: true });
+    expect(probe.ownTerminalWakeForTest()).toMatchObject({
+      payload: { sourceEventId: "event:child-commit" },
+    });
+  });
+
+  it("allows a failed child to report retained uncommitted work", async () => {
+    const probe = await makeChildCompletionProbe();
+    probe.respondToVcs(
+      "status",
+      semanticStatus(
+        "ctx-1",
+        "event:base",
+        { kind: "application", applicationId: "application:partial" },
+        false,
+      ),
+    );
+
+    await expect(
+      probe.completeOwnRunForTest("Blocked with partial work retained.", "failed"),
+    ).resolves.toMatchObject({ terminate: true });
+    expect(probe.ownTerminalWakeForTest()).toMatchObject({
+      payload: {
+        outcome: "failed",
+        sourceEventId: null,
+      },
+    });
+  });
+
   it("inherits the parent's effective Pi model, unattended settings, and system prompt", async () => {
     const probe = await makeSubagentSpawnProbe({
       systemPrompt: "system-test-parent-prompt",
@@ -3848,7 +3921,7 @@ describe("AgentVesselBase.runDeferredSpawn", () => {
     ).toBe(false);
   });
 
-  ledgerTest("execution.agent-spawn", async () => {
+  it("ledger:execution.agent-spawn", async () => {
     const probe = await makeSubagentSpawnProbe();
 
     await probe.spawnForTest(CHANNEL, "inv-source-identity", {

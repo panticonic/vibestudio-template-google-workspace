@@ -166,6 +166,7 @@ describe("AiChatWorker", () => {
     const worker = await makeWorker();
     expect(rpcExposedMethodNames(worker).has("acceptChannelDelivery")).toBe(true);
     expect(rpcMethodAuthority(worker, "acceptChannelDelivery")).toMatchObject({
+ website: {"kind":"eligible","rationale":"Explicit website receiver policy for this fixture."} as const,
       principals: ["host"],
       effect: { kind: "open" },
       tier: "open",

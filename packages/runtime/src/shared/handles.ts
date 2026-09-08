@@ -211,14 +211,14 @@ export function createPanelHandle<
     async emit(event: string, payload: unknown) {
       await rpc.emit(await resolveRpcTargetId(), event, payload);
     },
-    on(event: string, listener: (payload: unknown) => void): () => void {
+    on(event: string, listener: (payload: unknown) => void, website: import("@vibestudio/rpc").WebsiteMethodPolicy): () => void {
       if (!rpcEventTargetId) {
         void resolveRpcTargetId().catch(() => undefined);
       }
       return rpc.on(event, (ev: RpcEventContext) => {
         const targetId = rpcEventTargetId;
         if (targetId && ev.caller.callerId === targetId) listener(ev.payload);
-      });
+      }, website);
     },
     withContract<C extends PanelContract, Role extends PanelHandleContractRole>(
       _contract: C,

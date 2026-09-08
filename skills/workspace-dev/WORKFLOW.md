@@ -66,9 +66,58 @@ Before scaffolding, decide on persistence and agent integration:
   schemas, error surfaces, edge-case coverage, and principled state
   management from the first scaffold. No hardcoded demo data or placeholder
   content — build real empty states and real data flows.
-- **Theme and layout**: use `usePanelTheme()` from `@workspace/react` to
-  respect the host's dark/light theme. Build mobile-friendly, responsive
-  layouts — panels render on desktop, tablet, and mobile hosts.
+- **Theme and layout**: follow the host's live appearance using the contract
+  below. Build responsive layouts for desktop, tablet, and mobile hosts.
+
+### Theme and layout
+
+The host owns the user's light/dark choice. Automatically mounted React panels
+already receive a Radix `Theme` with live appearance and theme configuration;
+the builder supplies Radix and UI foundation styles. Export your component and
+use that wrapper. Do not add a fixed `appearance="light"`/`"dark"` wrapper or a
+separate persisted theme setting. OS `prefers-color-scheme` alone does not
+represent an explicit in-app choice.
+
+Radix components inherit the appearance, but custom CSS still has to use
+theme-aware colors. For example, inside the supplied wrapper:
+
+```css
+.board {
+  min-height: 100dvh;
+  background: var(--color-background);
+  color: var(--gray-12);
+}
+.task-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+}
+.task-description { color: var(--gray-11); }
+.task-selected { background: var(--accent-a3); }
+```
+
+Apply these tokens to component classes inside the theme wrapper, rather than
+expecting wrapper-scoped variables to inherit upwards into `body` or `:root`.
+Cover inputs, menus, dialogs, empty states, hover/focus/disabled states, and
+gradients as well as the page background. Custom branding and artwork are
+welcome; pair custom surface and text colors for both appearances rather than
+hardcoding a single UI palette.
+
+Use `usePanelTheme()` from `@workspace/react` when code needs the live appearance
+(for example, canvas rendering or a chart library). It is unnecessary for CSS
+that already consumes theme tokens. For a manually mounted or non-React panel,
+use `panel.getTheme()` and `panel.onThemeChange()` from `@workspace/runtime` to
+drive its own styling and release the subscription on teardown.
+
+Verify a newly authored or restyled UI in both host appearances, including a
+switch while the panel stays open. Check readability of surfaces, controls,
+overlays, and interaction states; merely observing a theme hook or `.dark`
+class is insufficient. Use the host appearance control and restore the prior
+setting afterward. A DOM class override or OS media emulation alone does not
+verify host-to-panel propagation. If the runtime receives the wrong appearance,
+investigate that path instead of compensating with app-local theme state.
+
+Use responsive flex/grid layouts and constrained media; inspect a narrow
+viewport as well as desktop width.
 
 ## Development loop
 

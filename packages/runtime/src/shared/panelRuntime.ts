@@ -19,7 +19,7 @@ import {
   isOpenPanelBrowserUrl,
 } from "@vibestudio/shared/panelChrome";
 import { normalizePanelTitle } from "@vibestudio/shared/panel/title";
-import { sanitizePlacementHint } from "@vibestudio/shared/panelTypes";
+import { sanitizePlacementHint } from "@vibestudio/shared/panel/placement";
 import {
   computePanelId,
   derivePanelOperationIdentity,

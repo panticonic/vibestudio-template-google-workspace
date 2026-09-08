@@ -258,7 +258,11 @@ export interface ApplicationPersistencePlan {
   decisions: readonly IntegrationDecisionRecord[];
   workspaceFacts: PreparedWorkspaceFactChange | null;
   newRepositories: readonly { repositoryId: string }[];
-  newFiles: readonly { fileId: string; repositoryId: string; changeId: string }[];
+  newFiles: readonly {
+    fileId: string;
+    repositoryId: string;
+    changeId: string;
+  }[];
 }
 
 export interface SemanticEffect {
@@ -536,7 +540,9 @@ export class SemanticVcsStore {
     if (!row) return null;
     const committedEventId = text(row, "committed_event_id");
     const workingHeadApplicationId = nullableText(row, "working_head_application_id");
-    const committed: SemanticStateRecord & { ref: { kind: "event"; eventId: string } } = {
+    const committed: SemanticStateRecord & {
+      ref: { kind: "event"; eventId: string };
+    } = {
       ref: { kind: "event", eventId: committedEventId },
       workspaceFactRootId: this.stateRoot({ kind: "event", eventId: committedEventId }),
     };
@@ -1423,50 +1429,19 @@ export class SemanticVcsStore {
     if (effect.status === "applied") return effect;
     let receipt = input.receipt;
     if (effect.kind === "materialize-context") {
-      if (effect.payload["mode"] === "content-only") {
-        const payloadBlobs = effect.payload["blobs"];
-        const contentHashes = input.receipt["contentHashes"];
-        const expected = Array.isArray(payloadBlobs)
-          ? payloadBlobs
-              .map((value) =>
-                value && typeof value === "object" && !Array.isArray(value)
-                  ? String((value as Row)["contentHash"] ?? "")
-                  : ""
-              )
-              .sort(compareUtf16CodeUnits)
-          : [];
-        const received = Array.isArray(contentHashes)
-          ? contentHashes.map(String).sort(compareUtf16CodeUnits)
-          : [];
-        if (
-          input.receipt["version"] !== 1 ||
-          expected.length === 0 ||
-          expected.some((contentHash) => !/^[0-9a-f]{64}$/u.test(contentHash)) ||
-          new Set(expected).size !== expected.length ||
-          canonicalJson(received) !== canonicalJson(expected)
-        ) {
-          throw internalSemanticIntegrityFailure(
-            "EffectMismatch",
-            `Receipt does not prove content persistence effect ${effect.effectId}`,
-            { effectId: effect.effectId, contract: "content-persistence-receipt" }
-          );
-        }
-        receipt = { version: 1, contentHashes: received };
-      } else {
-        const normalized = normalizeContextMaterializationReceipt(
-          effect.payload as unknown as ContextMaterializationCommand,
-          input.receipt
+      const normalized = normalizeContextMaterializationReceipt(
+        effect.payload as unknown as ContextMaterializationCommand,
+        input.receipt
+      );
+      if (!normalized) {
+        throw internalSemanticIntegrityFailure(
+          "EffectMismatch",
+          `Receipt does not prove materialization effect ${effect.effectId}`,
+          { effectId: effect.effectId, contract: "materialization-receipt" }
         );
-        if (!normalized) {
-          throw internalSemanticIntegrityFailure(
-            "EffectMismatch",
-            `Receipt does not prove materialization effect ${effect.effectId}`,
-            { effectId: effect.effectId, contract: "materialization-receipt" }
-          );
-        }
-        this.applyMaterializationReceipt(effect, normalized);
-        receipt = normalized as unknown as Row;
       }
+      this.applyMaterializationReceipt(effect, normalized);
+      receipt = normalized as unknown as Row;
     }
     if (effect.kind === "publish-main") this.applyPublicationReceipt(effect, receipt);
     const receiptDigest = canonicalDigest("host-effect-receipt", {

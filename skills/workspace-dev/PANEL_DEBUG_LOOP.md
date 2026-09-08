@@ -76,6 +76,14 @@ return the panel handle's native screenshot result directly. Omit an exact `auth
 ordinary eval; if intentionally attenuating, `cdp.page()` requires the exact
 `panel.inspect` request documented in `BROWSER.md`.
 
+Run CDP session/page acquisition in a read-write eval even when the subsequent
+locator calls only read text. The acquired connection can also execute scripts
+and mutate the page; a read-only eval cannot acquire that authority. For visual
+inspection without a CDP connection, use a read-only eval returning
+`await scope.panel.cdp.screenshot({ format: "png" })`; console inspection can use
+`await scope.panel.cdp.consoleHistory()`. Do not acquire `cdp.page()` first for
+either bounded read.
+
 ```ts
 scope.panelSession = await scope.panel.cdp.session();
 const page = scope.panelSession.page;
@@ -126,7 +134,11 @@ actions. Repeated controls must have item-specific names such as
 `Complete Buy milk` and `Delete Buy milk`; repair the panel if they do not.
 
 Run add, complete, filter, and delete in one bounded cell against the fresh
-page. Actions auto-wait, so do not add sleeps. Finish by reading console events,
+page. Actions auto-wait, so do not add sleeps. For newly authored or restyled UI,
+also follow [theme verification](WORKFLOW.md#theme-and-layout): inspect light and
+dark appearances, switch the host choice with the same panel open, and restore
+the prior setting. Check custom surfaces and open overlays, not just the theme
+class. Finish by reading console events,
 capturing the final screenshot, closing the page client, and returning compact
 evidence.
 

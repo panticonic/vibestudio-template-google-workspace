@@ -7,6 +7,7 @@
  */
 
 import { stream } from "@workspace/pi-ai/compat";
+import { isTerminalAuthorityFailure } from "@vibestudio/rpc";
 import {
   closeOpenAICodexWebSocketSessions,
   releaseOpenAICodexWebSocketSession,
@@ -229,6 +230,18 @@ function normalizePercent(value: number): number {
 
 function isUnattendedModelRequest(request: ModelCallEffect["request"]): boolean {
   return request.turnMetadata?.origin === "scheduled";
+}
+
+function terminalCredentialAuthorityOutcome(error: unknown): EffectOutcome {
+  const reason = error instanceof Error ? error.message : "Credential authorization failed";
+  return {
+    kind: "model",
+    blocks: [],
+    stopReason: "error",
+    errorReason: reason,
+    recoverable: false,
+    failure: { code: "auth_or_credentials", reason, recoverable: false },
+  };
 }
 
 function modelFailureOutcome(
@@ -682,6 +695,8 @@ function deterministicTestModeModelOutcome(
   descriptor: ModelCallEffect,
   state: AgentState,
   systemPrompt: string,
+  messages: ModelMessage[],
+  tools: Context["tools"],
   env?: Record<string, unknown>
 ): EffectOutcome | null {
   const testMode = env?.["VIBESTUDIO_TEST_MODE"];
@@ -692,19 +707,40 @@ function deterministicTestModeModelOutcome(
   // This deterministic endpoint substitutes only for model inference,
   // independently of whichever provider a fresh profile resolves. The opening
   // turn is the prompt's executable startup contract; honor its explicit
-  // Markdown-path read so E2E still exercises the real invocation, file
-  // transport, and continuation loop.
+  // Markdown-path read and inline UI render so E2E still exercises the real
+  // invocation, file transport, renderer, and continuation loop.
+  const availableToolNames = new Set((tools ?? []).map((tool) => tool.name));
   const openingTurn = systemPrompt.match(/##\s+Opening turn\b([\s\S]*?)(?=\n##\s|$)/i)?.[1];
   const requestedRead = openingTurn?.match(/\bread\s+`([^`]+)`/i)?.[1];
-  if (requestedRead && descriptor.request.activeToolNames.includes("read")) {
-    const turnOpenedAt = state.openTurn?.openedAtSeq ?? 0;
-    const readCompleted = state.entries.some(
-      (entry) =>
-        entry.kind === "tool-result" &&
-        entry.seq >= turnOpenedAt &&
-        entry.name === "read" &&
-        !entry.isError
+  const requestedInlineUi = openingTurn?.match(
+    /\brender\s+`([^`]+)`\s+with\s+`inline_ui`\s+using\s+(?:the\s+)?stable\s+ID\s+`([^`]+)`/i
+  );
+  const turnOpenedAt = state.openTurn?.openedAtSeq ?? 0;
+  const completedToolCall = (name: string, args: Record<string, string>): boolean =>
+    state.entries.some(
+      (result) =>
+        result.kind === "tool-result" &&
+        result.seq >= turnOpenedAt &&
+        result.name === name &&
+        !result.isError &&
+        messages.some(
+          (entry) =>
+            entry.role === "assistant" &&
+            entry.blocks?.some(
+              (block) =>
+                isRecord(block) &&
+                block["type"] === "toolCall" &&
+                block["id"] === result.invocationId &&
+                block["name"] === name &&
+                isRecord(block["arguments"]) &&
+                Object.entries(args).every(
+                  ([key, value]) => (block["arguments"] as Record<string, unknown>)[key] === value
+                )
+            )
+        )
     );
+  if (requestedRead && availableToolNames.has("read")) {
+    const readCompleted = completedToolCall("read", { path: requestedRead });
     if (!readCompleted) {
       return {
         kind: "model",
@@ -723,13 +759,31 @@ function deterministicTestModeModelOutcome(
     }
   }
 
-  const turnOpenedAt = state.openTurn?.openedAtSeq ?? 0;
-  const userEntry = [...state.entries]
-    .reverse()
-    .find(
-      (entry): entry is Extract<(typeof state.entries)[number], { kind: "user" }> =>
-        entry.kind === "user" && entry.seq <= descriptor.request.contextThroughSeq
-    );
+  if (
+    requestedInlineUi &&
+    availableToolNames.has("inline_ui") &&
+    (!requestedRead || completedToolCall("read", { path: requestedRead }))
+  ) {
+    const [, path, id] = requestedInlineUi;
+    if (path && id && !completedToolCall("inline_ui", { path, id })) {
+      return {
+        kind: "model",
+        blocks: [
+          {
+            type: "toolCall",
+            id: `${descriptor.messageId}:test-inline-ui`,
+            name: "inline_ui",
+            arguments: { path, id, props: {} },
+          },
+        ],
+        stopReason: "completed",
+        outcome: "tool_calls_only",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
+    }
+  }
+
+  const userEntry = [...messages].reverse().find((entry) => entry.role === "user");
   const userRequest = userEntry
     ? extractUserContent(userEntry.content)
         .map((block) => block.text)
@@ -744,7 +798,7 @@ function deterministicTestModeModelOutcome(
   if (
     requestedWebUrl &&
     requestsSandboxExecution &&
-    descriptor.request.activeToolNames.includes("eval")
+    availableToolNames.has("eval")
   ) {
     const evalCompleted = state.entries.some(
       (entry) => entry.kind === "tool-result" && entry.seq >= turnOpenedAt && entry.name === "eval"
@@ -772,7 +826,7 @@ function deterministicTestModeModelOutcome(
         usage: { inputTokens: 1, outputTokens: 1 },
       };
     }
-  } else if (requestedWebUrl && descriptor.request.activeToolNames.includes("web_fetch")) {
+  } else if (requestedWebUrl && availableToolNames.has("web_fetch")) {
     const webFetchCompleted = state.entries.some(
       (entry) =>
         entry.kind === "tool-result" && entry.seq >= turnOpenedAt && entry.name === "web_fetch"
@@ -986,11 +1040,27 @@ async function executeModelCall(
   const toolsJsonPromise = request.toolSchemasHash
     ? deps.blobstore.getText(request.toolSchemasHash)
     : Promise.resolve(null);
-  // The credential lookup below can return (suspend) or throw before these
-  // are awaited; detached no-op handlers prevent an unhandled rejection in
-  // that window. The awaited Promise.all still observes any real rejection.
-  systemPromptPromise.catch(() => {});
-  toolsJsonPromise.catch(() => {});
+  const [systemPromptRaw, toolsJson] = await Promise.all([systemPromptPromise, toolsJsonPromise]);
+  throwIfAborted();
+  trace("context.blobs.loaded", {
+    hasSystemPrompt: systemPromptRaw !== null,
+    hasTools: toolsJson !== null,
+  });
+  const systemPrompt = systemPromptForPolicy(
+    systemPromptRaw ?? undefined,
+    request.turnMetadata?.contextPolicy
+  );
+  const tools = toolsJson ? (JSON.parse(toolsJson) as Context["tools"]) : undefined;
+
+  // Both real and deterministic inference consume the same storage boundary:
+  // folded tool arguments, results and user content can be blob refs. Models see
+  // the actual bytes, never `vibestudio.blob-ref.v1` pointers (a model that
+  // reads pointer JSON emits garbage tool args and pointer-shaped paths).
+  const hydratedMessages = (await hydrateStoredValueRefs(
+    modelContextForPolicy(state, request.contextThroughSeq, request.turnMetadata?.contextPolicy),
+    { getText: (digest) => deps.blobstore.getText(digest) }
+  )) as ModelMessage[];
+  throwIfAborted();
 
   const testModeEnabled =
     deps.env?.["VIBESTUDIO_TEST_MODE"] === "1" ||
@@ -1001,7 +1071,9 @@ async function executeModelCall(
     ? deterministicTestModeModelOutcome(
         descriptor,
         state,
-        (await systemPromptPromise) ?? "",
+        systemPrompt ?? "",
+        hydratedMessages,
+        tools,
         deps.env
       )
     : null;
@@ -1099,30 +1171,13 @@ async function executeModelCall(
             : {}),
         } satisfies EffectOutcome;
       }
+      if (isTerminalAuthorityFailure(err)) {
+        return terminalCredentialAuthorityOutcome(err);
+      }
       throw err;
     }
   }
 
-  const [systemPromptRaw, toolsJson] = await Promise.all([systemPromptPromise, toolsJsonPromise]);
-  throwIfAborted();
-  trace("context.blobs.loaded", {
-    hasSystemPrompt: systemPromptRaw !== null,
-    hasTools: toolsJson !== null,
-  });
-  const systemPrompt = systemPromptForPolicy(
-    systemPromptRaw ?? undefined,
-    request.turnMetadata?.contextPolicy
-  );
-  const tools = toolsJson ? (JSON.parse(toolsJson) as Context["tools"]) : undefined;
-
-  // Storage boundary, model-input side: fold entries keep spilled fields
-  // (tool results, large user content) as blob refs — the model must see
-  // the actual bytes, never `vibestudio.blob-ref.v1` pointers (a model that
-  // reads pointer JSON emits garbage tool args and pointer-shaped paths).
-  const hydratedMessages = (await hydrateStoredValueRefs(
-    modelContextForPolicy(state, request.contextThroughSeq, request.turnMetadata?.contextPolicy),
-    { getText: (digest) => deps.blobstore.getText(digest) }
-  )) as ModelMessage[];
   const modelFacingMessages = hydratedMessages.map((message) =>
     message.role === "toolResult"
       ? { ...message, content: modelFacingToolResultContent(message.content) }

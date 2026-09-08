@@ -20,9 +20,27 @@ Use [public-contract.json](public-contract.json) for exact method shapes and
 
 ## Discover and create
 
+Open the host workspace chooser to discover development checkouts selected for
+the current launch. The host validates and presents those private exact
+snapshots; their filesystem paths never enter workspace code. Selecting one
+creates a new workspace from its exact pin. Do not send that pin through remote
+Git inspection because its checkpoint commit may intentionally be unpublished.
+
 Read `catalog` without arguments for cached rendering. Refresh only after an
 explicit user action with `[{ refresh: true }]`. Catalog selections remain
 bound to the returned `coordinates.commit` and `coordinates.snapshot`.
+The result is `null` when no catalog is cached. Otherwise `entries` is the
+template array: use `entries.length` for the template count. `coordinates`
+identifies the verified registry snapshot; it does not describe a workspace
+that has already been created.
+
+Use the extension's complete installed unit name when invoking it:
+
+```ts
+import { extensions } from "@workspace/runtime";
+
+return await extensions.invoke("@workspace-extensions/templates", "catalog", []);
+```
 
 Call `inspect` with an already reviewed exact `{ pin }`, a direct
 `{ url, credential? }`, or a catalog-bound
@@ -44,7 +62,10 @@ or authority settings.
 Native System clients use `prepareSelectedTransfer` from
 `@workspace/workspace-transfer`. It is a shared client implementation over the
 existing authenticated `vcs` and `blobstore` services, not an application RPC
-bridge. Public application calls between workspaces remain closed.
+bridge. Application RPC uses an explicit workspace destination, deliberately
+exposed receiver methods, and both workspaces' boundary policies in addition
+to ordinary operation authority; see [RPC](../workspace-dev/RPC.md). Source
+transfer does not create an RPC permission or share runtime state.
 
 Read `vcs.mainState()` to capture protected main directly without creating an
 observation context. Capture the source workspace, exact VCS state and explicitly selected

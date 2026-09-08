@@ -437,7 +437,7 @@ describe("TemplatePublishEngine", () => {
 
     expect(result.snapshot).toBe(consumer.snapshot);
     expect(consumer.files.map((file) => file.path)).toEqual([
-      "meta/template.yml",
+      "meta/vibestudio.yml",
       "panels/news/.npmrc",
       "panels/news/index.ts",
     ]);

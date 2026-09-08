@@ -55,7 +55,8 @@ services:
         - code
         - session
         - mission
-    description: Access your workspace's conversations, including sending messages and reading replies.
+    description: Access your workspace's conversations, including sending messages
+      and reading replies.
     durableObject:
       className: PubSubChannel
       context: creator
@@ -135,7 +136,8 @@ services:
         - host
         - user
         - code
-    description: Launch automated tasks immediately, then inspect and control their running definitions.
+    description: Launch automated tasks immediately, then inspect and control their
+      running definitions.
     durableObject:
       className: MissionsDO
     name: missions
@@ -164,6 +166,85 @@ singletonObjects:
     key: workspace-missions
     source: workers/missions
 systemEpoch: 0
+template:
+  description: Connect Google Workspace and add a Gmail agent.
+  files:
+    - .gitattributes
+    - .ignore
+    - package.json
+    - tsconfig.json
+    - types/assets.d.ts
+  name: Google Workspace
+  repositories:
+    - about/help
+    - about/new
+    - about/testbench
+    - extensions/claude-code
+    - extensions/file-tools
+    - extensions/git-bridge
+    - extensions/image-service
+    - extensions/pdf-ingest
+    - extensions/shell
+    - extensions/templates
+    - extensions/test-runner
+    - packages/about-shared
+    - packages/agent-loop
+    - packages/agentic-chat
+    - packages/agentic-core
+    - packages/agentic-do
+    - packages/agentic-protocol
+    - packages/cdp-client
+    - packages/channel-fork
+    - packages/channel-policies
+    - packages/eval
+    - packages/gmail
+    - packages/google-workspace
+    - packages/harness
+    - packages/integrations
+    - packages/model-catalog
+    - packages/omnibox-core
+    - packages/pi-ai
+    - packages/pi-core
+    - packages/pubsub
+    - packages/quickfire-core
+    - packages/react
+    - packages/runtime
+    - packages/template-registry
+    - packages/test-runtime
+    - packages/testkit
+    - packages/tool-ui
+    - packages/ui
+    - packages/vcs-engine
+    - panels/chat
+    - panels/terminal
+    - projects/default
+    - skills/agentic-development
+    - skills/agents
+    - skills/api-integrations
+    - skills/architecture
+    - skills/capabilities
+    - skills/extensiondev
+    - skills/gad-context
+    - skills/google-drive
+    - skills/google-workspace
+    - skills/messaging
+    - skills/provenance-orientation
+    - skills/sandbox
+    - skills/templates
+    - skills/terminal
+    - skills/vibestudio-vcs
+    - skills/web-research
+    - skills/workspace-dev
+    - templates/default
+    - workers/agent-worker
+    - workers/gmail-agent
+    - workers/missions
+    - workers/model-settings
+    - workers/pubsub-channel
+    - workers/quickfire-service
+    - workers/silent-agent-worker
+    - workers/workspace-presentation
+    - workers/workspace-source
 templateRegistry:
   ref: refs/heads/main
   url: git+https://github.com/panticonic/vibestudio-template-registry.git

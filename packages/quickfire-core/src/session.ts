@@ -122,6 +122,7 @@ const EXPAND_STEP = 40;
  */
 export interface QuickfireSessionFacts {
   channelId: string;
+  channelTargetId: string;
   contextId: string;
   state: "fresh" | "resumed" | "promoted";
   messageCount: number | null;
@@ -147,6 +148,7 @@ export type QuickfireSessionSource =
   | {
       kind: "conversation";
       channelId: string;
+      channelTargetId: string;
       contextId: string;
       /** Stable client id for the observer connection (the channel maps a
        *  human caller to `user:<id>` regardless). */
@@ -176,7 +178,11 @@ export interface QuickfireTransport {
   connectToChannel: (
     channelId: string,
     contextId: string,
-    options: { clientId?: string; replayMessageLimit?: number },
+    options: {
+      channelTargetId: string;
+      clientId?: string;
+      replayMessageLimit?: number;
+    },
   ) => PubSubClient;
 }
 
@@ -185,6 +191,7 @@ export interface QuickfireSessionView {
   source: QuickfireSessionSource | null;
   slotId: string | null;
   channelId: string | null;
+  channelTargetId: string | null;
   contextId: string | null;
   connecting: boolean;
   /** True once a durable mapping exists for the slot (always true for a conversation). */
@@ -231,6 +238,7 @@ const IDLE: QuickfireSessionView = {
   source: null,
   slotId: null,
   channelId: null,
+  channelTargetId: null,
   contextId: null,
   connecting: false,
   hasConversation: false,
@@ -464,17 +472,22 @@ export function useQuickfireSessionCore(
             ? await transportRef.current.sessionFor(bound.slotId, { fresh })
             : {
                 channelId: bound.channelId,
+                channelTargetId: bound.channelTargetId,
                 contextId: bound.contextId,
                 state: "resumed",
                 messageCount: null,
                 lastActivityAt: null,
               };
+        if (!session.channelTargetId?.trim()) {
+          throw new Error("Quickfire session has no channel target identity");
+        }
         if (!live()) return;
         setView((current) => ({
           ...current,
           source: bound,
           slotId: bound.kind === "slot" ? bound.slotId : null,
           channelId: session.channelId,
+          channelTargetId: session.channelTargetId,
           contextId: session.contextId,
           hasConversation: true,
           promoted: session.state === "promoted",
@@ -494,6 +507,7 @@ export function useQuickfireSessionCore(
           session.channelId,
           session.contextId,
           {
+            channelTargetId: session.channelTargetId,
             clientId: bound.kind === "slot" ? bound.slotId : bound.clientId,
             replayMessageLimit: REPLAY_LIMIT,
           },
@@ -679,6 +693,7 @@ export function useQuickfireSessionCore(
         // its chat panel from these facts (find-or-open, messaging plan §4.8).
         return {
           channelId: bound.channelId,
+          channelTargetId: bound.channelTargetId,
           contextId: bound.contextId,
           state: "promoted",
           messageCount: null,

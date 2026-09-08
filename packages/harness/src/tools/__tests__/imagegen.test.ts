@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { generateImage } from "../../image-generation.js";
 import { createImagegenTool } from "../imagegen.js";
 import { createMemoryWorkspaceFileObservationStore } from "../file-observations.js";
 import { createAgentFileVisibility } from "../agent-file-visibility.js";
@@ -20,18 +21,53 @@ function setup(inputEvents: unknown[] = events) {
   const observations = createMemoryWorkspaceFileObservationStore();
   const fetcher = vi.fn(
     async () =>
-      new Response(
-        inputEvents
-          .map((data) => `data: ${JSON.stringify(data)}\r\n\r\n`)
-          .join(""),
-      ),
+      new Response(inputEvents.map((data) => `data: ${JSON.stringify(data)}\r\n\r\n`).join(""))
   );
   const resolveSession = vi.fn(async () => ({
     model: "gpt-5.5",
     accountId: "account-test",
     fetcher,
   }));
-  const rpc = { call: vi.fn(async () => "image/png") };
+  let request: any;
+  let asset: any;
+  const rpc = {
+    call: vi.fn(async (_target: string, method: string, args: any[]) => {
+      if (method === "workers.resolveService")
+        return {
+          kind: "durable-object",
+          targetId: "do:images",
+          source: "workers/images",
+          className: "ImagesDO",
+          objectKey: "default",
+        };
+      if (method === "generate") {
+        request = args[0];
+        return { id: "job:1", status: "queued" };
+      }
+      if (method === "getJob") {
+        const result = await generateImage(
+          {
+            ...request,
+            references: request.references.map(() => ({ base64: png, mimeType: "image/png" })),
+          },
+          { session: await resolveSession(), detectMimeType: async () => "image/png" }
+        );
+        asset = {
+          id: "asset:1",
+          digest: sha256Hex(base64ToBytes(png)),
+          mimeType: "image/png",
+          width: 1,
+          height: 1,
+          byteLength: base64ToBytes(png).length,
+          provenance: result.provenance,
+        };
+        return { id: "job:1", status: "succeeded", asset };
+      }
+      if (method === "readAsset") return { asset, base64: png };
+      if (method === "importAsset") return { id: "reference:1" };
+      return "image/png";
+    }),
+  };
   const tool = createImagegenTool({
     cwd: "/",
     fs,
@@ -40,7 +76,6 @@ function setup(inputEvents: unknown[] = events) {
     visibility: createAgentFileVisibility("/", fs),
     context: { contextId: "context:test", commandId: "command:image" },
     rpc: rpc as never,
-    resolveSession,
   });
   return { tool, fs, vcs, observations, fetcher, resolveSession, rpc };
 }
@@ -65,9 +100,7 @@ describe("workspace imagegen", () => {
       data: png,
       mimeType: "image/png",
     });
-    const [url, init] = (
-      fetcher.mock.calls as unknown as Array<[string, RequestInit]>
-    )[0]!;
+    const [url, init] = (fetcher.mock.calls as unknown as Array<[string, RequestInit]>)[0]!;
     expect(url).toBe("https://chatgpt.com/backend-api/codex/responses");
     expect(new Headers(init.headers).has("Authorization")).toBe(false);
     expect(JSON.parse(init.body as string)).toMatchObject({
@@ -85,13 +118,18 @@ describe("workspace imagegen", () => {
       ...input,
       referencePaths: ["meta/reference.png"],
     });
-    const [, init] = (
-      fetcher.mock.calls as unknown as Array<[string, RequestInit]>
-    )[0]!;
+    const [, init] = (fetcher.mock.calls as unknown as Array<[string, RequestInit]>)[0]!;
     expect(JSON.parse(init.body as string).input[0].content[1]).toEqual({
       type: "input_image",
       image_url: `data:image/png;base64,${png}`,
     });
+  });
+
+  it("returns a reusable image asset without changing source when outputPath is omitted", async () => {
+    const { tool, vcs } = setup();
+    const result = await tool.execute("call:asset", { prompt: "A blue fish" });
+    expect(vcs.lastEditInput).toBeUndefined();
+    expect(result.details).toMatchObject({ asset: { id: "asset:1" }, jobId: "job:1" });
   });
 
   it("preserves an existing file by default and reports the conflict", async () => {
@@ -105,10 +143,7 @@ describe("workspace imagegen", () => {
   it("uses read observations when replacement is requested", async () => {
     const { tool, vcs, observations } = setup();
     vcs.files.set(input.outputPath, "changed elsewhere");
-    observations.record(
-      input.outputPath,
-      sha256Hex(new TextEncoder().encode("observed")),
-    );
+    observations.record(input.outputPath, sha256Hex(new TextEncoder().encode("observed")));
     const result = await tool.execute("call:image", {
       ...input,
       createOnly: false,
@@ -135,25 +170,16 @@ describe("workspace imagegen", () => {
     ],
     [[{ type: "error", message: "quota exceeded" }], "quota exceeded"],
     [[{ type: "response.completed", response: { output: [] } }], "received 0"],
-  ])(
-    "does not author files on incomplete or failed streams",
-    async (frames, message) => {
-      const { tool, vcs } = setup(frames as unknown[]);
-      await expect(tool.execute("call:image", input)).rejects.toThrow(
-        message as string,
-      );
-      expect(vcs.lastEditInput).toBeUndefined();
-    },
-  );
+  ])("does not author files on incomplete or failed streams", async (frames, message) => {
+    const { tool, vcs } = setup(frames as unknown[]);
+    await expect(tool.execute("call:image", input)).rejects.toThrow(message as string);
+    expect(vcs.lastEditInput).toBeUndefined();
+  });
 
   it("cancels before credentials, generation, or mutation", async () => {
     const { tool, resolveSession, vcs } = setup();
     await expect(
-      tool.execute(
-        "call:image",
-        input,
-        AbortSignal.abort(new Error("cancelled")),
-      ),
+      tool.execute("call:image", input, AbortSignal.abort(new Error("cancelled")))
     ).rejects.toThrow("cancelled");
     expect(resolveSession).not.toHaveBeenCalled();
     expect(vcs.lastEditInput).toBeUndefined();

@@ -31,7 +31,11 @@ interface ChannelSendOptions {
   replyTo?: string;
   mentions?: string[];
   /** Explicit direction: only the selected participants should respond. */
-  to?: Array<{ kind: "all" | "role" | "participant"; role?: string; participantId?: string }>;
+  to?: Array<{
+    kind: "all" | "role" | "participant";
+    role?: string;
+    participantId?: string;
+  }>;
   idempotencyKey?: string;
   attachments?: ChannelAttachment[];
   /**
@@ -104,33 +108,45 @@ export class ChannelClient {
   constructor(
     private rpc: RpcCaller,
     private channelId: string,
-    private protocol: string = DEFAULT_CHANNEL_SERVICE_PROTOCOL
+    private protocol: string = DEFAULT_CHANNEL_SERVICE_PROTOCOL,
   ) {}
-  private async target(): Promise<string> {
+  async resolveTarget(): Promise<string> {
     this.targetPromise ??= this.rpc
-      .call<ResolvedService>("main", "workers.resolveService", [this.protocol, this.channelId])
+      .call<ResolvedService>("main", "workers.resolveService", [
+        this.protocol,
+        this.channelId,
+      ])
       .then((service) => {
         if (service.kind !== "durable-object" || !service.targetId) {
-          throw new Error("Channel service must resolve to a Durable Object service");
+          throw new Error(
+            "Channel service must resolve to a Durable Object service",
+          );
         }
         return service.targetId;
       });
     return this.targetPromise;
   }
-  private async call<T = unknown>(method: string, ...args: unknown[]): Promise<T> {
-    return this.rpc.call<T>(await this.target(), method, [...args]);
+  private async call<T = unknown>(
+    method: string,
+    ...args: unknown[]
+  ): Promise<T> {
+    return this.rpc.call<T>(await this.resolveTarget(), method, [...args]);
   }
   async send(
     participantId: string,
     messageId: string,
     content: string,
-    opts?: ChannelSendOptions
+    opts?: ChannelSendOptions,
   ): Promise<void> {
     const senderMetadata = opts?.senderMetadata ?? {};
     const participantType =
-      typeof senderMetadata["type"] === "string" ? senderMetadata["type"] : undefined;
+      typeof senderMetadata["type"] === "string"
+        ? senderMetadata["type"]
+        : undefined;
     const displayName =
-      typeof senderMetadata["name"] === "string" ? senderMetadata["name"] : participantId;
+      typeof senderMetadata["name"] === "string"
+        ? senderMetadata["name"]
+        : participantId;
     const attachments = opts?.attachments?.map((attachment, index) => ({
       id: attachment.id ?? `att_${index}`,
       data: attachment.data,
@@ -142,14 +158,20 @@ export class ChannelClient {
       kind: "message.completed",
       actor: {
         kind:
-          participantType === "agent" ? "agent" : participantType === "headless" ? "user" : "panel",
+          participantType === "agent"
+            ? "agent"
+            : participantType === "headless"
+              ? "user"
+              : "panel",
         id: participantId,
         displayName,
         metadata: senderMetadata,
       },
       causality: {
         messageId: messageId as never,
-        ...(typeof opts?.agentHops === "number" ? { agentHops: opts.agentHops } : {}),
+        ...(typeof opts?.agentHops === "number"
+          ? { agentHops: opts.agentHops }
+          : {}),
       },
       payload: {
         protocol: AGENTIC_PROTOCOL_VERSION,
@@ -159,7 +181,10 @@ export class ChannelClient {
           ...(attachments?.map((attachment, index) => ({
             blockId: `${messageId}:block:${index + 1}` as never,
             type: "attachment" as const,
-            metadata: { mimeType: attachment.mimeType, filename: attachment.name },
+            metadata: {
+              mimeType: attachment.mimeType,
+              filename: attachment.name,
+            },
           })) ?? []),
         ],
         outcome: "completed",
@@ -188,15 +213,21 @@ export class ChannelClient {
         Required<Pick<ChannelAttachment, "id" | "data" | "mimeType" | "size">> &
           Pick<ChannelAttachment, "name">
       >;
-    }
+    },
   ): Promise<{ id?: number }> {
-    return this.call("publish", participantId, AGENTIC_EVENT_PAYLOAD_KIND, event, opts);
+    return this.call(
+      "publish",
+      participantId,
+      AGENTIC_EVENT_PAYLOAD_KIND,
+      event,
+      opts,
+    );
   }
   async publish(
     participantId: string,
     payloadKind: string,
     payload: unknown,
-    opts?: { idempotencyKey?: string }
+    opts?: { idempotencyKey?: string },
   ): Promise<{ id?: number }> {
     return this.call("publish", participantId, payloadKind, payload, opts);
   }
@@ -212,7 +243,7 @@ export class ChannelClient {
   async recordReadReceipt(
     participantId: string,
     messageId: string,
-    turnId?: string
+    turnId?: string,
   ): Promise<void> {
     await this.call("recordReceipt", participantId, messageId, "read", {
       ...(turnId ? { turnId } : {}),
@@ -225,22 +256,37 @@ export class ChannelClient {
     idempotencyKey?: string,
     opts?: {
       append?: boolean;
-    }
+    },
   ): Promise<void> {
-    await this.call("update", participantId, messageId, content, idempotencyKey, opts);
+    await this.call(
+      "update",
+      participantId,
+      messageId,
+      content,
+      idempotencyKey,
+      opts,
+    );
   }
-  async complete(participantId: string, messageId: string, idempotencyKey?: string): Promise<void> {
+  async complete(
+    participantId: string,
+    messageId: string,
+    idempotencyKey?: string,
+  ): Promise<void> {
     await this.call("complete", participantId, messageId, idempotencyKey);
   }
   async error(
     participantId: string,
     messageId: string,
     error: string,
-    code?: string
+    code?: string,
   ): Promise<void> {
     await this.call("error", participantId, messageId, error, code);
   }
-  async sendSignal(participantId: string, content: string, contentType?: string): Promise<void> {
+  async sendSignal(
+    participantId: string,
+    content: string,
+    contentType?: string,
+  ): Promise<void> {
     await this.call("sendSignal", participantId, content, contentType);
   }
   /**
@@ -249,7 +295,11 @@ export class ChannelClient {
    * sendSignal path. Receivers decode via
    * `parseSignalEvent` from `@workspace/agentic-core`.
    */
-  async sendSignalEvent<T>(participantId: string, contentType: string, payload: T): Promise<void> {
+  async sendSignalEvent<T>(
+    participantId: string,
+    contentType: string,
+    payload: T,
+  ): Promise<void> {
     await this.sendSignal(participantId, JSON.stringify(payload), contentType);
   }
   /** Durable semantic signal. Unlike UI/model progress hints, this is appended
@@ -258,19 +308,26 @@ export class ChannelClient {
     participantId: string,
     contentType: string,
     payload: T,
-    idempotencyKey: string
+    idempotencyKey: string,
   ): Promise<void> {
     await this.publish(
       participantId,
       "signal",
       { content: JSON.stringify(payload), contentType },
-      { idempotencyKey }
+      { idempotencyKey },
     );
   }
-  async broadcastStoredEnvelopes(envelopeIds: string[]): Promise<{ broadcasted: number }> {
-    return this.call("broadcastStoredEnvelopes", envelopeIds) as Promise<{ broadcasted: number }>;
+  async broadcastStoredEnvelopes(
+    envelopeIds: string[],
+  ): Promise<{ broadcasted: number }> {
+    return this.call("broadcastStoredEnvelopes", envelopeIds) as Promise<{
+      broadcasted: number;
+    }>;
   }
-  async updateMetadata(participantId: string, metadata: Record<string, unknown>): Promise<void> {
+  async updateMetadata(
+    participantId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
     await this.call("updateMetadata", participantId, metadata);
   }
   async setTypingState(participantId: string, typing: boolean): Promise<void> {
@@ -284,7 +341,9 @@ export class ChannelClient {
     await this.call("leave", { participantId, revision });
   }
 
-  async relationshipState(participantId: string): Promise<{ revision: number; active: boolean }> {
+  async relationshipState(
+    participantId: string,
+  ): Promise<{ revision: number; active: boolean }> {
     return this.call("relationshipState", participantId);
   }
   async getParticipants(): Promise<
@@ -308,32 +367,63 @@ export class ChannelClient {
     callId: string,
     method: string,
     args: unknown,
-    opts?: { invocationId?: string; transportCallId?: string; turnId?: string; timeoutMs?: number }
+    opts?: {
+      invocationId?: string;
+      transportCallId?: string;
+      turnId?: string;
+      timeoutMs?: number;
+    },
   ): Promise<void> {
-    await this.call("callMethod", callerPid, targetPid, callId, method, args, opts);
+    await this.call(
+      "callMethod",
+      callerPid,
+      targetPid,
+      callId,
+      method,
+      args,
+      opts,
+    );
   }
   async cancelCall(participantId: string, callId: string): Promise<void> {
     await this.call("cancelMethodCall", participantId, callId);
   }
-  async getReplayAfter(request: ChannelReplayAfterRequest): Promise<ChannelReplayEnvelope> {
-    return this.call("getReplayAfter", request) as Promise<ChannelReplayEnvelope>;
+  async getReplayAfter(
+    request: ChannelReplayAfterRequest,
+  ): Promise<ChannelReplayEnvelope> {
+    return this.call(
+      "getReplayAfter",
+      request,
+    ) as Promise<ChannelReplayEnvelope>;
   }
   /** Iterate a stable forward snapshot without ever assembling it into one RPC
    * payload. Appends after the first page's watermark belong to the next read. */
   async *replayAfterPages(
-    request: ChannelReplayAfterRequest
+    request: ChannelReplayAfterRequest,
   ): AsyncGenerator<ChannelReplayEnvelope, void, void> {
-    yield* iterateChannelReplayAfterPages((page) => this.getReplayAfter(page), request);
+    yield* iterateChannelReplayAfterPages(
+      (page) => this.getReplayAfter(page),
+      request,
+    );
   }
   /** Look up one durable channel envelope by its stable id. */
   async getEnvelope(envelopeId: string): Promise<unknown | null> {
     return this.call("getEnvelope", envelopeId) as Promise<unknown | null>;
   }
-  async getMessageType(typeId: string): Promise<Record<string, unknown> | null> {
-    return this.call("getMessageType", typeId) as Promise<Record<string, unknown> | null>;
+  async getMessageType(
+    typeId: string,
+  ): Promise<Record<string, unknown> | null> {
+    return this.call("getMessageType", typeId) as Promise<Record<
+      string,
+      unknown
+    > | null>;
   }
-  async getMessageSender(participantId: string, messageId: string): Promise<string | null> {
-    return this.call("getMessageSender", participantId, messageId) as Promise<string | null>;
+  async getMessageSender(
+    participantId: string,
+    messageId: string,
+  ): Promise<string | null> {
+    return this.call("getMessageSender", participantId, messageId) as Promise<
+      string | null
+    >;
   }
   async getMessageTypes(): Promise<Record<string, unknown>[]> {
     return this.call("getMessageTypes") as Promise<Record<string, unknown>[]>;
@@ -355,8 +445,12 @@ export class ChannelClient {
       state: unknown;
     }>;
   }
-  async updateConfig(config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.call("updateConfig", config) as Promise<Record<string, unknown>>;
+  async updateConfig(
+    config: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return this.call("updateConfig", config) as Promise<
+      Record<string, unknown>
+    >;
   }
   async getConfig(): Promise<Record<string, unknown> | null> {
     return this.call("getConfig") as Promise<Record<string, unknown> | null>;

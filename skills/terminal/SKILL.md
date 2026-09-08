@@ -5,6 +5,12 @@ description: Run bounded local commands from an agent via the installed shell ex
 
 # Terminal commands
 
+Use the terminal when the task requires an actual operating-system process or
+command behavior. For programmatic workspace or scratch filesystem work—such
+as creating, listing, moving, or removing a temporary tree—use the scoped
+`@workspace/runtime` filesystem API in eval. That filesystem follows the
+current context and needs no native shell authority.
+
 Use the installed `shell` extension. For a normal command, use argv mode so
 arguments are passed literally:
 

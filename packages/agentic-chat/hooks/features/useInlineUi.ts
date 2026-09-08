@@ -6,12 +6,14 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { CONTENT_TYPE_INLINE_UI } from "@workspace/pubsub";
+import { CONTENT_TYPE_INLINE_UI, type PubSubClient } from "@workspace/pubsub";
+import { isRpcConnectionLost } from "@vibestudio/rpc";
 import type { LoadSourceFile, SandboxOptions } from "@workspace/eval";
 import { parseInlineUiData } from "../../components/InlineUiMessage";
 import type { ChatMessage, InlineUiComponentEntry } from "../../types";
 
 interface UseInlineUiOptions {
+  client?: Pick<PubSubClient, "onReconnect"> | null;
   messages: ChatMessage[];
   loadSourceFile?: LoadSourceFile;
   loadImport?: SandboxOptions["loadImport"];
@@ -54,6 +56,7 @@ function compiledSourceKey(
 }
 
 export function useInlineUi({
+  client,
   messages,
   loadSourceFile,
   loadImport,
@@ -67,6 +70,19 @@ export function useInlineUi({
   const compilationQueuesRef = useRef(new Map<string, Promise<void>>());
   const loadersRef = useRef({ loadSourceFile, loadImport });
   const mountedRef = useRef(true);
+  const [sourceEpoch, setSourceEpoch] = useState(0);
+  const sourceClientRef = useRef(client);
+
+  // Source reads belong to the live channel session. Reconnection invalidates
+  // failed/in-flight reads; the source-content cache still retains healthy
+  // components and their local state when their code has not changed.
+  useEffect(() => {
+    if (sourceClientRef.current !== client) {
+      sourceClientRef.current = client;
+      setSourceEpoch((epoch) => epoch + 1);
+    }
+    return client?.onReconnect(() => setSourceEpoch((epoch) => epoch + 1));
+  }, [client]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -142,7 +158,7 @@ export function useInlineUi({
             cacheKey: result.cacheKey!,
             runtime: result.runtime,
           });
-        } else {
+        } else if (!isRpcConnectionLost(result)) {
           compiledSourcesRef.current.delete(data.id);
           console.error(
             `[InlineUiMessage] Component "${data.id}" compilation failed` +
@@ -158,6 +174,12 @@ export function useInlineUi({
         }
       } catch (err) {
         if (!isCurrent(data.id, revision)) return;
+        if (isRpcConnectionLost(err)) {
+          if (!entriesRef.current.has(data.id)) {
+            publishEntry(data.id, { cacheKey: revision });
+          }
+          return;
+        }
         compiledSourcesRef.current.delete(data.id);
         console.error(
           `[InlineUiMessage] Component "${data.id}" source loading failed` +
@@ -195,7 +217,7 @@ export function useInlineUi({
       const data = msg.inlineUi ?? parseInlineUiData(msg.content);
       if (!data) continue;
       referencedUiIds.add(data.id);
-      const revision = renderRevisionKey(data);
+      const revision = JSON.stringify([sourceEpoch, renderRevisionKey(data)]);
       if (observedRevisionsRef.current.get(data.id) === revision) continue;
       observedRevisionsRef.current.set(data.id, revision);
       enqueueCompilation(data, revision);
@@ -220,7 +242,7 @@ export function useInlineUi({
       entriesRef.current = updated;
       setInlineUiComponents(updated);
     }
-  }, [messages, loadSourceFile, loadImport]);
+  }, [messages, loadSourceFile, loadImport, sourceEpoch]);
 
   return { inlineUiComponents };
 }

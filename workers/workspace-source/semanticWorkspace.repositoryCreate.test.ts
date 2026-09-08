@@ -5,7 +5,7 @@ import {
   createSemanticVcsSchema,
   createTrajectoryMirrorSchema,
 } from "./semanticVcsSchema.js";
-import { SemanticWorkspace, type SemanticDispatchRequest } from "./semanticWorkspace.js";
+import { SemanticWorkspace, type SemanticDispatchRequest } from "./semanticWorkspace.testHost.js";
 import { SemanticVcsStore } from "./semanticVcsStore.js";
 
 const timestamp = "2026-07-16T00:00:00.000Z";

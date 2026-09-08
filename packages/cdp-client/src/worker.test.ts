@@ -985,6 +985,68 @@ describe("worker CDP client", () => {
     ).toBe(true);
   });
 
+  it("dispatches Shift+Enter's newline between keydown and keyup", async () => {
+    installFakeWebSocket();
+    const browser = await BrowserImpl.connect("ws://cdp");
+    const page = browser.contexts()[0]!.pages()[0]!;
+
+    await page.keyboard.press("Shift+Enter");
+
+    const events = FakeWebSocket.sent.filter((event) => event.method === "Input.dispatchKeyEvent");
+    expect(
+      events.map((event) => ({
+        type: event.params?.["type"],
+        key: event.params?.["key"],
+        text: event.params?.["text"],
+        modifiers: event.params?.["modifiers"],
+      }))
+    ).toEqual([
+      { type: "keyDown", key: "Shift", text: undefined, modifiers: 8 },
+      { type: "keyDown", key: "Enter", text: undefined, modifiers: 8 },
+      { type: "char", key: "Enter", text: "\r", modifiers: 8 },
+      { type: "keyUp", key: "Enter", text: undefined, modifiers: 8 },
+      { type: "keyUp", key: "Shift", text: undefined, modifiers: 8 },
+    ]);
+  });
+
+  it.each(["Control", "Meta", "Alt"])(
+    "suppresses Enter text for %s shortcuts, including held modifiers",
+    async (modifier) => {
+      installFakeWebSocket();
+      const browser = await BrowserImpl.connect("ws://cdp");
+      const page = browser.contexts()[0]!.pages()[0]!;
+
+      await page.keyboard.press(modifier + "+Shift+Enter");
+      await page.keyboard.down(modifier);
+      await page.keyboard.press("Enter");
+      await page.keyboard.up(modifier);
+      expect(
+        FakeWebSocket.sent.filter(
+          (event) => event.method === "Input.dispatchKeyEvent" && event.params?.["type"] === "char"
+        )
+      ).toEqual([]);
+
+      await page.keyboard.down("Shift");
+      await page.keyboard.press("Enter");
+      await page.keyboard.up("Shift");
+      await page.keyboard.press("Enter");
+      expect(
+        FakeWebSocket.sent
+          .filter(
+            (event) =>
+              event.method === "Input.dispatchKeyEvent" && event.params?.["type"] === "char"
+          )
+          .map((event) => ({
+            text: event.params?.["text"],
+            modifiers: event.params?.["modifiers"],
+          }))
+      ).toEqual([
+        { text: "\r", modifiers: 8 },
+        { text: "\r", modifiers: 0 },
+      ]);
+    }
+  );
+
   it("surfaces browser exception identity, message, and stack", async () => {
     installFakeWebSocket();
     const browser = await BrowserImpl.connect("ws://cdp");

@@ -55,6 +55,19 @@ type EnsureExternalRequires = (
 const EXTENSIONS = [".tsx", ".ts", ".jsx", ".js"];
 const INDEX_FILES = EXTENSIONS.map((ext) => `/index${ext}`);
 
+class SourceFileResolutionError extends Error {
+  readonly code = "ENOENT";
+}
+
+function isMissingSourceFileError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "ENOENT" || error.code === "ENOTDIR" || error.code === "EISDIR")
+  );
+}
+
 function isRelativeSpecifier(specifier: string): boolean {
   return specifier.startsWith("./") || specifier.startsWith("../");
 }
@@ -226,7 +239,8 @@ export async function findNearestPackageJson(
     try {
       const raw = await loadSourceFile(packagePath);
       return { path: packagePath, dir, packageJson: JSON.parse(raw) as PackageJsonShape };
-    } catch {
+    } catch (error) {
+      if (!isMissingSourceFileError(error)) throw error;
       dir = parentDir(dir);
     }
   }
@@ -246,7 +260,8 @@ async function findNearestTsConfig(
     try {
       const raw = await loadSourceFile(tsconfigPath);
       return { path: tsconfigPath, dir, tsconfig: JSON.parse(raw) as TsConfigShape };
-    } catch {
+    } catch (error) {
+      if (!isMissingSourceFileError(error)) throw error;
       dir = parentDir(dir);
     }
   }
@@ -407,7 +422,7 @@ async function resolveSourceFile(
       ? candidatePaths(specifier, importerPath)
       : await localAliasCandidates(specifier, importerPath, loadSourceFile);
   if (candidates.length === 0) {
-    throw new Error(
+    throw new SourceFileResolutionError(
       `Specifier "${specifier}" does not resolve to a source file from ${importerPath ?? "<inline source>"}`
     );
   }
@@ -435,11 +450,12 @@ async function resolveSourceFile(
       if (resolutions && importerPath) resolutions.set(`${importerPath}\n${specifier}`, normalized);
       return { path: normalized, code };
     } catch (err) {
+      if (!isMissingSourceFileError(err)) throw err;
       errors.push(err instanceof Error ? err.message : String(err));
     }
   }
 
-  throw new Error(
+  throw new SourceFileResolutionError(
     `Relative import "${specifier}" could not be resolved from ${importerPath ?? "<inline source>"}. ` +
       `Tried: ${candidates.map((candidate) => normalizeSourcePath(candidate)).join(", ")}. ${errors[errors.length - 1] ?? ""}`.trim()
   );
@@ -460,6 +476,7 @@ async function tryResolveSourceFile(
     return await resolveSourceFile(specifier, importerPath, files, loadSourceFile, resolutions);
   } catch (err) {
     if (isRelativeSpecifier(specifier)) throw err;
+    if (!isMissingSourceFileError(err)) throw err;
     return null;
   }
 }
@@ -630,7 +647,9 @@ export async function prepareSourceCode(
       const existing = normalizedFiles.get(normalized);
       if (existing !== undefined) return existing;
       if (!options.loadSourceFile) {
-        throw new Error(`Source file not present in embedded file bundle: ${normalized}`);
+        throw new SourceFileResolutionError(
+          `Source file not present in embedded file bundle: ${normalized}`
+        );
       }
       return options.loadSourceFile(normalized);
     },

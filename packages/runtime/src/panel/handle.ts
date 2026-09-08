@@ -3,9 +3,6 @@ import type { PanelHandle as CorePanelHandle, Rpc } from "../core/index.js";
 import type { OpenExternalOptions, OpenExternalResult } from "@vibestudio/shared/externalOpen";
 import {
   createPanelRuntime,
-  type CreatePanelSlotOptions,
-  type OpenPanelOptions,
-  type PanelRuntimeApi,
   type PanelRuntimeTree,
 } from "../shared/panelRuntime.js";
 import { currentJournal } from "../shared/journal.js";
@@ -20,11 +17,7 @@ export type PanelTreeApi = PanelRuntimeTree;
 
 type PanelRuntimeRpc = Pick<RpcClient, "call" | "emit" | "on">;
 
-let _rpc: PanelRuntimeRpc | null = null;
-let _runtime: PanelRuntimeApi | null = null;
-const shell = (globalThis as any).__vibestudioShell;
-
-export function _initPanelHandleBridge(
+export function createPanelHandleApi(
   rpc: PanelRuntimeRpc,
   options: {
     selfId?: string | null;
@@ -33,9 +26,9 @@ export function _initPanelHandleBridge(
     parentRpcTargetId?: string | null;
     effectiveVersion?: string | null;
   } = {}
-): void {
-  _rpc = rpc;
-  _runtime = createPanelRuntime({
+) {
+  const shell = (globalThis as any).__vibestudioShell;
+  const runtime = createPanelRuntime({
     rpc,
     ...(typeof shell?.focusPanel === "function"
       ? { focusPanel: (id, focusOptions) => shell.focusPanel(id, focusOptions) }
@@ -78,102 +71,73 @@ export function _initPanelHandleBridge(
     onClose: (id) => currentJournal()?.append({ type: "close", id }),
     onStateArgsSet: (id) => currentJournal()?.append({ type: "stateArgs.set", id }),
   });
-}
+  const subscriptions = new Set<() => void>();
+  let destroyed = false;
+  function ownSubscription(unsubs: Array<() => void>): () => void {
+    const unsubscribe = () => {
+      if (!subscriptions.delete(unsubscribe)) return;
+      for (const unsub of unsubs) unsub();
+    };
+    subscriptions.add(unsubscribe);
+    return unsubscribe;
+  }
 
-function getRpc(): PanelRuntimeRpc {
-  if (!_rpc) throw new Error("Panel bridge not initialized");
-  return _rpc;
-}
+  async function openExternal(
+    url: string,
+    options?: OpenExternalOptions
+  ): Promise<OpenExternalResult> {
+    return rpc.call<OpenExternalResult>("main", "externalOpen.openExternal", [url, options]);
+  }
 
-function getRuntime(): PanelRuntimeApi {
-  if (!_runtime) throw new Error("Panel bridge not initialized");
-  return _runtime;
-}
-
-export async function openPanel(source: string, options?: OpenPanelOptions): Promise<PanelHandle> {
-  return getRuntime().openPanel(source, options);
-}
-
-export async function createPanelSlot(
-  source: string,
-  options?: CreatePanelSlotOptions
-): Promise<PanelHandle> {
-  return getRuntime().createPanelSlot(source, options);
-}
-
-export async function openExternal(
-  url: string,
-  options?: OpenExternalOptions
-): Promise<OpenExternalResult> {
-  return getRpc().call<OpenExternalResult>("main", "externalOpen.openExternal", [url, options]);
-}
-
-export function onChildCreated(
-  handler: (info: { childId: string; url: string }) => void
-): () => void {
-  const unsubs: Array<() => void> = [];
-  if (shell?.addEventListener) {
-    const listenerId = shell.addEventListener((event: string, payload: unknown) => {
-      if (event === "runtime:child-created") {
-        const data = payload as { childId?: string; url?: string } | null;
+  function onChildCreated(
+    handler: (info: { childId: string; url: string }) => void
+  ): () => void {
+    if (destroyed) throw new Error("Panel handle runtime has been destroyed");
+    const unsubs: Array<() => void> = [];
+    if (shell?.addEventListener) {
+      const listenerId = shell.addEventListener((event: string, payload: unknown) => {
+        if (event === "runtime:child-created") {
+          const data = payload as { childId?: string; url?: string } | null;
+          if (data?.childId && data?.url) handler({ childId: data.childId, url: data.url });
+        }
+      });
+      unsubs.push(() => shell.removeEventListener(listenerId));
+    }
+    unsubs.push(
+      rpc.on("runtime:child-created", (event: RpcEventContext) => {
+        const data = event.payload as { childId?: string; url?: string } | null;
         if (data?.childId && data?.url) handler({ childId: data.childId, url: data.url });
-      }
-    });
-    unsubs.push(() => shell.removeEventListener(listenerId));
+      }, {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."})
+    );
+    return ownSubscription(unsubs);
   }
-  const rpc = getRpc();
-  unsubs.push(
-    rpc.on("runtime:child-created", (event: RpcEventContext) => {
-      const data = event.payload as { childId?: string; url?: string } | null;
-      if (data?.childId && data?.url) handler({ childId: data.childId, url: data.url });
-    })
-  );
-  return () => {
-    for (const unsub of unsubs) unsub();
-  };
-}
 
-export function onChildCreationError(
-  handler: (info: { url: string; error: string }) => void
-): () => void {
-  const unsubs: Array<() => void> = [];
-  const notify = (payload: unknown) => {
-    const data = payload as { url?: string; error?: string } | null;
-    if (data?.url && data?.error) handler({ url: data.url, error: data.error });
-  };
-  if (shell?.addEventListener) {
-    const listenerId = shell.addEventListener((event: string, payload: unknown) => {
-      if (event === "runtime:child-creation-error") notify(payload);
-    });
-    unsubs.push(() => shell.removeEventListener(listenerId));
+  function onChildCreationError(
+    handler: (info: { url: string; error: string }) => void
+  ): () => void {
+    if (destroyed) throw new Error("Panel handle runtime has been destroyed");
+    const unsubs: Array<() => void> = [];
+    const notify = (payload: unknown) => {
+      const data = payload as { url?: string; error?: string } | null;
+      if (data?.url && data?.error) handler({ url: data.url, error: data.error });
+    };
+    if (shell?.addEventListener) {
+      const listenerId = shell.addEventListener((event: string, payload: unknown) => {
+        if (event === "runtime:child-creation-error") notify(payload);
+      });
+      unsubs.push(() => shell.removeEventListener(listenerId));
+    }
+    unsubs.push(
+      rpc.on("runtime:child-creation-error", (event: RpcEventContext) => notify(event.payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."})
+    );
+    return ownSubscription(unsubs);
   }
-  unsubs.push(
-    getRpc().on("runtime:child-creation-error", (event: RpcEventContext) => notify(event.payload))
-  );
-  return () => {
-    for (const unsub of unsubs) unsub();
+
+  return {
+    ...runtime, openExternal, onChildCreated, onChildCreationError,
+    destroy: () => {
+      destroyed = true;
+      for (const unsubscribe of subscriptions) unsubscribe();
+    },
   };
 }
-
-export function getPanelHandle(
-  id: string,
-  kind: "workspace" | "browser" = "workspace"
-): PanelHandle {
-  return getRuntime().getPanelHandle(id, kind);
-}
-
-export const panelTree: PanelTreeApi = {
-  self: () => getRuntime().panelTree.self(),
-  get: (id, kind) => getRuntime().panelTree.get(id, kind),
-  rootOwners: (input) => getRuntime().panelTree.rootOwners(input),
-  roots: (input) => getRuntime().panelTree.roots(input),
-  rootsForOwner: (ownerUserId, input) => getRuntime().panelTree.rootsForOwner(ownerUserId, input),
-  children: (parentSlotId, input) => getRuntime().panelTree.children(parentSlotId, input),
-  page: (input) => getRuntime().panelTree.page(input),
-  path: (id) => getRuntime().panelTree.path(id),
-  search: (input) => getRuntime().panelTree.search(input),
-  sourceUsage: (limit) => getRuntime().panelTree.sourceUsage(limit),
-  parent: (id) => getRuntime().panelTree.parent(id),
-  navigate: (id, source, options) => getRuntime().panelTree.navigate(id, source, options),
-  navigateHistory: (id, delta) => getRuntime().panelTree.navigateHistory(id, delta),
-};

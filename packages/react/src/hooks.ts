@@ -152,14 +152,15 @@ export function usePanelPartition(): string | null {
  */
 export function usePanelRpcGlobalEvent<T = unknown>(
   eventName: string,
-  handler: (fromPanelId: string, payload: T) => void
+  handler: (fromPanelId: string, payload: T) => void,
+  website: import("@vibestudio/rpc").WebsiteMethodPolicy
 ): void {
   useEffect(() => {
     const unsubscribe = runtime.rpc.on(eventName, (event) => {
       handler(event.caller.callerId, event.payload as T);
-    });
+    }, website);
     return unsubscribe;
-  }, [eventName, handler]);
+  }, [eventName, handler, website]);
 }
 
 // =============================================================================

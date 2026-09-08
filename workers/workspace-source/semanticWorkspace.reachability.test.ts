@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createInMemorySql } from "@vibestudio/durable/test-utils";
 import { createSemanticVcsSchema } from "./semanticVcsSchema.js";
 import { SemanticVcsStore } from "./semanticVcsStore.js";
-import { SemanticWorkspace } from "./semanticWorkspace.js";
+import { SemanticWorkspace } from "./semanticWorkspace.testHost.js";
 
 const timestamp = "2026-07-16T00:00:00.000Z";
 

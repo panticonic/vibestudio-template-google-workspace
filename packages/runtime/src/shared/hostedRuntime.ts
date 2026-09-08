@@ -22,6 +22,7 @@ import type { OpenExternalOptions, OpenExternalResult } from "@vibestudio/shared
 import { PanelOperationError } from "@vibestudio/shared/panel/observation";
 import { helpfulNamespace } from "./helpfulNamespace.js";
 import { createGadClient, type GadClient } from "./gad.js";
+import { createImagesClient, type ImagesClient } from "./images.js";
 import { createBlobstoreClient, type BlobstoreClient } from "./blobstore.js";
 import { createWorkspaceClient, type WorkspaceClient } from "./workspace.js";
 import { createCredentialClient, type CredentialClient } from "./credentials.js";
@@ -106,6 +107,7 @@ export interface WorkspaceRuntime {
   readonly gad: GadClient;
   /** Per-workspace content-addressable blob store (persist/fetch large artifacts). */
   readonly blobstore: BlobstoreClient;
+  readonly images: ImagesClient;
   readonly workspace: WorkspaceClient;
   readonly runtime: RuntimeServiceClient;
   readonly credentials: CredentialClient;
@@ -332,6 +334,7 @@ export function createHostedRuntime(host: RuntimeHost): WorkspaceRuntime {
     getParentWithContract: parentApi.getParentWithContract,
     gad,
     blobstore,
+    images: helpfulNamespace("images", createImagesClient(rpc)),
     workspace,
     runtime: runtimeService,
     credentials,

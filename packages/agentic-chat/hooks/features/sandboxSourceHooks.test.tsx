@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { CONTENT_TYPE_INLINE_UI } from "@workspace/pubsub";
+import { RpcBoundaryError } from "@vibestudio/rpc";
 import { useActionBar } from "./useActionBar";
 import { useInlineUi } from "./useInlineUi";
 import type { ActionBarHookState } from "./useActionBar";
@@ -105,7 +106,7 @@ describe("sandbox source hooks", () => {
         return `import { label } from "label-lib"; export default function App() { return label; }`;
       if (path === "packages/app/package.json")
         return JSON.stringify({ dependencies: { "label-lib": "2" } });
-      throw new Error(`Missing ${path}`);
+      throw Object.assign(new Error(`Missing ${path}`), { code: "ENOENT" });
     };
     const loadImport = async (specifier: string, ref: string | undefined) => {
       loadCalls.push({ specifier, ref });
@@ -140,6 +141,90 @@ describe("sandbox source hooks", () => {
     );
     expect(loadCalls).toEqual([{ specifier: "label-lib", ref: "npm:2" }]);
   });
+
+  it.each(["root", "dependency"])(
+    "reloads interrupted %s source on reconnect and preserves the healthy component",
+    async (failureAt) => {
+      const handlers = new Set<() => void>();
+      const client = {
+        onReconnect: (handler: () => void) => {
+          handlers.add(handler);
+          return () => {
+            handlers.delete(handler);
+          };
+        },
+      };
+      const lost = new RpcBoundaryError(
+        "Pipe closed",
+        "transport",
+        "CONNECTION_LOST",
+      );
+      let available = false;
+      const loadSourceFile = vi.fn(async (file: string) => {
+        if (!available && (failureAt === "root" || file.includes("catalog")))
+          throw lost;
+        if (file.endsWith("package.json")) return "{}";
+        if (file.endsWith("Card.tsx"))
+          return failureAt === "dependency"
+            ? "import { label } from './catalog'; export default function Card() { return label; }"
+            : "export default function Card() { return 'ready'; }";
+        if (file.endsWith("catalog.ts")) return "export const label = 'ready';";
+        throw Object.assign(new Error(`Missing ${file}`), { code: "ENOENT" });
+      });
+      const messages = [
+        makeMessage({
+          id: "recovery-ui",
+          source: { type: "file", path: "skills/setup/Card.tsx" },
+        }),
+      ];
+      let state: InlineUiState;
+      function Harness() {
+        state = useInlineUi({ client, messages, loadSourceFile });
+        return null;
+      }
+      const view = render(<Harness />);
+      await waitFor(() =>
+        expect(state.inlineUiComponents.has("recovery-ui")).toBe(true),
+      );
+      if (failureAt === "dependency") {
+        await waitFor(() =>
+          expect(
+            loadSourceFile.mock.calls.some(([file]) =>
+              file.includes("catalog"),
+            ),
+          ).toBe(true),
+        );
+        await act(async () => {
+          await Promise.resolve();
+        });
+      }
+      expect(
+        state!.inlineUiComponents.get("recovery-ui")?.error,
+      ).toBeUndefined();
+      available = true;
+      act(() => {
+        for (const handler of handlers) handler();
+      });
+      await waitFor(() =>
+        expect(
+          state.inlineUiComponents.get("recovery-ui")?.Component,
+        ).toBeTruthy(),
+      );
+      const component = state!.inlineUiComponents.get("recovery-ui")?.Component;
+      const before = loadSourceFile.mock.calls.length;
+      act(() => {
+        for (const handler of handlers) handler();
+      });
+      await waitFor(() =>
+        expect(loadSourceFile.mock.calls.length).toBeGreaterThan(before),
+      );
+      expect(state!.inlineUiComponents.get("recovery-ui")?.Component).toBe(
+        component,
+      );
+      view.unmount();
+      expect(handlers.size).toBe(0);
+    },
+  );
 
   it("loads explicit inline_ui imports from a replayed payload", async () => {
     const states: InlineUiState[] = [];
@@ -330,7 +415,9 @@ describe("sandbox source hooks", () => {
     let sourceReads = 0;
     const loadSourceFile = async (sourcePath: string) => {
       if (sourcePath !== "packages/app/Card.tsx")
-        throw new Error(`Missing ${sourcePath}`);
+        throw Object.assign(new Error(`Missing ${sourcePath}`), {
+          code: "ENOENT",
+        });
       sourceReads += 1;
       return source;
     };
@@ -457,7 +544,7 @@ describe("sandbox source hooks", () => {
         return `import { label } from "label-lib"; export default function Bar() { return label; }`;
       if (path === "packages/app/package.json")
         return JSON.stringify({ dependencies: { "label-lib": "3" } });
-      throw new Error(`Missing ${path}`);
+      throw Object.assign(new Error(`Missing ${path}`), { code: "ENOENT" });
     };
     const loadImport = async (specifier: string, ref: string | undefined) => {
       loadCalls.push({ specifier, ref });
@@ -576,7 +663,7 @@ describe("sandbox source hooks", () => {
         messages,
         loadSourceFile: async (path) => {
           if (path === sourcePath) return source;
-          throw new Error(`Missing ${path}`);
+          throw Object.assign(new Error(`Missing ${path}`), { code: "ENOENT" });
         },
       });
       useEffect(() => {

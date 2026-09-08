@@ -1072,7 +1072,7 @@ export class ${className} extends DurableObjectBase {
     return ["records"];
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -1094,7 +1094,7 @@ export class ${className} extends DurableObjectBase {
     return { id };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",

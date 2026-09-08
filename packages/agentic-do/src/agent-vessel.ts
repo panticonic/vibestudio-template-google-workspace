@@ -21,6 +21,7 @@ import {
 import { PanelDurableObjectBase } from "@workspace/runtime/worker/panel-durable-base";
 import { assertExactSqlTableSchema } from "@workspace/runtime/worker/sql-table-schema";
 import {
+  isTerminalAuthorityFailure,
   RemoteRpcError,
   rpc,
   withCausalParent,
@@ -218,16 +219,6 @@ function authorityAcquisitionRequired(error: unknown): boolean {
     candidate.code === "EACQUIRE" &&
     typeof candidate.errorData?.acquisition?.ownerRuntimeId === "string"
   );
-}
-
-function authorityDecisionDenied(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const failure = (
-    error as {
-      errorData?: { authorityFailure?: { reasonCode?: unknown } };
-    }
-  ).errorData?.authorityFailure;
-  return failure?.reasonCode === "user-denied";
 }
 
 const DELTA_BATCH_MS = 100;
@@ -846,7 +837,6 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
         participant_id TEXT NOT NULL,
         subscription_revision INTEGER NOT NULL,
         event_sequence INTEGER NOT NULL,
-        envelope_json TEXT,
         agentic_context_json TEXT,
         state TEXT NOT NULL CHECK (state IN ('admitted', 'processed', 'declined')),
         outcome_json TEXT,
@@ -1877,9 +1867,10 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
    * failure stays exceptional so uncertainty can never authorize a duplicate. */
   private async completedMutationEvidence(
     commandId: string,
+    rpc: RpcClient,
   ): Promise<{ commandId: string; command: unknown } | null> {
     try {
-      const inspected = await createSubagentVcsClient(this.rpc).inspect({
+      const inspected = await createSubagentVcsClient(rpc).inspect({
         node: { kind: "command", commandId },
         edgeLimit: 1,
       });
@@ -2036,7 +2027,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
                 modelBaseUrl,
               );
             }
-            if (authorityDecisionDenied(err)) throw err;
+            if (isTerminalAuthorityFailure(err)) throw err;
             if (!(err instanceof CredentialPendingError)) {
               console.warn(
                 `[AgentVessel] resolveCredential(${modelBaseUrl ?? providerId}) failed:`,
@@ -2167,6 +2158,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
             ) {
               const evidence = await this.completedMutationEvidence(
                 execution.commandId,
+                execution.rpc,
               );
               if (evidence) {
                 return {
@@ -2207,12 +2199,17 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
           }
         },
         alreadyApplied: async (state, invocationId) => {
-          const commandId = commandIdForTrajectoryInvocation({
+          const parent = {
+            kind: "trajectory-invocation" as const,
             logId: state.logId,
             head: state.head,
             invocationId,
-          });
-          return this.completedMutationEvidence(commandId);
+          };
+          const commandId = commandIdForTrajectoryInvocation(parent);
+          return this.completedMutationEvidence(
+            commandId,
+            withCausalParent(this.rpc, parent),
+          );
         },
       },
       http: {
@@ -2495,7 +2492,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3326,7 +3323,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
   // Membership is established by the userland owner that created or acquired
   // the agent. Host lifecycle code can interrupt an active vessel, but does not
   // join it to arbitrary channels on a product service's behalf.
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3387,7 +3384,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
   }
 
   /** Adopt this concrete vessel's durable queues for one server generation. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -3428,7 +3425,7 @@ export abstract class AgentVesselBase extends PanelDurableObjectBase {
    * turn. `runId` is carried through the journal so the terminal turn can
    * close the exact ledger row without polling the conversation.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3475,7 +3472,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * journaled as an ordinary eval invocation and runs in this agent/channel's
    * EvalDO, so ambient `chat` publishes with this agent's durable identity.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3531,7 +3528,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** Receiver-owned evidence for an automation dispatch. This method hydrates
    * the durable channel fold when needed; it never treats activation-local
    * cache absence as evidence that a run is missing. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3566,7 +3563,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** MissionsDO calls this only after its terminal ledger row is durable. A
    * missed acknowledgement merely retains replay evidence; it cannot reopen or
    * duplicate the run. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3642,7 +3639,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   // Symmetric with `subscribeChannel`: an owning userland service must be able
   // to detach a vessel during lifecycle cleanup.
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -3668,7 +3665,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   // ── Channel intake ───────────────────────────────────────────────────────
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -3688,12 +3685,11 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     const stored = this.subscriptions
       .listStored()
       .find(({ channelId }) => channelId === delivery.channelId);
-    const envelopeJson = JSON.stringify(delivery.envelope);
     const agenticContextJson = JSON.stringify(delivery.agenticContext);
     const existing = this.sql
       .exec(
         `SELECT channel_id, participant_id, subscription_revision, event_sequence,
-                envelope_json, agentic_context_json, state, outcome_json
+                agentic_context_json, state, outcome_json
            FROM channel_delivery_admissions WHERE delivery_id = ?`,
         delivery.deliveryId,
       )
@@ -3705,11 +3701,9 @@ This is one admitted recurring-automation tick. If this tick establishes that th
         Number(existing["subscription_revision"]) !==
           delivery.subscriptionRevision ||
         Number(existing["event_sequence"]) !== delivery.eventSequence ||
-        // Terminal rows shed their envelope bytes (storage bound); the
-        // deterministic delivery id plus the coordinate columns above remain
-        // the duplicate identity. Compare bytes only while retained.
-        (existing["envelope_json"] !== null &&
-          existing["envelope_json"] !== envelopeJson) ||
+        // The host resolves the immutable canonical channel event before
+        // delivery. Its routing coordinate is the admission identity; keeping
+        // another payload copy here would create a second event store.
         (existing["agentic_context_json"] !== null &&
           existing["agentic_context_json"] !== agenticContextJson)
       ) {
@@ -3754,8 +3748,8 @@ This is one admitted recurring-automation tick. If this tick establishes that th
       this.sql.exec(
         `INSERT OR REPLACE INTO channel_delivery_admissions (
            delivery_id, channel_id, participant_id, subscription_revision,
-           event_sequence, envelope_json, agentic_context_json, state, outcome_json, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'declined', ?, ?, ?)`,
+           event_sequence, agentic_context_json, state, outcome_json, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, NULL, 'declined', ?, ?, ?)`,
         delivery.deliveryId,
         delivery.channelId,
         delivery.participantId,
@@ -3772,14 +3766,13 @@ This is one admitted recurring-automation tick. If this tick establishes that th
       this.sql.exec(
         `INSERT INTO channel_delivery_admissions (
            delivery_id, channel_id, participant_id, subscription_revision,
-           event_sequence, envelope_json, agentic_context_json, state, outcome_json, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', NULL, ?, ?)`,
+           event_sequence, agentic_context_json, state, outcome_json, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, 'admitted', NULL, ?, ?)`,
         delivery.deliveryId,
         delivery.channelId,
         delivery.participantId,
         delivery.subscriptionRevision,
         delivery.eventSequence,
-        envelopeJson,
         agenticContextJson,
         now,
         now,
@@ -3814,7 +3807,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     };
     this.sql.exec(
       `UPDATE channel_delivery_admissions
-          SET state = 'processed', outcome_json = ?, envelope_json = NULL,
+          SET state = 'processed', outcome_json = ?,
               agentic_context_json = NULL, updated_at = ?
         WHERE delivery_id = ?`,
       JSON.stringify(outcome),
@@ -3828,7 +3821,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return outcome;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -3998,7 +3991,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return claimed;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4101,7 +4094,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { processed: true };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4135,7 +4128,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { executed: true };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4228,7 +4221,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return settlement.disposition;
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -4320,7 +4313,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     });
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -5281,7 +5274,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   // ── Method calls (agent as PROVIDER) ─────────────────────────────────────
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5319,7 +5312,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     }
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5344,7 +5337,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * below is in-memory or local SQLite; missing folded state remains explicitly
    * missing instead of being hydrated through GAD.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     // PubSubChannel performs the admitted, receiver-gated inspection and then
     // reaches this endpoint as an authenticated code principal. The method's
     // exact channel-DO assertion below is the authority boundary for this
@@ -5388,7 +5381,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * stale, which is precisely when timeout/cancellation diagnostics need it.
    * The response contains no prompt, tool argument, credential, or secret.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5406,7 +5399,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** Direct lifecycle barrier for non-interactive owners. Unlike the chat
    * `pause` method this does not require the controller to remain a channel
    * member while cancellation is already unwinding that membership. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5420,7 +5413,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { interrupted: true };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -5668,7 +5661,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * `do:vibestudio/internal:EvalDO:<key>`. Any other caller is rejected; the
    * generic DO relay is open, so a sensitive receiver gates on receipt.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -5897,7 +5890,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * intentional: chatOp contains mutations and is therefore correctly
    * classified as write, while a self snapshot must remain usable from a
    * read-only eval. The same own-EvalDO receiver check protects both routes. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6515,7 +6508,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   /** Channel DO settle path: terminals for our channel_call effects POST back
    *  here. Duplicate delivery is a no-op (deterministic terminal ids). */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -6535,7 +6528,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
 
   /** Best-effort host wake hint. Durable outbox state, not this notification,
    * owns continuation; a lost hint is recovered by the ordinary redrive alarm. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -6999,7 +6992,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * before completing, so every output precedes the `invocation.completed` terminal (the reducer drops
    * output after terminal).
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7093,7 +7086,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * identity is carried separately for causality and never reconstructed from
    * the effect id. Duplicate settlement is an idempotent driver no-op.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7424,7 +7417,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
   /** Per-channel fork preflight. Vets ONLY the named subscription (it must
    *  exist); a multi-channel agent forks the one channel and drops the rest in
    *  the clone (see {@link postClone}), so the old ≤1-subscription gate is gone. */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7437,7 +7430,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { ok: true };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -7532,7 +7525,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
    * just created), so there is nothing to wipe: outbox/fold caches start empty.
    * The child boots knowing everything the parent knew at the fork point.
    */
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -9137,7 +9130,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     await this.settleSubagentTerminal(run, "cancelled", reason);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -9167,7 +9160,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     return { cancelled: true };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -9267,6 +9260,23 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     const childStatus = await createSubagentVcsClient(this.rpc).status({
       contextId,
     });
+    if (outcome === "completed" && !childStatus.clean) {
+      throw Object.assign(
+        new Error(
+          `subagent ${sub.runId} has uncommitted semantic work; commit the child context before completing`,
+        ),
+        {
+          code: "IntegrationIncomplete",
+          errorData: {
+            code: "IntegrationIncomplete",
+            operation: "complete-subagent",
+            runId: sub.runId,
+            contextId,
+            workingChangeCount: childStatus.workingCounts.changes,
+          },
+        },
+      );
+    }
     const sourceEventId =
       childStatus.clean && childStatus.committed.kind === "event"
         ? childStatus.committed.eventId
@@ -9831,7 +9841,7 @@ This is one admitted recurring-automation tick. If this tick establishes that th
     };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",

@@ -30,10 +30,11 @@
     "./worker/rpc-fs": "./src/shared/rpcFs.ts",
     "./worker/sql-table-schema": "./src/worker/sql-table-schema.ts",
     "./worker/test-utils": "./src/worker/durable-test-utils.ts",
-    "./panel/credentials": "./src/panel/credentials.ts",
     "./workerd-client": "./src/shared/workerd.ts",
     "./workspace-presentation": "./src/shared/workspacePresentation.ts",
-    "./internal/diagnostics": "./src/internal/diagnostics.ts"
+    "./internal/diagnostics": "./src/internal/diagnostics.ts",
+    "./images": "./src/shared/images.ts",
+    "./image-loader": "./src/shared/imageLoader.ts"
   },
   "dependencies": {
     "@vibestudio/browser-data": "workspace:*",

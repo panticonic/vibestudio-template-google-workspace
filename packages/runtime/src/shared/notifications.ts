@@ -51,7 +51,7 @@ export function createNotificationClient(rpc: NotificationRpc): NotificationClie
 
   function ensureActionSubscription(): void {
     unsubscribeDirectActions ??= rpc.on("notification:action", ({ payload }) =>
-      handleAction(payload)
+      handleAction(payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."}
     );
   }
 

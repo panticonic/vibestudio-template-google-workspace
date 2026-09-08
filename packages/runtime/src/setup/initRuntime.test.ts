@@ -106,6 +106,51 @@ describe("initRuntime", () => {
     vi.unstubAllGlobals();
   });
 
+  it("removes shell state subscriptions and retires RPC when the panel runtime is destroyed", async () => {
+    const panelWindow = stubPanelWindow();
+    const listeners = new Map<
+      number,
+      (event: string, payload: unknown) => void
+    >();
+    let nextListenerId = 0;
+    g.__vibestudioGatewayConfig = {
+      serverUrl: "https://gateway.test",
+      token: "test-token",
+    };
+    g.__vibestudioEntityId = "panel:panel-1";
+    g.__vibestudioSlotId = "panel:tree/slot-1";
+    g.__vibestudioContextId = "ctx-1";
+    g.__vibestudioKind = "panel";
+    g.__vibestudioShell = {
+      addEventListener: (
+        listener: (event: string, payload: unknown) => void,
+      ) => {
+        const id = nextListenerId++;
+        listeners.set(id, listener);
+        return id;
+      },
+      removeEventListener: (id: number) => listeners.delete(id),
+    };
+    const { runtime } = initRuntime({ createTransport: () => createTransport() });
+    const emitState = (state: Record<string, unknown>) => {
+      for (const listener of listeners.values())
+        listener("runtime:stateArgsChanged", state);
+    };
+    emitState({ title: "Current document" });
+    expect(panelWindow.__vibestudioStateArgs).toEqual({
+      title: "Current document",
+    });
+    runtime.destroy();
+    expect(listeners.size).toBe(0);
+    await expect(runtime.rpc.call("main", "late", [])).rejects.toThrow(
+      /retired/,
+    );
+    emitState({ title: "Later document" });
+    expect(panelWindow.__vibestudioStateArgs).toEqual({
+      title: "Current document",
+    });
+  });
+
   it("uses the injected canonical panel id as the RPC self id", () => {
     g.__vibestudioEntityId = "panel:panel-1";
     g.__vibestudioSlotId = "panel:tree/slot-1";
@@ -122,13 +167,48 @@ describe("initRuntime", () => {
     };
 
     const { runtime, config } = initRuntime({
-      createTransport,
-      fs: {} as never,
+      createTransport: () => createTransport(),
     });
 
     expect(config.entityId).toBe("panel:panel-1");
     expect(config.slotId).toBe("panel:tree/slot-1");
     expect(runtime.rpc.selfId).toBe("panel:panel-1");
+  });
+
+  it("binds filesystem clients to their own runtime without global reinitialization", async () => {
+    g.__vibestudioEntityId = "panel:panel-1";
+    g.__vibestudioContextId = "ctx-1";
+    g.__vibestudioKind = "panel";
+    g.__vibestudioGatewayConfig = {
+      serverUrl: "https://gateway.test",
+      token: "token",
+    };
+    const make = (contents: string) =>
+      initRuntime({
+        createTransport: () =>
+          createTransport({
+            onSend: (envelope, deliver) => {
+              if (envelope.message.type === "request")
+                deliver(responseFor(envelope, contents));
+            },
+          }),
+      }).runtime;
+    const first = make("first workspace");
+    g.__vibestudioEntityId = "panel:panel-2";
+    g.__vibestudioContextId = "ctx-2";
+    const second = make("second workspace");
+    try {
+      expect(await first.fs.readFile("/test.txt", "utf8")).toBe(
+        "first workspace",
+      );
+      expect(await second.fs.readFile("/test.txt", "utf8")).toBe(
+        "second workspace",
+      );
+      expect(first.fs).not.toBe(second.fs);
+    } finally {
+      first.destroy();
+      second.destroy();
+    }
   });
 
   it("preserves call delivery metadata through the runtime transport envelope", async () => {
@@ -157,7 +237,6 @@ describe("initRuntime", () => {
             deliver(responseFor(envelope, "ok"));
           },
         }),
-      fs: {} as never,
     });
 
     await expect(
@@ -223,7 +302,6 @@ describe("initRuntime", () => {
             );
           },
         }),
-      fs: {} as never,
     });
 
     await setStateArgs({ mode: "live" });
@@ -275,8 +353,7 @@ describe("initRuntime", () => {
     );
 
     initRuntime({
-      createTransport,
-      fs: {} as never,
+      createTransport: () => createTransport(),
     });
     expect(shellListeners).toHaveLength(2);
     for (const listener of shellListeners) {
@@ -309,8 +386,7 @@ describe("initRuntime", () => {
     };
 
     const { config } = initRuntime({
-      createTransport,
-      fs: {} as never,
+      createTransport: () => createTransport(),
     });
 
     expect(config.gatewayConfig.serverUrl).toBe("http://localhost:3000");
@@ -334,8 +410,7 @@ describe("initRuntime", () => {
     };
 
     const { config } = initRuntime({
-      createTransport,
-      fs: {} as never,
+      createTransport: () => createTransport(),
     });
 
     expect(config.gatewayConfig.serverUrl).toBe("http://127.0.0.1:4000");
@@ -445,7 +520,6 @@ describe("initRuntime", () => {
             );
           },
         }),
-      fs: {} as never,
     });
 
     expect(config.parentId).toBe("panel:tree/parent-slot");
@@ -464,16 +538,16 @@ describe("initRuntime", () => {
       token: "t",
     });
 
-    expect(sends).toContainEqual(
-      { targetId: "panel:nav-parent-entity", method: "ping", args: [] },
-    );
-    expect(sends).toContainEqual(
-      {
-        targetId: "main",
-        method: "panelCdp.getCdpEndpoint",
-        args: ["panel:tree/parent-slot"],
-      },
-    );
+    expect(sends).toContainEqual({
+      targetId: "panel:nav-parent-entity",
+      method: "ping",
+      args: [],
+    });
+    expect(sends).toContainEqual({
+      targetId: "main",
+      method: "panelCdp.getCdpEndpoint",
+      args: ["panel:tree/parent-slot"],
+    });
   });
 
   it("exposes panel lifecycle and state operations on the unified parent handle", async () => {
@@ -657,7 +731,6 @@ describe("initRuntime", () => {
             );
           },
         }),
-      fs: {} as never,
     });
 
     const parent = runtime.parent;
@@ -742,7 +815,6 @@ describe("initRuntime", () => {
             );
           },
         }),
-      fs: {} as never,
     });
 
     // The panel-side client no longer injects parent metadata — the worker entity
@@ -796,7 +868,6 @@ describe("initRuntime", () => {
             deliverInbound = deliver;
           },
         }),
-      fs: {} as never,
     });
     const onRun = vi.fn();
     runtime.onHostCommandRun(onRun);

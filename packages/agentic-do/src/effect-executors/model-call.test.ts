@@ -6,6 +6,7 @@ import {
   type InitialStateInput,
   type ModelCallEffect,
 } from "@workspace/agent-loop";
+import { encodeChannelPayloadStoredValues } from "@workspace/agentic-protocol";
 import { transformMessages } from "@workspace/pi-ai/api/transform-messages";
 import {
   CredentialApprovalDeferredError,
@@ -186,6 +187,10 @@ function descriptor(
       ...requestOverrides,
     },
   };
+}
+
+function toolSchemas(names: string[]): string {
+  return JSON.stringify(names.map((name) => ({ name, parameters: { type: "object", properties: {} } })));
 }
 
 function deps(): ExecutorDeps {
@@ -461,6 +466,49 @@ describe("modelCallExecutor", () => {
     resolveCredential({ apiKey: "too-late" });
 
     await expect(pending).rejects.toThrow("channel retired");
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["user-denied", "Credential approval denied"],
+    ["receiver-rejected", "Approval requester is not a member of this workspace"],
+  ])("settles terminal credential authority failure %s without retrying", async (reasonCode, reason) => {
+    const inputDeps = deps();
+    inputDeps.credentials.getApiKey = vi.fn(async () => {
+      throw Object.assign(new Error(reason), {
+        code: "EACCES",
+        errorKind: "access",
+        errorData: {
+          authorityFailure: {
+            reasonCode,
+            reason,
+            capability: "credentials.use",
+            resourceKey: "credentials.use",
+            remediation: { kind: "none", message: "The user denied this request." },
+          },
+        },
+      });
+    });
+
+    await expect(
+      modelCallExecutor.execute({
+        descriptor: descriptor(),
+        state: initialAgentState({ channelId: "channel-1", config }),
+        signal: new AbortController().signal,
+        deps: inputDeps,
+        onEphemeral: () => {},
+      }),
+    ).resolves.toMatchObject({
+      kind: "model",
+      stopReason: "error",
+      recoverable: false,
+      errorReason: reason,
+      failure: {
+        code: "auth_or_credentials",
+        reason,
+        recoverable: false,
+      },
+    });
     expect(mocks.stream).not.toHaveBeenCalled();
   });
 
@@ -1273,8 +1321,8 @@ describe("modelCallExecutor", () => {
         digest === "sys"
           ? "BASE SYSTEM\n\nRead `packages/agentic-do/SKILL.md` when working on the runtime." +
             "\n\n## Opening turn\n\nRead `skills/onboarding/SKILL.md`, then continue."
-          : "";
-      const inputDescriptor = descriptor();
+          : digest === "tools" ? toolSchemas(["read"]) : "";
+      const inputDescriptor = descriptor({ toolSchemasHash: "tools" });
       inputDescriptor.request.provider = "openai-codex";
       inputDescriptor.request.model = "gpt-5.3-codex-spark";
       inputDescriptor.request.activeToolNames = ["read"];
@@ -1330,7 +1378,11 @@ describe("modelCallExecutor", () => {
         },
       ];
       const continued = await modelCallExecutor.execute({
-        descriptor: { ...inputDescriptor, messageId: "msg-continued" },
+        descriptor: {
+          ...inputDescriptor,
+          messageId: "msg-continued",
+          request: { ...inputDescriptor.request, contextThroughSeq: 2 },
+        },
         state: continuedState,
         signal: new AbortController().signal,
         deps: inputDeps,
@@ -1354,11 +1406,145 @@ describe("modelCallExecutor", () => {
     }
   });
 
+  it.each([
+    [
+      "skills/onboarding/SKILL.md",
+      "skills/onboarding/SetupHub.tsx",
+      "onboarding-setup-overview",
+    ],
+    [
+      "skills/example/SKILL.md",
+      "skills/example/Overview.tsx",
+      "example-overview",
+    ],
+  ])(
+    "executes the opening read before inline_ui for %s",
+    async (readPath, uiPath, uiId) => {
+      const inputDeps = deps();
+      inputDeps.env = { VIBESTUDIO_TEST_MODE: "1" };
+      let exposedTools = ["read", "inline_ui"];
+      const stored = new Map<string, string>();
+      const writer = {
+        putText: async (text: string) => {
+          const digest = `stored-${stored.size}`;
+          stored.set(digest, text);
+          return { digest, size: new TextEncoder().encode(text).length };
+        },
+      };
+      inputDeps.blobstore.getText = async (digest) =>
+        digest === "sys"
+          ? `## Opening turn\nRead \`${readPath}\`, then render \`${uiPath}\` with \`inline_ui\` using the stable ID \`${uiId}\`.`
+          : digest === "tools" ? toolSchemas(exposedTools) : stored.get(digest) ?? "";
+      const inputDescriptor = descriptor({ toolSchemasHash: "tools" });
+      inputDescriptor.request.activeToolNames = ["read"];
+      const state = initialAgentState({ channelId: "channel-1", config });
+      const execute = () =>
+        modelCallExecutor.execute({
+          descriptor: {
+            ...inputDescriptor,
+            messageId: `msg-${state.entries.length}`,
+            request: {
+              ...inputDescriptor.request,
+              contextThroughSeq: state.entries.length,
+            },
+          },
+          state,
+          signal: new AbortController().signal,
+          deps: inputDeps,
+          onEphemeral: () => {},
+        });
+      const completeTool = async (
+        name: string,
+        args: Record<string, unknown>,
+      ) => {
+        const outcome = await execute();
+        expect(outcome).toMatchObject({
+          kind: "model",
+          blocks: [{ type: "toolCall", name, arguments: args }],
+          outcome: "tool_calls_only",
+        });
+        if (!("kind" in outcome) || outcome.kind !== "model")
+          throw new Error("Expected model inference");
+        const call = outcome.blocks[0];
+        if (
+          !call ||
+          typeof call !== "object" ||
+          !("type" in call) ||
+          call.type !== "toolCall" ||
+          !("id" in call) ||
+          typeof call.id !== "string"
+        )
+          throw new Error("Expected a real tool invocation");
+        state.entries.push({
+          kind: "assistant",
+          seq: state.entries.length + 1,
+          messageId: `assistant-${state.entries.length}`,
+          // Use the same storage classes as durable assistant events. Even
+          // small tool arguments are references when the next inference runs.
+          blocks: (await encodeChannelPayloadStoredValues(
+            { payload: { blocks: outcome.blocks } },
+            writer
+          ) as { payload: { blocks: unknown[] } }).payload.blocks,
+        });
+        state.entries.push({
+          kind: "tool-result",
+          seq: state.entries.length + 1,
+          invocationId: call.id,
+          turnId: "turn-context",
+          name,
+          result: "Tool execution completed",
+          isError: false,
+        });
+      };
+
+      // A successful unrelated read cannot satisfy the opening skill read.
+      state.entries = [
+        {
+          kind: "assistant",
+          seq: 1,
+          messageId: "unrelated",
+          blocks: [
+            {
+              type: "toolCall",
+              id: "unrelated-read",
+              name: "read",
+              arguments: { path: "README.md" },
+            },
+          ],
+        },
+        {
+          kind: "tool-result",
+          seq: 2,
+          invocationId: "unrelated-read",
+          turnId: "turn-context",
+          name: "read",
+          result: "Unrelated file",
+          isError: false,
+        },
+      ];
+      await completeTool("read", { path: readPath });
+      // Inference may request only tools actually exposed to the current turn.
+      exposedTools = ["read"];
+      expect(await execute()).toMatchObject({
+        kind: "model",
+        blocks: [{ type: "text" }],
+      });
+      exposedTools = ["read", "inline_ui"];
+      await completeTool("inline_ui", { path: uiPath, id: uiId, props: {} });
+      expect(await execute()).toMatchObject({
+        kind: "model",
+        blocks: [{ type: "text" }],
+      });
+      expect(mocks.stream).not.toHaveBeenCalled();
+    },
+  );
+
   it("turns a natural web request into a real web_fetch invocation in deterministic test mode", async () => {
     const inputDeps = deps();
     inputDeps.env = { VIBESTUDIO_TEST_MODE: "1" };
-    inputDeps.blobstore.getText = async () => "";
+    inputDeps.blobstore.getText = async (digest) => digest === "tools" ? toolSchemas(["web_fetch"]) : "";
     const inputDescriptor = descriptor({
+      toolSchemasHash: "tools",
       activeToolNames: ["web_fetch"],
       contextThroughSeq: 2,
     });
@@ -1456,8 +1642,9 @@ describe("modelCallExecutor", () => {
   it("uses the real eval sandbox for a natural sandbox web request in deterministic test mode", async () => {
     const inputDeps = deps();
     inputDeps.env = { VIBESTUDIO_TEST_MODE: "1" };
-    inputDeps.blobstore.getText = async () => "";
+    inputDeps.blobstore.getText = async (digest) => digest === "tools" ? toolSchemas(["eval", "web_fetch"]) : "";
     const inputDescriptor = descriptor({
+      toolSchemasHash: "tools",
       activeToolNames: ["eval", "web_fetch"],
       contextThroughSeq: 2,
     });

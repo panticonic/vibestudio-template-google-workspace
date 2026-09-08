@@ -31,6 +31,9 @@ export interface PubSubClient<T extends ParticipantMetadata = ParticipantMetadat
   /** Update this client's participant metadata (full replace, triggers roster broadcast). */
   updateMetadata(metadata: Partial<T>, options?: UpdateMetadataOptions): Promise<void>;
 
+  /** Read the channel's current participants from the exact connected channel entity. */
+  getParticipants(): Promise<Array<{ participantId: string; metadata: T }>>;
+
   /** Set this client's typing state. Broadcasts as a signal, outside durable message history. */
   setTyping(active: boolean): Promise<void>;
 

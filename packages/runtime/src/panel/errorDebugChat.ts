@@ -1,5 +1,5 @@
 import { getStateArgs } from "./stateArgs.js";
-import { openPanel, panelTree } from "./handle.js";
+import type { PanelRuntimeApi } from "../shared/panelRuntime.js";
 
 export interface PanelRenderErrorDiagnosticRequest {
   surfaceName?: string;
@@ -46,18 +46,22 @@ const MAX_DEPTH = 6;
 const REDACTED = "[redacted]";
 const SENSITIVE_KEY_RE = /(?:token|secret|password|credential|api[_-]?key|authorization|cookie)/i;
 
-export function installPanelErrorDiagnosticLauncher(options: {
+interface DiagnosticLauncherOptions {
   slotId: string;
   contextId?: string | null;
-}): void {
+  panelRuntime: Pick<PanelRuntimeApi, "openPanel" | "panelTree">;
+}
+
+export function installPanelErrorDiagnosticLauncher(options: DiagnosticLauncherOptions): void {
   const g = globalThis as typeof globalThis & PanelErrorDiagnosticLauncherGlobal;
   g.__vibestudioPanelErrorDiagnostics = (request) => openPanelErrorDiagnosticChat(request, options);
 }
 
 export async function openPanelErrorDiagnosticChat(
   request: PanelRenderErrorDiagnosticRequest,
-  options: { slotId: string; contextId?: string | null }
+  options: DiagnosticLauncherOptions
 ): Promise<PanelErrorDiagnosticChatResult> {
+  const { openPanel, panelTree } = options.panelRuntime;
   const self = panelTree.self();
   const [diagnostics, stateArgs] = await Promise.all([
     capture("panel diagnostics", () => self.diagnose()),

@@ -13,13 +13,16 @@ import type {
   GitTemplatePublishResult,
 } from "@vibestudio/service-schemas/gitInterop";
 import { normalizeWorkspaceRepoPath } from "@vibestudio/workspace/remotes";
-import { normalizeTemplateGitUrl } from "@vibestudio/workspace/templateCoordinates";
+import {
+  normalizeTemplateGitUrl,
+  TEMPLATE_SOURCE_MANIFEST_PATH,
+} from "@vibestudio/workspace/templateCoordinates";
 import { resolveGitHubPublishOperation } from "@workspace/integrations/github";
 import { getRemoteProvider } from "@workspace/integrations/remoteProviders";
 import { GitBridge, type ProtectedRepositorySnapshot } from "./bridge.js";
 import type { ExtensionContextLike } from "./context.js";
 
-const MANIFEST_PATH = "meta/template.yml";
+const MANIFEST_PATH = TEMPLATE_SOURCE_MANIFEST_PATH;
 const BRANCH = "main";
 const OPERATION_TRAILER = "Vibestudio-Template-Operation:";
 const REQUEST_TRAILER = "Vibestudio-Template-Request:";

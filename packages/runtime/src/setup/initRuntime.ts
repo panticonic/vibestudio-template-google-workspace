@@ -1,3 +1,5 @@
+import { injectedPanelEnvironment } from "../panel/injectedEnvironment.js";
+import { bindDefaultStateArgs } from "../panel/stateArgs.js";
 /**
  * Runtime initialization for panels.
  *
@@ -9,15 +11,11 @@ import { getInjectedConfig, type InjectedConfig } from "../shared/globals.js";
 import { assertPanelPrincipalId } from "@vibestudio/shared/principalIds";
 import type { RuntimeFs } from "../types.js";
 import type { EnvelopeRpcTransport } from "@vibestudio/rpc";
-import { _initFsWithRpc } from "../panel/fs.js";
 
 export interface InitRuntimeOptions {
   /** Function to create the RPC transport */
-  createTransport: () => EnvelopeRpcTransport;
-  /** Filesystem implementation (RPC-backed proxy) */
-  fs: RuntimeFs;
+  createTransport: (lifetime: AbortSignal) => EnvelopeRpcTransport;
   /** Optional function to set up globals before runtime initialization */
-  setupGlobals?: () => void;
 }
 
 export interface InitRuntimeResult {
@@ -36,12 +34,12 @@ export function initRuntime(options: InitRuntimeOptions): InitRuntimeResult {
   const config = getInjectedConfig();
 
   // Apply globals setup if provided
-  options.setupGlobals?.();
   if (config.kind === "panel") {
     assertPanelPrincipalId(config.entityId);
   }
 
   const runtime = createRuntime({
+    environment: injectedPanelEnvironment(),
     selfId: config.entityId,
     createTransport: options.createTransport,
     entityId: config.entityId,
@@ -50,15 +48,11 @@ export function initRuntime(options: InitRuntimeOptions): InitRuntimeResult {
     parentId: config.parentId,
     parentEntityId: config.parentEntityId,
     initialTheme: config.initialTheme,
-    fs: options.fs,
-    setupGlobals: options.setupGlobals,
     gatewayConfig: config.gatewayConfig,
     effectiveVersion: config.effectiveVersion,
   });
 
-  // Initialize RPC-backed fs with the runtime's RPC bridge
-  _initFsWithRpc(runtime.rpc);
-
+  bindDefaultStateArgs(runtime.stateArgs);
   return {
     runtime,
     config,

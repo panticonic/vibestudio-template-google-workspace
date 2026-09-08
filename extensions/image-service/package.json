@@ -27,6 +27,11 @@
           "effect": {
             "kind": "open"
           }
+        },
+        "getMetadata": {
+          "effect": {
+            "kind": "open"
+          }
         }
       }
     },

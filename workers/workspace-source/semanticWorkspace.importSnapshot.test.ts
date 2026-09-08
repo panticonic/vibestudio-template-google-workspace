@@ -14,7 +14,7 @@ import {
   SemanticWorkspace,
   type SemanticDispatchRequest,
   type SemanticDispatchResult,
-} from "./semanticWorkspace.js";
+} from "./semanticWorkspace.testHost.js";
 import { SemanticVcsStore } from "./semanticVcsStore.js";
 
 const timestamp = "2026-07-15T00:00:00.000Z";
@@ -325,35 +325,11 @@ describe("SemanticWorkspace snapshot import", () => {
         ],
       },
     });
-    expect(edited).toMatchObject({
-      kind: "effects-pending",
-      effects: [
-        {
-          kind: "materialize-context",
-          payload: {
-            version: 1,
-            mode: "content-only",
-            contextId: "context:semantic-only",
-            blobs: [
-              {
-                contentHash: operationRecordHash,
-              },
-            ],
-          },
-        },
-      ],
-    });
-    if (edited.kind !== "effects-pending") throw new Error("semantic edit did not persist content");
-    const persistence = edited.effects[0]!;
-    const persisted = semantic.acknowledgeEffect({
-      effectId: persistence.effectId,
-      payloadDigest: persistence.payloadDigest,
-      receipt: {
-        version: 1,
-        contentHashes: [operationRecordHash],
-      },
-    });
-    expect(persisted).toMatchObject({ kind: "complete" });
+    expect(edited).toMatchObject({ kind: "complete" });
+    expect(semantic.preparedContent.get(operationRecordHash)).toEqual(
+      new TextEncoder().encode(operationRecordText)
+    );
+    expect(store.pendingEffects("command:semantic-edit")).toEqual([]);
     expect(semantic.contentGcRoots().contentHashes).toContain(operationRecordHash);
     const editedWorking = store.contextRequired("context:semantic-only").working.ref;
 

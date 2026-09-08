@@ -32,7 +32,7 @@ import { rpc } from "@workspace/runtime";
 // Top-level `expose` was removed from @workspace/runtime; this is the same
 // arg-spreading wrapper over the portable `rpc.expose`, kept local to the panel.
 const expose = (method: string, handler: (...args: any[]) => unknown | Promise<unknown>) =>
-  rpc.expose(method, (request) => handler(...request.args));
+  rpc.expose(method, (request) => handler(...request.args), {"kind":"closed","reason":"This handler controls an internal execution or presentation surface."});
 import { useHostCommands, usePanelTheme, usePanelThemeConfig } from "@workspace/react";
 import { PanelChrome, Stack } from "@workspace/ui/layout";
 import "@workspace/ui/foundation.css";

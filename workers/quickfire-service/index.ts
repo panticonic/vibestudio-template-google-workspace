@@ -158,6 +158,11 @@ export class QuickfireSessionsDO extends DurableObjectBase {
     return {
       slotId: row.slot_id,
       channelId: row.channel_id,
+      channelTargetId: doTargetId({
+        source: CHANNEL_SOURCE,
+        className: CHANNEL_CLASS,
+        objectKey: row.channel_id,
+      }),
       contextId: row.context_id,
       agentEntityId: row.agent_entity_id,
       state,
@@ -194,7 +199,7 @@ export class QuickfireSessionsDO extends DurableObjectBase {
     ]);
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -275,7 +280,7 @@ export class QuickfireSessionsDO extends DurableObjectBase {
     return this.present(this.row(input.slotId)!, "fresh");
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -292,7 +297,7 @@ export class QuickfireSessionsDO extends DurableObjectBase {
     return { cleared: true };
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -323,7 +328,7 @@ export class QuickfireSessionsDO extends DurableObjectBase {
     return this.present(this.row(input.slotId)!, "promoted");
   }
 
-  @rpc({
+  @rpc({ website: {"kind":"closed","reason":"This receiver owns workspace orchestration or retained workspace data; websites require a reviewed bounded operation."},
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",

@@ -10,7 +10,8 @@ import { createRpcClient, type EnvelopeRpcTransport } from "@vibestudio/rpc";
 import { createWorkerdClient } from "../shared/workerd.js";
 import type { GatewayConfig } from "../shared/globals.js";
 import { createMainCaller } from "../shared/mainRpc.js";
-import type { HostCommand, RuntimeFs, ThemeAppearance, ThemeConfig } from "../types.js";
+import { createRpcFs } from "../shared/rpcFs.js";
+import type { HostCommand, ThemeAppearance, ThemeConfig } from "../types.js";
 import { DEFAULT_THEME_CONFIG } from "../types.js";
 import {
   HOST_COMMAND_CONTRIBUTION_EVENT,
@@ -26,25 +27,26 @@ import {
 
 export interface BaseRuntimeDeps {
   selfId: string;
+  environment?: import("../panel/runtimeEnvironment.js").PanelRuntimeEnvironment;
   /** Primary envelope transport (single WS for panels, WS for workers) */
-  createTransport: () => EnvelopeRpcTransport;
+  createTransport: (lifetime: AbortSignal) => EnvelopeRpcTransport;
   id: string;
   contextId: string;
   initialTheme: ThemeAppearance;
-  fs: RuntimeFs;
-  setupGlobals?: () => void;
   gatewayConfig?: GatewayConfig | null;
 }
 
 export function createBaseRuntime(deps: BaseRuntimeDeps) {
-  deps.setupGlobals?.();
-  const primaryTransport = deps.createTransport();
+  const rpcLifetime = new AbortController();
+  const primaryTransport = deps.createTransport(rpcLifetime.signal);
   const rpc = createRpcClient({
     selfId: deps.selfId,
     transport: primaryTransport,
     authorityAcquisition: "wait",
+    publishExposures: true,
+    lifetime: rpcLifetime.signal,
   });
-  const fs = deps.fs;
+  const fs = createRpcFs(rpc);
   const callMain = createMainCaller(rpc);
   const workers = createWorkerdClient(rpc);
 
@@ -83,9 +85,15 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
       accentColor: isThemeAccentColor(c["accentColor"])
         ? c["accentColor"]
         : DEFAULT_THEME_CONFIG.accentColor,
-      grayColor: isThemeGrayColor(c["grayColor"]) ? c["grayColor"] : DEFAULT_THEME_CONFIG.grayColor,
-      radius: isThemeRadius(c["radius"]) ? c["radius"] : DEFAULT_THEME_CONFIG.radius,
-      scaling: isThemeScaling(c["scaling"]) ? c["scaling"] : DEFAULT_THEME_CONFIG.scaling,
+      grayColor: isThemeGrayColor(c["grayColor"])
+        ? c["grayColor"]
+        : DEFAULT_THEME_CONFIG.grayColor,
+      radius: isThemeRadius(c["radius"])
+        ? c["radius"]
+        : DEFAULT_THEME_CONFIG.radius,
+      scaling: isThemeScaling(c["scaling"])
+        ? c["scaling"]
+        : DEFAULT_THEME_CONFIG.scaling,
       panelBackground: isThemePanelBackground(c["panelBackground"])
         ? c["panelBackground"]
         : DEFAULT_THEME_CONFIG.panelBackground,
@@ -110,7 +118,9 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
   // Theme events come from:
   // - Electron: via __vibestudioShell.addEventListener
   // - Server WS: via rpc.on (for both Electron and standalone)
-  const themeUnsubscribers = [rpc.on("runtime:theme", (event) => onThemeEvent(event.payload))];
+  const themeUnsubscribers = [
+    rpc.on("runtime:theme", (event) => onThemeEvent(event.payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."}),
+  ];
 
   // Best-effort boot fetch: a late-loaded panel converges to a user-changed
   // accent without waiting for the next theme push. Non-panel/worker contexts
@@ -131,7 +141,7 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
   // Also listen for focus via RPC (standalone mode, server-sent events)
   const rpcFocusUnsub = rpc.on("runtime:focus", () => {
     for (const cb of focusCallbacks) cb();
-  });
+  }, {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."});
   focusUnsubscribers.push(rpcFocusUnsub);
 
   const onFocus = (callback: () => void) => {
@@ -156,45 +166,35 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
     for (const cb of hostCommandRunCallbacks) cb(commandId);
   };
   const hostCommandUnsubscribers = [
-    rpc.on(HOST_COMMAND_RUN_EVENT, (event) => onHostCommandRunEvent(event.payload)),
+    rpc.on(HOST_COMMAND_RUN_EVENT, (event) =>
+      onHostCommandRunEvent(event.payload), {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."},
+    ),
   ];
 
-  // Wire __vibestudioShell events if available (Electron mode)
-  const electron = (globalThis as any).__vibestudioShell;
-  let electronListenerId: number | undefined;
-  if (electron?.addEventListener) {
-    electronListenerId = electron.addEventListener((event: string, payload: unknown) => {
-      if (event === "runtime:theme") {
-        onThemeEvent(payload);
-      } else if (event === "runtime:focus") {
-        // Directly invoke focus callbacks; no RPC bridge roundtrip needed.
-        for (const cb of focusCallbacks) cb();
-      } else if (event === HOST_COMMAND_RUN_EVENT) {
-        onHostCommandRunEvent(payload);
-      }
-    });
-  }
+  const stopHostEvents = deps.environment?.events?.subscribe((event, payload) => {
+    if (event === "runtime:theme") onThemeEvent(payload);
+    else if (event === "runtime:focus") for (const cb of focusCallbacks) cb();
+    else if (event === HOST_COMMAND_RUN_EVENT) onHostCommandRunEvent(payload);
+  });
 
   const destroy = () => {
+    rpcLifetime.abort();
     for (const unsub of themeUnsubscribers) unsub();
     for (const unsub of focusUnsubscribers) unsub();
     for (const unsub of hostCommandUnsubscribers) unsub();
-    void rpc
-      .emit("shell", HOST_COMMAND_CONTRIBUTION_EVENT, { commands: [] })
-      .catch((error: unknown) =>
-        console.warn("[runtime] Failed to clear host commands during teardown:", error)
-      );
     focusUnsubscribers.length = 0;
     themeListeners.clear();
     themeConfigListeners.clear();
     hostCommandRunCallbacks.clear();
-    if (electronListenerId !== undefined && electron?.removeEventListener) {
-      electron.removeEventListener(electronListenerId);
-    }
+    stopHostEvents?.();
   };
 
   const onConnectionError = (
-    callback: (error: { code: number; reason: string; source?: "electron" | "server" }) => void
+    callback: (error: {
+      code: number;
+      reason: string;
+      source?: "electron" | "server";
+    }) => void,
   ): (() => void) => {
     return rpc.on("runtime:connection-error", (event) => {
       if (event.caller.callerId !== "main") return;
@@ -204,13 +204,21 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
         reason?: unknown;
         source?: unknown;
       } | null;
-      if (!data || typeof data.code !== "number" || typeof data.reason !== "string") return;
+      if (
+        !data ||
+        typeof data.code !== "number" ||
+        typeof data.reason !== "string"
+      )
+        return;
       callback({
         code: data.code,
         reason: data.reason,
-        source: data.source === "electron" || data.source === "server" ? data.source : undefined,
+        source:
+          data.source === "electron" || data.source === "server"
+            ? data.source
+            : undefined,
       });
-    });
+    }, {"kind":"closed","reason":"This listener consumes host or implementation lifecycle events."});
   };
 
   return {
@@ -241,14 +249,14 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
       void rpc
         .emit("shell", HOST_COMMAND_CONTRIBUTION_EVENT, { commands })
         .catch((error: unknown) =>
-          console.warn("[runtime] Failed to register host commands:", error)
+          console.warn("[runtime] Failed to register host commands:", error),
         );
     },
     unregisterHostCommands: () => {
       void rpc
         .emit("shell", HOST_COMMAND_CONTRIBUTION_EVENT, { commands: [] })
         .catch((error: unknown) =>
-          console.warn("[runtime] Failed to unregister host commands:", error)
+          console.warn("[runtime] Failed to unregister host commands:", error),
         );
     },
     onHostCommandRun: (callback: (commandId: string) => void) => {
@@ -257,8 +265,12 @@ export function createBaseRuntime(deps: BaseRuntimeDeps) {
         hostCommandRunCallbacks.delete(callback);
       };
     },
-    expose: (method: string, handler: (...args: any[]) => unknown | Promise<unknown>) => {
-      rpc.expose(method, (request) => handler(...request.args));
+    expose: (
+      method: string,
+      handler: (...args: any[]) => unknown | Promise<unknown>,
+      website: import("@vibestudio/rpc").WebsiteMethodPolicy,
+    ) => {
+      rpc.expose(method, (request) => handler(...request.args), website);
     },
     gatewayConfig: deps.gatewayConfig ?? null,
     contextId: deps.contextId,

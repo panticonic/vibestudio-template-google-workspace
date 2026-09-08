@@ -163,6 +163,7 @@ describe("context-exact verify tool", () => {
     );
     expect(result.details).toMatchObject({
       operation: "build",
+      failureKind: "user-code",
       report: { diagnostics: [{ source: "tsc", severity: "error" }] },
       failure: {
         protocol: "agent-tool-failure.v1",
@@ -179,6 +180,34 @@ describe("context-exact verify tool", () => {
     expect(failure).not.toHaveProperty("report");
     expect(failure).not.toHaveProperty("receipt");
     expect(JSON.stringify(result)).not.toContain("[object Object]");
+  });
+
+  it("does not classify an infrastructure build diagnostic as guest source", async () => {
+    const { callMain } = rpcResult({
+      stateHash: `state:${"b".repeat(64)}`,
+      repoPath: "panels/editor",
+      kind: "panel",
+      status: "failed" as const,
+      diagnostics: [
+        {
+          source: "infrastructure" as const,
+          severity: "error" as const,
+          file: "panels/editor/package.json",
+          line: 0,
+          column: 0,
+          message: "Declared runtime dependency is unavailable",
+        },
+      ],
+      builds: [{ target: "runtime" as const, diagnosticIndexes: [0] }],
+    });
+
+    const result = await createVerifyTool(callMain, () => "context-7").execute("call-build", {
+      operation: "build",
+      target: "panels/editor",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.details).not.toHaveProperty("failureKind");
   });
 
   it("passes host-derived structured repairs through the diagnostic bounds untouched", async () => {

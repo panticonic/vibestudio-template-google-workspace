@@ -2,6 +2,28 @@
 
 Type-safe parent-child communication using contracts.
 
+## Cross-workspace calls
+
+Parent-child panel relationships remain workspace-local. For integration with
+another workspace, use an explicitly exposed receiver through ordinary RPC:
+
+```typescript
+const result = await rpc.call(receiverId, "listAvailableSlots", [], {
+  destination: { kind: "workspace", workspaceId: destinationWorkspaceId },
+});
+```
+
+Omitting `destination` means the current workspace; it never searches other
+workspaces. The exact receiver method must declare `crossWorkspace: true`.
+Source outgoing and destination incoming policies must allow the target and
+method before ordinary authority can be acquired. System rejects application
+ingress from other workspaces. A context selector stays within the selected
+workspace and does not substitute for a workspace destination.
+
+See [worker receiver declarations](WORKERS.md) for the method contract. Reuse
+the existing RPC transport and cancellation behavior; do not create a separate
+export registry or forwarding service.
+
 ## Define Contract
 
 ```typescript

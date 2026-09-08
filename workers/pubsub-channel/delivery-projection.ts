@@ -7,7 +7,6 @@ import type { ChannelEvent } from "@workspace/pubsub";
 import type {
   ChannelAgenticContext,
   ChannelConfig,
-  RpcChannelMessage,
 } from "@workspace/pubsub";
 import type { AgenticEvent } from "@workspace/agentic-protocol";
 import {
@@ -17,7 +16,7 @@ import {
 } from "@workspace/channel-policies";
 import type { ChannelRelationshipPayload } from "./types.js";
 
-export const CHANNEL_DELIVERY_PROJECTION_VERSION = 11;
+export const CHANNEL_DELIVERY_PROJECTION_VERSION = 12;
 export const CHANNEL_RELATIONSHIP_EVENT_TYPES = new Set([
   "channel.subscription.opened",
   "channel.subscription.revised",
@@ -49,28 +48,8 @@ export class ChannelDeliveryProjection {
     private readonly durableForkBoundary: () => number | null = () => null,
   ) {}
 
-  static createTables(sql: SqlStorage): void {
+  private static createMailbox(sql: SqlStorage): void {
     sql.exec(`
-      CREATE TABLE IF NOT EXISTS channel_relationships (
-        participant_id TEXT PRIMARY KEY,
-        revision INTEGER NOT NULL CHECK (revision > 0),
-        delivery TEXT NOT NULL CHECK (delivery IN ('all', 'addressed', 'none')),
-        endpoint_kind TEXT NOT NULL CHECK (endpoint_kind IN ('entity', 'session')),
-        endpoint_entity_id TEXT,
-        invocation_route TEXT CHECK (invocation_route IN ('direct', 'mailbox')),
-        metadata_json TEXT NOT NULL,
-        application_config_json TEXT,
-        opened_sequence INTEGER NOT NULL,
-        active INTEGER NOT NULL CHECK (active IN (0, 1)),
-        attached INTEGER NOT NULL DEFAULT 1 CHECK (attached IN (0, 1)),
-        detached_at_sequence INTEGER,
-        reattach_after_sequence INTEGER,
-        reattach_through_sequence INTEGER,
-        CHECK (
-          (endpoint_kind = 'entity' AND endpoint_entity_id IS NOT NULL AND invocation_route IS NOT NULL) OR
-          (endpoint_kind = 'session' AND endpoint_entity_id IS NULL AND invocation_route IS NULL)
-        )
-      );
       CREATE TABLE IF NOT EXISTS channel_delivery_mailbox (
         delivery_id TEXT PRIMARY KEY,
         channel_id TEXT NOT NULL,
@@ -79,7 +58,8 @@ export class ChannelDeliveryProjection {
         participant_id TEXT NOT NULL,
         endpoint_entity_id TEXT NOT NULL,
         subscription_revision INTEGER NOT NULL,
-        envelope_json TEXT,
+        source_message_id TEXT,
+        event_kind TEXT,
         agentic_context_json TEXT,
         projection_version INTEGER NOT NULL,
         state TEXT NOT NULL DEFAULT 'ready'
@@ -103,6 +83,31 @@ export class ChannelDeliveryProjection {
         ON channel_delivery_mailbox(state, next_attempt_at, participant_id, event_sequence);
       CREATE INDEX IF NOT EXISTS idx_channel_delivery_lane
         ON channel_delivery_mailbox(participant_id, event_sequence, state, next_attempt_at);
+    `);
+  }
+
+  static createTables(sql: SqlStorage): void {
+    sql.exec(`
+      CREATE TABLE IF NOT EXISTS channel_relationships (
+        participant_id TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        delivery TEXT NOT NULL CHECK (delivery IN ('all', 'addressed', 'none')),
+        endpoint_kind TEXT NOT NULL CHECK (endpoint_kind IN ('entity', 'session')),
+        endpoint_entity_id TEXT,
+        invocation_route TEXT CHECK (invocation_route IN ('direct', 'mailbox')),
+        metadata_json TEXT NOT NULL,
+        application_config_json TEXT,
+        opened_sequence INTEGER NOT NULL,
+        active INTEGER NOT NULL CHECK (active IN (0, 1)),
+        attached INTEGER NOT NULL DEFAULT 1 CHECK (attached IN (0, 1)),
+        detached_at_sequence INTEGER,
+        reattach_after_sequence INTEGER,
+        reattach_through_sequence INTEGER,
+        CHECK (
+          (endpoint_kind = 'entity' AND endpoint_entity_id IS NOT NULL AND invocation_route IS NOT NULL) OR
+          (endpoint_kind = 'session' AND endpoint_entity_id IS NULL AND invocation_route IS NULL)
+        )
+      );
       CREATE TABLE IF NOT EXISTS channel_delivery_event_context (
         event_id TEXT PRIMARY KEY,
         agentic_context_json TEXT NOT NULL,
@@ -148,6 +153,7 @@ export class ChannelDeliveryProjection {
         PRIMARY KEY (message_id, participant_id)
       );
     `);
+    this.createMailbox(sql);
   }
 
   cursor(): number {
@@ -208,7 +214,10 @@ export class ChannelDeliveryProjection {
       return;
     this.transaction(() => {
       this.sql.exec(`DELETE FROM channel_relationships`);
-      this.sql.exec(`DELETE FROM channel_delivery_mailbox`);
+      // The mailbox is a disposable reference projection; canonical payloads
+      // stay in the log, and deterministic delivery IDs preserve replay identity.
+      this.sql.exec(`DROP TABLE IF EXISTS channel_delivery_mailbox`);
+      ChannelDeliveryProjection.createMailbox(this.sql);
       this.sql.exec(`DELETE FROM channel_delivery_event_context`);
       this.sql.exec(`DELETE FROM channel_receipts`);
       this.sql.exec(`DELETE FROM channel_delivery_message_senders`);
@@ -344,7 +353,10 @@ export class ChannelDeliveryProjection {
   resetForFork(forkPointSequence: number): void {
     this.transaction(() => {
       this.sql.exec(`DELETE FROM channel_relationships`);
-      this.sql.exec(`DELETE FROM channel_delivery_mailbox`);
+      // The mailbox is a disposable reference projection; canonical payloads
+      // stay in the log, and deterministic delivery IDs preserve replay identity.
+      this.sql.exec(`DROP TABLE IF EXISTS channel_delivery_mailbox`);
+      ChannelDeliveryProjection.createMailbox(this.sql);
       this.sql.exec(`DELETE FROM channel_delivery_event_context`);
       this.sql.exec(`DELETE FROM channel_receipts`);
       this.sql.exec(`DELETE FROM channel_delivery_message_senders`);
@@ -625,8 +637,10 @@ export class ChannelDeliveryProjection {
     rearmTerminal = false,
     deliveryStartedAt?: number,
   ): number {
-    const envelope: RpcChannelMessage = { kind: "log", phase: "live", event };
-    const envelopeJson = JSON.stringify(envelope);
+    const sourceMessageId = this.sourceMessageId(event);
+    const eventKind = event.type === "agentic.trajectory.v1/event"
+      ? (event.payload as { kind?: unknown }).kind
+      : null;
     const now = Date.now();
     const createdAt =
       typeof deliveryStartedAt === "number" &&
@@ -694,17 +708,18 @@ export class ChannelDeliveryProjection {
         `INSERT INTO channel_delivery_mailbox (
            delivery_id, channel_id, event_id, event_sequence, participant_id,
            endpoint_entity_id,
-           subscription_revision, envelope_json, agentic_context_json,
+           subscription_revision, source_message_id, event_kind, agentic_context_json,
            projection_version, state, claim_generation, attempts,
            next_attempt_at, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 0, 0, ?, ?)
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 0, 0, ?, ?)
          ON CONFLICT(delivery_id) DO ${
            rearmTerminal
              ? `UPDATE SET
            event_sequence = excluded.event_sequence,
            endpoint_entity_id = excluded.endpoint_entity_id,
            subscription_revision = excluded.subscription_revision,
-           envelope_json = excluded.envelope_json,
+           source_message_id = excluded.source_message_id,
+           event_kind = excluded.event_kind,
            agentic_context_json = excluded.agentic_context_json,
            projection_version = excluded.projection_version,
            state = 'ready', claim_generation = 0, claimed_by = NULL,
@@ -721,7 +736,8 @@ export class ChannelDeliveryProjection {
         participantId,
         endpointEntityId,
         revision,
-        envelopeJson,
+        sourceMessageId,
+        typeof eventKind === "string" ? eventKind : null,
         null,
         CHANNEL_DELIVERY_PROJECTION_VERSION,
         now,
@@ -729,7 +745,6 @@ export class ChannelDeliveryProjection {
       );
       const insertedRows = result.toArray().length;
       inserted += insertedRows;
-      const sourceMessageId = this.sourceMessageId(event);
       if (insertedRows > 0 && sourceMessageId) {
         this.sql.exec(
           `INSERT INTO channel_receipts
@@ -893,16 +908,14 @@ export class ChannelDeliveryProjection {
   recordDeclined(deliveryId: string): void {
     const row = this.sql
       .exec(
-        `SELECT participant_id, envelope_json
+        `SELECT participant_id, source_message_id
            FROM channel_delivery_mailbox
           WHERE delivery_id = ?`,
         deliveryId,
       )
       .toArray()[0];
-    if (!row || typeof row["envelope_json"] !== "string") return;
-    const sourceMessageId = this.sourceMessageIdFromEnvelope(
-      String(row["envelope_json"]),
-    );
+    if (!row) return;
+    const sourceMessageId = row["source_message_id"];
     if (!sourceMessageId) return;
     this.sql.exec(
       `INSERT INTO channel_receipts
@@ -1080,15 +1093,6 @@ export class ChannelDeliveryProjection {
       typeof agentic.causality?.messageId === "string"
       ? agentic.causality.messageId
       : null;
-  }
-
-  private sourceMessageIdFromEnvelope(envelopeJson: string): string | null {
-    try {
-      const envelope = JSON.parse(envelopeJson) as { event?: ChannelEvent };
-      return envelope.event ? this.sourceMessageId(envelope.event) : null;
-    } catch {
-      return null;
-    }
   }
 
   private audienceFor(

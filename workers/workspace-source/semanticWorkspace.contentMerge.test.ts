@@ -6,7 +6,7 @@ import {
   SemanticWorkspace,
   type SemanticDispatchRequest,
   type SemanticDispatchResult,
-} from "./semanticWorkspace.js";
+} from "./semanticWorkspace.testHost.js";
 import { SemanticVcsStore } from "./semanticVcsStore.js";
 
 const timestamp = "2026-07-15T00:00:00.000Z";
@@ -77,13 +77,14 @@ describe("SemanticWorkspace hunk composition", () => {
       });
     };
     const editText = (result: SemanticDispatchResult, baseText: string): SemanticDispatchResult => {
-      if (result.kind !== "effects-pending") throw new Error("text edit did not request bytes");
-      const observation = result.effects.find((candidate) => candidate.kind === "observe-content");
-      if (!observation) throw new Error("text edit has no observation");
-      return semantic.acknowledgeEffect({
-        effectId: observation.effectId,
-        payloadDigest: observation.payloadDigest,
-        receipt: { files: [{ contentHash: hash(baseText), base64: btoa(baseText) }] },
+      if (result.kind !== "host-read") throw new Error("text edit did not request bytes");
+      expect(result.request).toMatchObject({
+        kind: "read-merge-content",
+        operation: "edit",
+      });
+      return semantic.acknowledgeHostRead({
+        request: result.request,
+        files: [{ contentHash: hash(baseText), text: baseText }],
       });
     };
 

@@ -209,7 +209,13 @@ export type SemanticDispatchResult =
       result: unknown;
       effects: readonly SemanticEffect[];
     }
-  | { kind: "host-read"; request: Row };
+  | { kind: "host-read"; request: Row }
+  | { kind: "host-content"; request: Row };
+
+/** Roll back provisional command admission before yielding a host preparation. */
+class TransientSemanticPreparation {
+  constructor(readonly result: SemanticDispatchResult) {}
+}
 
 export interface SemanticEffectAcknowledgement {
   effectId: string;
@@ -326,8 +332,18 @@ interface NetMergeAspect {
   status: "adopt" | "convergent" | "composed" | "conflict" | "ours";
   composedText?: string;
   composedMappings?: {
-    ours: Array<{ childStart: number; childEnd: number; parentStart: number; parentEnd: number }>;
-    theirs: Array<{ childStart: number; childEnd: number; parentStart: number; parentEnd: number }>;
+    ours: Array<{
+      childStart: number;
+      childEnd: number;
+      parentStart: number;
+      parentEnd: number;
+    }>;
+    theirs: Array<{
+      childStart: number;
+      childEnd: number;
+      parentStart: number;
+      parentEnd: number;
+    }>;
   };
 }
 interface NetMergeCoordinate {
@@ -335,7 +351,10 @@ interface NetMergeCoordinate {
   paths: { base?: string; ours?: string; theirs?: string };
   status: "adopt" | "convergent" | "composed" | "conflict" | "resolved";
   aspects: NetMergeAspect[];
-  attribution: { ours: MergeAttributionEntry[]; theirs: MergeAttributionEntry[] };
+  attribution: {
+    ours: MergeAttributionEntry[];
+    theirs: MergeAttributionEntry[];
+  };
   group?: string;
   structuralConflicts?: MergeCoordinate[];
   resolutions: Array<"composed" | "theirs" | "ours" | "current">;
@@ -480,11 +499,16 @@ const mappingsForTextEdits = (input: {
     if (typeof candidate !== "object" || candidate === null) {
       throw new SemanticVcsError("IntegrityFailure", "Text change has an invalid edit span");
     }
-    const edit = candidate as { start?: unknown; end?: unknown; text?: unknown };
+    const edit = candidate as {
+      start?: unknown;
+      end?: unknown;
+      insertedExtent?: unknown;
+    };
     if (
       !Number.isSafeInteger(edit.start) ||
       !Number.isSafeInteger(edit.end) ||
-      typeof edit.text !== "string" ||
+      !Number.isSafeInteger(edit.insertedExtent) ||
+      Number(edit.insertedExtent) < 0 ||
       Number(edit.start) < parentCursor ||
       Number(edit.end) < Number(edit.start) ||
       Number(edit.end) > input.parentExtent
@@ -507,7 +531,7 @@ const mappingsForTextEdits = (input: {
         })
       );
     }
-    childCursor += unchangedLength + edit.text.length;
+    childCursor += unchangedLength + Number(edit.insertedExtent);
     parentCursor = end;
   }
   const tailLength = input.parentExtent - parentCursor;
@@ -763,8 +787,14 @@ const cursorOffset = (cursor: string | undefined, basis: Row): number => {
 };
 
 type NeighborPosition = Readonly<{ phase: number; key: string }>;
-type PositionedNeighborEdge = Readonly<{ position: NeighborPosition; edge: Row }>;
-type PositionedHistoryEntry = Readonly<{ position: NeighborPosition; entry: Row }>;
+type PositionedNeighborEdge = Readonly<{
+  position: NeighborPosition;
+  edge: Row;
+}>;
+type PositionedHistoryEntry = Readonly<{
+  position: NeighborPosition;
+  entry: Row;
+}>;
 type NeighborPhaseQuery = Readonly<{
   phase: number;
   edgeKind?: string;
@@ -1387,7 +1417,6 @@ export class SemanticWorkspace {
                   pending.commandId,
                   asState(importInput.expectedWorkingHead),
                   committed.context.working.ref,
-                  [],
                   planned.draft
                 )
               : null;
@@ -1446,83 +1475,11 @@ export class SemanticWorkspace {
           });
           return { kind: "complete", result };
         }
-        const draft =
-          method === "edit"
-            ? this.planEdit(commandInput as unknown as VcsEditInput, input.receipt)
-            : null;
-        if (!draft) {
-          throw new SemanticVcsError("IntegrityFailure", `Observation cannot resume ${method}`);
-        }
-        const result = this.persistWorkingMutation(
-          commandInput as unknown as VcsEditInput,
-          draft,
-          pending.commandId,
-          persistedEffectIntegrity(pending.payload)
-        );
-        const projection = this.queueRealization(
-          commandInput["contextId"] as string,
-          pending.commandId,
-          asState((commandInput as unknown as VcsEditInput).expectedWorkingHead),
-          result.workingHead as StateNodeRef,
-          draft.blobs ?? [],
-          draft
-        );
-        this.deps.store.updatePendingCommandResult({
-          scopeKind: "context",
-          scopeId: String(commandInput["contextId"]),
-          commandId: pending.commandId,
-          result,
-        });
-        this.deps.store.compactAppliedObservation(pending.effectId);
-        if (!projection) {
-          this.deps.store.finishEffectPendingCommand({
-            scopeKind: "context",
-            scopeId: String(commandInput["contextId"]),
-            commandId: pending.commandId,
-          });
-          return { kind: "complete", result };
-        }
-        return { kind: "effects-pending", result, effects: [projection] };
+        throw new SemanticVcsError("IntegrityFailure", `Observation cannot resume ${method}`);
       });
-    }
-    const contentOnlyMaterialization =
-      pending.kind === "materialize-context" && pending.payload["mode"] === "content-only";
-    if (contentOnlyMaterialization) {
-      const payloadBlobs = pending.payload["blobs"];
-      const receiptVersion = input.receipt["version"];
-      const receiptHashes = input.receipt["contentHashes"];
-      if (!Array.isArray(payloadBlobs) || payloadBlobs.length === 0) {
-        throw internalSemanticIntegrityFailure(
-          "EffectMismatch",
-          "Content persistence effect lacks blobs",
-          { effectId: pending.effectId, contract: "content-persistence-receipt" }
-        );
-      }
-      const expected = payloadBlobs
-        .map((value) => {
-          if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-          return String((value as Row)["contentHash"] ?? "");
-        })
-        .sort(compareUtf16CodeUnits);
-      const received = Array.isArray(receiptHashes)
-        ? receiptHashes.map(String).sort(compareUtf16CodeUnits)
-        : [];
-      if (
-        receiptVersion !== 1 ||
-        expected.some((contentHash) => !/^[0-9a-f]{64}$/u.test(contentHash)) ||
-        new Set(expected).size !== expected.length ||
-        canonicalJson(received) !== canonicalJson(expected)
-      ) {
-        throw internalSemanticIntegrityFailure(
-          "EffectMismatch",
-          `Receipt does not prove content persistence effect ${pending.effectId}`,
-          { effectId: pending.effectId, contract: "content-persistence-receipt" }
-        );
-      }
     }
     if (
       pending.kind === "materialize-context" &&
-      !contentOnlyMaterialization &&
       !contextMaterializationReceiptProves(
         pending.payload as unknown as ContextMaterializationCommand,
         input.receipt as unknown as ContextMaterializationReceipt
@@ -1577,7 +1534,7 @@ export class SemanticWorkspace {
       );
     }
     const operation = input.request["operation"];
-    if (operation !== "compare" && operation !== "merge") {
+    if (operation !== "compare" && operation !== "merge" && operation !== "edit") {
       throw new SemanticVcsError("InvalidReference", "Unknown merge-content operation");
     }
     const expected = new Set(
@@ -1615,6 +1572,10 @@ export class SemanticWorkspace {
       input: input.request["input"],
       ingress: input.request["ingress"],
     } as SemanticDispatchRequest;
+    if (operation === "edit") {
+      const parsed = parseVcsSemanticRequest("edit", request.input).input as VcsEditInput;
+      return this.edit(parsed, request, observed);
+    }
     if (operation === "compare") {
       const parsed = parseVcsSemanticRequest("compare", request.input).input as VcsCompareInput;
       return this.compare(parsed, request, observed);
@@ -1720,8 +1681,7 @@ export class SemanticWorkspace {
         input.contextId,
         input.commandId,
         null,
-        context.working.ref,
-        []
+        context.working.ref
       );
       if (!effect) {
         throw new SemanticVcsError(
@@ -1756,13 +1716,16 @@ export class SemanticWorkspace {
       commandId,
       "replace",
       materializedState,
-      context.working.ref,
-      []
+      context.working.ref
     );
   }
 
   forkContext(
-    input: { sourceContextId: string; targetContextId: string; commandId: string },
+    input: {
+      sourceContextId: string;
+      targetContextId: string;
+      commandId: string;
+    },
     ingress: SemanticDispatchRequest["ingress"]
   ): SemanticDispatchResult {
     return this.deps.transaction(() => {
@@ -1785,8 +1748,7 @@ export class SemanticWorkspace {
         input.targetContextId,
         input.commandId,
         null,
-        context.working.ref,
-        []
+        context.working.ref
       );
       if (!effect) {
         throw new SemanticVcsError(
@@ -1890,20 +1852,116 @@ export class SemanticWorkspace {
     request: SemanticDispatchRequest,
     apply: () => SemanticDispatchResult
   ): SemanticDispatchResult {
-    return this.deps.transaction(() => {
-      const replay = this.mutationReplay(method, input, request);
-      return replay ?? apply();
-    });
+    try {
+      return this.deps.transaction(() => {
+        const replay = this.mutationReplay(method, input, request);
+        const result = replay ?? apply();
+        if (result.kind === "host-read" || result.kind === "host-content") {
+          throw new TransientSemanticPreparation(result);
+        }
+        return result;
+      });
+    } catch (error) {
+      if (error instanceof TransientSemanticPreparation) return error.result;
+      throw error;
+    }
   }
 
-  private edit(input: VcsEditInput, request: SemanticDispatchRequest): SemanticDispatchResult {
+  private prepareContent(
+    operation: "edit" | "merge",
+    input: VcsEditInput | VcsMergeInput,
+    request: SemanticDispatchRequest,
+    draft: MutationDraft,
+    observed?: ReadonlyMap<string, string>,
+    preparedHashes?: readonly string[]
+  ): SemanticDispatchResult | null {
+    const blobs = [
+      ...new Map((draft.blobs ?? []).map((blob) => [blob.contentHash, blob])).values(),
+    ];
+    const expected = blobs.map((blob) => blob.contentHash).sort(compareUtf16CodeUnits);
+    if (preparedHashes !== undefined) {
+      if (
+        canonicalJson([...preparedHashes].sort(compareUtf16CodeUnits)) !== canonicalJson(expected)
+      ) {
+        throw internalSemanticIntegrityFailure(
+          "EffectMismatch",
+          "Prepared content does not match the authored mutation",
+          {
+            contract: "authored-content-preparation",
+          }
+        );
+      }
+      return null;
+    }
+    if (blobs.length === 0) return null;
+    return {
+      kind: "host-content",
+      request: {
+        kind: "prepare-semantic-content",
+        operation,
+        input: input as unknown as Row,
+        ingress: request.ingress as unknown as Row,
+        ...(observed
+          ? {
+              observed: [...observed].map(([contentHash, text]) => ({
+                contentHash,
+                text,
+              })),
+            }
+          : {}),
+        blobs,
+      },
+    };
+  }
+
+  acknowledgeContent(input: { request: Row; contentHashes: string[] }): SemanticDispatchResult {
+    if (input.request["kind"] !== "prepare-semantic-content") {
+      throw new SemanticVcsError("InvalidReference", "Unsupported content preparation");
+    }
+    const request = {
+      input: input.request["input"],
+      ingress: input.request["ingress"],
+    } as SemanticDispatchRequest;
+    const rows = input.request["observed"] as
+      | Array<{ contentHash: string; text: string }>
+      | undefined;
+    const observed = rows
+      ? new Map(
+          rows.map((file) => {
+            if (sha256Hex(new TextEncoder().encode(file.text)) !== file.contentHash) {
+              throw new SemanticVcsError(
+                "IntegrityFailure",
+                "Prepared content observation digest differs"
+              );
+            }
+            return [file.contentHash, file.text] as const;
+          })
+        )
+      : undefined;
+    if (input.request["operation"] === "edit") {
+      const parsed = parseVcsSemanticRequest("edit", request.input).input as VcsEditInput;
+      return this.edit(parsed, request, observed, input.contentHashes);
+    }
+    if (input.request["operation"] === "merge") {
+      const parsed = parseVcsSemanticRequest("merge", request.input).input as VcsMergeInput;
+      return this.merge(parsed, request, observed, input.contentHashes);
+    }
+    throw new SemanticVcsError("InvalidReference", "Unknown content preparation operation");
+  }
+
+  private edit(
+    input: VcsEditInput,
+    request: SemanticDispatchRequest,
+    observed?: ReadonlyMap<string, string>,
+    preparedHashes?: readonly string[]
+  ): SemanticDispatchResult {
     return this.runMutation("edit", input, request, () => {
       this.deps.store.assertExpectedWorking(input.contextId, asState(input.expectedWorkingHead));
       const textFiles = input.changes.filter(
         (change): change is Extract<VcsEditInput["changes"][number], { kind: "text-edit" }> =>
           change.kind === "text-edit"
       );
-      if (textFiles.length > 0) {
+      if (textFiles.length > 0 && !observed) {
         const root = this.deps.store.stateRoot(asState(input.expectedWorkingHead));
         const contentHashes = new Set<string>();
         for (const change of textFiles) {
@@ -1913,32 +1971,37 @@ export class SemanticWorkspace {
           }
           contentHashes.add(point.state.contentHash);
         }
-        const effect = this.deps.store.queueEffect({
-          scopeKind: "context",
-          scopeId: input.contextId,
-          commandId: input.commandId,
-          kind: "observe-content",
-          payload: {
-            method: "edit",
-            representation: "bytes",
+        return {
+          kind: "host-read",
+          request: {
+            kind: "read-merge-content",
+            operation: "edit",
             input: input as unknown as Row,
-            contextIntegrity: request.ingress.contextIntegrity as unknown as Row,
-            files: [...contentHashes]
-              .sort(compareUtf16CodeUnits)
-              .map((contentHash) => ({ contentHash })),
+            ingress: request.ingress as unknown as Row,
+            contentHashes: [...contentHashes].sort(compareUtf16CodeUnits),
           },
-        });
-        const result = { contextId: input.contextId, workingHead: input.expectedWorkingHead };
-        this.deps.store.finishCommand({
-          scopeKind: "context",
-          scopeId: input.contextId,
-          commandId: input.commandId,
-          result,
-          effectPending: true,
-        });
-        return { kind: "effects-pending", result, effects: [effect] };
+        };
       }
-      const draft = this.planEdit(input, null);
+      const draft = this.planEdit(
+        input,
+        observed
+          ? {
+              files: [...observed].map(([contentHash, text]) => ({
+                contentHash,
+                base64: base64FromBytes(new TextEncoder().encode(text)),
+              })),
+            }
+          : null
+      );
+      const preparation = this.prepareContent(
+        "edit",
+        input,
+        request,
+        draft,
+        observed,
+        preparedHashes
+      );
+      if (preparation) return preparation;
       const result = this.persistWorkingMutation(
         input,
         draft,
@@ -1950,7 +2013,6 @@ export class SemanticWorkspace {
         input.commandId,
         asState(input.expectedWorkingHead),
         result.workingHead,
-        draft.blobs ?? [],
         draft
       );
       this.deps.store.finishCommand({
@@ -2150,7 +2212,7 @@ export class SemanticWorkspace {
           kind: "file-create",
           base: missingEndpoint(result, repository.repoPath),
           result: resultEndpoint,
-          payload: change as unknown as Row,
+          payload: { path: change.path, mode: change.mode },
         });
         fileResults.push({
           fileId,
@@ -2252,7 +2314,21 @@ export class SemanticWorkspace {
               : change.kind,
         base,
         result: resultEndpoint,
-        payload: change as unknown as Row,
+        payload:
+          change.kind === "binary-replace"
+            ? { mode: change.mode ?? point.state.mode }
+            : change.kind === "text-edit"
+              ? {
+                  edits: [...change.edits]
+                    .sort((a, b) => a.start - b.start)
+                    .map(({ start, end, text }) => ({
+                      start,
+                      end,
+                      insertedExtent: text.length,
+                    })),
+                  ...(change.mode !== undefined ? { mode: change.mode } : {}),
+                }
+              : (change as unknown as Row),
       });
       fileResults.push({
         fileId: change.fileId,
@@ -2443,7 +2519,6 @@ export class SemanticWorkspace {
         input.commandId,
         asState(input.expectedWorkingHead),
         result.workingHead,
-        [],
         draft
       );
       this.deps.store.finishCommand({
@@ -2550,7 +2625,6 @@ export class SemanticWorkspace {
         input.commandId,
         asState(input.expectedWorkingHead),
         result.workingHead,
-        [],
         draft
       );
       this.deps.store.finishCommand({
@@ -2569,7 +2643,8 @@ export class SemanticWorkspace {
   private merge(
     input: VcsMergeInput,
     request: SemanticDispatchRequest,
-    observed?: ReadonlyMap<string, string>
+    observed?: ReadonlyMap<string, string>,
+    preparedHashes?: readonly string[]
   ): SemanticDispatchResult {
     const apply = (): SemanticDispatchResult => {
       const mergeStartedAt = performance.now();
@@ -3126,6 +3201,15 @@ export class SemanticWorkspace {
           entries,
         },
       ];
+      const preparation = this.prepareContent(
+        "merge",
+        input,
+        request,
+        draft,
+        observed,
+        preparedHashes
+      );
+      if (preparation) return preparation;
       const result = this.persistWorkingMutation(
         input,
         draft,
@@ -3173,7 +3257,6 @@ export class SemanticWorkspace {
         input.commandId,
         asState(input.expectedWorkingHead),
         result.workingHead,
-        draft.blobs ?? [],
         draft
       );
       this.deps.store.finishCommand({
@@ -3187,31 +3270,6 @@ export class SemanticWorkspace {
         ? { kind: "effects-pending", result: publicResult, effects: [effect] }
         : { kind: "complete", result: publicResult };
     };
-    if (observed) {
-      return this.deps.transaction(() => {
-        const command = this.deps.store.command(input.commandId);
-        if (command?.status === "pending") {
-          const requestDigest = compactId("merge-request", input);
-          const cause = causalCommandRef(request.ingress);
-          if (
-            command.scopeKind !== "context" ||
-            command.scopeId !== input.contextId ||
-            command.method !== "merge" ||
-            command.requestDigest !== requestDigest ||
-            canonicalJson(command.cause) !== canonicalJson(cause)
-          ) {
-            throw new SemanticVcsError(
-              "CommandIdReuse",
-              `Command ${input.commandId} was reused for different merge content`,
-              { commandId: input.commandId }
-            );
-          }
-          return apply();
-        }
-        const replay = this.mutationReplay("merge", input, request);
-        return replay ?? apply();
-      });
-    }
     return this.runMutation("merge", input, request, apply);
   }
 
@@ -3556,7 +3614,6 @@ export class SemanticWorkspace {
         input.commandId,
         asState(input.expectedWorkingHead),
         result.workingHead,
-        [],
         draft
       );
       this.deps.store.finishCommand({
@@ -3674,8 +3731,7 @@ export class SemanticWorkspace {
         input.contextId,
         input.commandId,
         asState(input.expectedWorkingHead),
-        committed.context.working.ref,
-        []
+        committed.context.working.ref
       );
       this.deps.store.finishCommand({
         scopeKind: "context",
@@ -3711,7 +3767,6 @@ export class SemanticWorkspace {
         input.commandId,
         asState(input.expectedWorkingHead),
         context.working.ref,
-        [],
         undefined,
         this.deps.store.affectedRepositoryIds(chain.applicationIds)
       );
@@ -7172,7 +7227,11 @@ export class SemanticWorkspace {
   }
 
   private persistWorkingMutation(
-    input: { contextId: string; expectedWorkingHead: VcsStateNodeRef; commandId: string },
+    input: {
+      contextId: string;
+      expectedWorkingHead: VcsStateNodeRef;
+      commandId: string;
+    },
     draft: MutationDraft,
     commandId: string,
     contextIntegrity: SemanticDispatchRequest["ingress"]["contextIntegrity"]
@@ -7614,7 +7673,11 @@ export class SemanticWorkspace {
     for (const transition of repositories) repoById.set(transition.repositoryId, transition);
     const paths = new Map<
       string,
-      Array<{ fileId: string; expectedPath: string | null; resultPath: string | null }>
+      Array<{
+        fileId: string;
+        expectedPath: string | null;
+        resultPath: string | null;
+      }>
     >();
     const ensureRepo = (repositoryId: string) => {
       if (!repoById.has(repositoryId)) {
@@ -7778,33 +7841,16 @@ export class SemanticWorkspace {
     commandId: string,
     previousState: StateNodeRef | null,
     targetState: StateNodeRef,
-    blobs: readonly { contentHash: string; base64: string }[],
     draft?: MutationDraft,
     affectedRepositoryIds?: readonly string[]
   ): SemanticEffect | null {
-    if (!this.deps.store.contextProjectionRequired(contextId)) {
-      if (blobs.length === 0) return null;
-      return this.deps.store.queueEffect({
-        scopeKind: "context",
-        scopeId: contextId,
-        commandId,
-        kind: "materialize-context",
-        payload: {
-          version: 1,
-          mode: "content-only",
-          contextId,
-          targetState,
-          blobs: [...blobs],
-        },
-      });
-    }
+    if (!this.deps.store.contextProjectionRequired(contextId)) return null;
     const command = this.buildMaterializationCommand(
       contextId,
       commandId,
       previousState === null ? "initialize" : "patch",
       previousState,
       targetState,
-      blobs,
       draft,
       affectedRepositoryIds
     );
@@ -7825,7 +7871,6 @@ export class SemanticWorkspace {
     mode: ContextMaterializationCommand["mode"],
     previousState: StateNodeRef | null,
     targetState: StateNodeRef,
-    blobs: readonly { contentHash: string; base64: string }[],
     draft?: MutationDraft,
     affectedRepositoryIds?: readonly string[]
   ): ContextMaterializationCommand {
@@ -7845,7 +7890,7 @@ export class SemanticWorkspace {
       previousState,
       targetState,
       repositories,
-      blobs,
+      blobs: [],
     });
   }
 
@@ -8603,7 +8648,10 @@ export class SemanticWorkspace {
             }
           }
           start = index;
-        } else if (!this.sameAspectValue(aspect, before, current)) {
+        } else if (
+          !this.sameAspectValue(aspect, before, current) &&
+          !this.isDecisionAccountedIntroduction(change, coordinate, aspect, current)
+        ) {
           throw new SemanticVcsError(
             "IntegrityFailure",
             `Provenance discontinuity at ${coordinate.kind} ${coordinate.id}/${aspect}`,
@@ -8636,6 +8684,29 @@ export class SemanticWorkspace {
     aspect: MergeAspectName,
     expectedSourceValue: unknown
   ): boolean {
+    const decision = this.deps.sql
+      .exec(
+        `SELECT decision.decision_id
+           FROM gad_merge_decision_entries entry
+           JOIN gad_integration_decisions decision ON decision.decision_id = entry.decision_id
+          WHERE entry.result_change_id = ?
+            AND entry.coordinate_kind = ?
+            AND entry.coordinate_id = ?
+          LIMIT 1`,
+        change.changeId,
+        coordinate.kind,
+        coordinate.id
+      )
+      .toArray()[0] as Row | undefined;
+    if (decision) {
+      const target = this.decisionTargetState(String(decision["decision_id"]));
+      const endpoint = this.coordinateEndpoint(this.deps.store.stateRoot(target), coordinate);
+      if (
+        this.sameAspectValue(aspect, this.aspectValue(endpoint, aspect), expectedSourceValue)
+      ) {
+        return true;
+      }
+    }
     const rows = this.deps.sql
       .exec(
         `SELECT source.change_id
@@ -8820,13 +8891,17 @@ export class SemanticWorkspace {
     let targetComparisonApplicationIds = targetLine.applicationIds;
     if (sourceApplicationIds) {
       // Exact applications present on both first-parent lines are shared
-      // history, regardless of whether the graph has one or several maximal
-      // merge bases. Remove that intersection before expanding changes so
-      // comparison cost follows the branch delta rather than the imported
-      // workspace. This reuses the two already-bounded lineage walks.
+      // history. Only applications already represented by the selected base
+      // state can be elided: sibling integrations can share a working
+      // application that follows their maximal event bases, and its changes
+      // are required to cover the base-to-endpoint attribution sequence.
       const targetApplicationIds = new Set(targetComparisonApplicationIds);
+      const baseApplicationIds = new Set(this.firstParentLineage(base).applicationIds);
       const sharedApplicationIds = new Set(
-        sourceApplicationIds.filter((applicationId) => targetApplicationIds.has(applicationId))
+        sourceApplicationIds.filter(
+          (applicationId) =>
+            targetApplicationIds.has(applicationId) && baseApplicationIds.has(applicationId)
+        )
       );
       sourceApplicationIds = sourceApplicationIds.filter(
         (applicationId) => !sharedApplicationIds.has(applicationId)

@@ -19,6 +19,15 @@ describe("composeSystemPrompt", () => {
     expect(VIBESTUDIO_BASE_SYSTEM_PROMPT).toContain(
       "Do not emulate managed file authoring through generic `eval`"
     );
+    expect(VIBESTUDIO_BASE_SYSTEM_PROMPT).toContain(
+      "programmatic scratch filesystem work that focused tools do not express"
+    );
+    expect(VIBESTUDIO_BASE_SYSTEM_PROMPT).toContain(
+      "context-scoped `fs` export from `@workspace/runtime`"
+    );
+    expect(VIBESTUDIO_BASE_SYSTEM_PROMPT).toContain(
+      "terminal skill only when the task actually requires an operating-system command"
+    );
   });
 
   it("defines the evidence boundary for a completed executable-source repair", () => {

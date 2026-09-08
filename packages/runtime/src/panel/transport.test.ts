@@ -12,7 +12,9 @@ const g = globalThis as typeof globalThis & {
   };
 };
 
-function makeShell(overrides: Partial<NonNullable<typeof g.__vibestudioShell>> = {}) {
+function makeShell(
+  overrides: Partial<NonNullable<typeof g.__vibestudioShell>> = {},
+) {
   return {
     postEnvelope: vi.fn(async () => {}),
     onEnvelope: vi.fn(() => vi.fn()),
@@ -31,6 +33,9 @@ function envelope(target: string, message: RpcMessage): RpcEnvelope {
   };
 }
 
+const createOwnedPanelTransport = () =>
+  createPanelTransport(new AbortController().signal);
+
 describe("createPanelTransport", () => {
   afterEach(() => {
     delete g.__vibestudioShell;
@@ -39,7 +44,7 @@ describe("createPanelTransport", () => {
   it("posts canonical envelopes over the shell bridge unchanged", async () => {
     const shell = makeShell();
     g.__vibestudioShell = shell;
-    const transport = createPanelTransport();
+    const transport = createOwnedPanelTransport();
     const message: RpcMessage = {
       type: "event",
       fromId: "panel:panel-1",
@@ -61,7 +66,7 @@ describe("createPanelTransport", () => {
         return vi.fn();
       }),
     });
-    const transport = createPanelTransport();
+    const transport = createOwnedPanelTransport();
     const handler = vi.fn();
     const message: RpcMessage = {
       type: "event",
@@ -81,18 +86,44 @@ describe("createPanelTransport", () => {
     const shell = makeShell();
     g.__vibestudioShell = shell;
 
-    createPanelTransport();
+    createOwnedPanelTransport();
 
     expect(shell.onRecovery).toHaveBeenCalledTimes(2);
-    expect(shell.onRecovery).toHaveBeenNthCalledWith(1, "resubscribe", expect.any(Function));
-    expect(shell.onRecovery).toHaveBeenNthCalledWith(2, "cold-recover", expect.any(Function));
+    expect(shell.onRecovery).toHaveBeenNthCalledWith(
+      1,
+      "resubscribe",
+      expect.any(Function),
+    );
+    expect(shell.onRecovery).toHaveBeenNthCalledWith(
+      2,
+      "cold-recover",
+      expect.any(Function),
+    );
+  });
+
+  it("removes recovery subscriptions when the owning runtime retires", () => {
+    const unsubscribeResubscribe = vi.fn();
+    const unsubscribeColdRecover = vi.fn();
+    const shell = makeShell({
+      onRecovery: vi
+        .fn()
+        .mockReturnValueOnce(unsubscribeResubscribe)
+        .mockReturnValueOnce(unsubscribeColdRecover),
+    });
+    g.__vibestudioShell = shell;
+    const lifetime = new AbortController();
+    createPanelTransport(lifetime.signal);
+    lifetime.abort();
+    lifetime.abort();
+    expect(unsubscribeResubscribe).toHaveBeenCalledTimes(1);
+    expect(unsubscribeColdRecover).toHaveBeenCalledTimes(1);
   });
 
   it("sends panel event watches over the shell bridge", async () => {
     const serviceCall = vi.fn(async () => {});
     const shell = makeShell({ serviceCall });
     g.__vibestudioShell = shell;
-    const transport = createPanelTransport();
+    const transport = createOwnedPanelTransport();
     const message: RpcMessage = {
       type: "request",
       fromId: "panel:panel-1",
@@ -112,7 +143,7 @@ describe("createPanelTransport", () => {
     const serviceCall = vi.fn(async () => {});
     const shell = makeShell({ serviceCall });
     g.__vibestudioShell = shell;
-    const transport = createPanelTransport();
+    const transport = createPanelTransport(new AbortController().signal);
     const message: RpcMessage = {
       type: "request",
       fromId: "panel:chat-entity",
@@ -128,101 +159,36 @@ describe("createPanelTransport", () => {
     expect(serviceCall).not.toHaveBeenCalled();
   });
 
-  it("routes Electron-local panel host helpers through serviceCall", async () => {
-    const serviceCall = vi.fn(async () => "ok");
-    const isLocalService = vi.fn(async () => true);
-    const shell = makeShell({ serviceCall, isLocalService });
-    g.__vibestudioShell = shell;
-    const transport = createPanelTransport();
-    const handler = vi.fn();
-    transport.onMessage(handler);
-    const message: RpcMessage = {
-      type: "request",
-      fromId: "panel:panel-1",
-      requestId: "req-2",
-      method: "panel.reloadView",
-      args: ["panel-1"],
-    };
-
-    await transport.send(envelope("main", message));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(serviceCall).toHaveBeenCalledWith("panel.reloadView", "panel-1");
-    expect(isLocalService).toHaveBeenCalledWith("panel");
-    expect(shell.postEnvelope).not.toHaveBeenCalled();
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({
-        from: "main",
-        target: "panel:panel-1",
-        message: {
-          type: "response",
-          requestId: "req-2",
-          result: "ok",
-        },
-      })
-    );
-  });
-
-  it("categorizes unavailable Electron-local services on non-Electron hosts", async () => {
-    g.__vibestudioShell = makeShell({ isLocalService: vi.fn(async () => true) });
-    const transport = createPanelTransport();
-    const handler = vi.fn();
-    transport.onMessage(handler);
-
-    await transport.send(
-      envelope("main", {
-        type: "request",
-        fromId: "panel:panel-1",
-        requestId: "req-unavailable",
-        method: "panel.reloadView",
-        args: ["panel-1"],
-      })
-    );
-
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.objectContaining({
-          requestId: "req-unavailable",
-          errorKind: "service",
-        }),
-      })
-    );
-  });
-
-  it("preserves a local service error category", async () => {
-    const failure = Object.assign(new Error("denied"), { errorKind: "access" as const });
-    g.__vibestudioShell = makeShell({
-      isLocalService: vi.fn(async () => true),
-      serviceCall: vi.fn(async () => {
-        throw failure;
+  it("leaves native ownership and error replies to the host", async () => {
+    let incoming!: (envelope: RpcEnvelope) => void;
+    const shell = makeShell({
+      onEnvelope: vi.fn((handler) => {
+        incoming = handler;
+        return vi.fn();
       }),
     });
-    const transport = createPanelTransport();
+    g.__vibestudioShell = shell;
+    const transport = createPanelTransport(new AbortController().signal);
     const handler = vi.fn();
     transport.onMessage(handler);
-
-    await transport.send(
-      envelope("main", {
-        type: "request",
-        fromId: "panel:panel-1",
-        requestId: "req-denied",
-        method: "panel.reloadView",
-        args: ["panel-1"],
-      })
-    );
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.objectContaining({
-          requestId: "req-denied",
-          error: "denied",
-          errorKind: "access",
-        }),
-      })
-    );
+    const request = envelope("main", {
+      type: "request",
+      fromId: "panel:panel-1",
+      requestId: "native-1",
+      method: "panel.reloadView",
+      args: ["panel-1"],
+    });
+    await transport.send(request);
+    expect(shell.postEnvelope).toHaveBeenCalledWith(request);
+    expect(handler).not.toHaveBeenCalled();
+    const reply = envelope("panel:panel-1", {
+      type: "response",
+      requestId: "native-1",
+      error: "denied",
+      errorKind: "access",
+    });
+    incoming(reply);
+    expect(handler).toHaveBeenCalledWith(reply);
   });
 
   describe("bridge stream surface", () => {
@@ -273,7 +239,7 @@ describe("createPanelTransport", () => {
     it("wires streamBody from the shell bridge surface and pumps the body across", async () => {
       const { shell, sentBodyChunks } = makeStreamShell();
       g.__vibestudioShell = shell as never;
-      const transport = createPanelTransport();
+      const transport = createPanelTransport(new AbortController().signal);
       expect(typeof transport.streamBody).toBe("function");
 
       const body = new ReadableStream<Uint8Array>({
@@ -282,36 +248,49 @@ describe("createPanelTransport", () => {
           controller.close();
         },
       });
-      const response = await transport.streamBody!(streamRequestEnvelope(), null, body);
+      const response = await transport.streamBody!(
+        streamRequestEnvelope(),
+        null,
+        body,
+      );
       expect(response.status).toBe(200);
 
       await vi.waitFor(() => {
         // 1 data chunk + the done marker.
         expect(sentBodyChunks.length).toBe(2);
       });
-      expect(sentBodyChunks[0]).toMatchObject({ seq: 1, chunk: expect.any(String) });
+      expect(sentBodyChunks[0]).toMatchObject({
+        seq: 1,
+        chunk: expect.any(String),
+      });
       expect(sentBodyChunks[1]).toMatchObject({ seq: 2, done: true });
       expect(
-        (shell as unknown as { streamOpen: ReturnType<typeof vi.fn> }).streamOpen
+        (shell as unknown as { streamOpen: ReturnType<typeof vi.fn> })
+          .streamOpen,
       ).toHaveBeenCalledWith(
         expect.objectContaining({
           bodyId: expect.any(String),
           envelope: expect.objectContaining({ target: "main" }),
-        })
+        }),
       );
     });
 
     it("routes body-less subscriptions through the host stream plane", async () => {
       const { shell, sentBodyChunks } = makeStreamShell();
       g.__vibestudioShell = shell as never;
-      const transport = createPanelTransport();
+      const transport = createPanelTransport(new AbortController().signal);
 
-      const response = await transport.stream!(streamRequestEnvelope(), null, null);
+      const response = await transport.stream!(
+        streamRequestEnvelope(),
+        null,
+        null,
+      );
 
       expect(response.status).toBe(200);
       expect(sentBodyChunks).toEqual([]);
       expect(
-        (shell as unknown as { streamOpen: ReturnType<typeof vi.fn> }).streamOpen
+        (shell as unknown as { streamOpen: ReturnType<typeof vi.fn> })
+          .streamOpen,
       ).toHaveBeenCalledWith({
         opId: expect.any(String),
         envelope: expect.objectContaining({ target: "main" }),
@@ -320,14 +299,14 @@ describe("createPanelTransport", () => {
 
     it("leaves streamBody undefined when the bridge has no upload surface", () => {
       g.__vibestudioShell = makeShell();
-      const transport = createPanelTransport();
+      const transport = createPanelTransport(new AbortController().signal);
       expect(transport.streamBody).toBeUndefined();
     });
 
     it("passes the upload body through a first-class shell.stream verbatim", async () => {
       const stream = vi.fn(async () => new Response(null, { status: 204 }));
       g.__vibestudioShell = makeShell({ stream } as never);
-      const transport = createPanelTransport();
+      const transport = createPanelTransport(new AbortController().signal);
       const body = new ReadableStream<Uint8Array>();
       const sentEnvelope = streamRequestEnvelope();
 

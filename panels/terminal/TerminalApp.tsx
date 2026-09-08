@@ -10,7 +10,7 @@ import { isReviewPending } from "@vibestudio/shared/authority/reviewPending";
 // Top-level `expose` was removed from @workspace/runtime; this is the same
 // arg-spreading wrapper over the portable `rpc.expose`, kept local to the panel.
 const expose = (method: string, handler: (...args: any[]) => unknown | Promise<unknown>) =>
-  rpc.expose(method, (request) => handler(...request.args));
+  rpc.expose(method, (request) => handler(...request.args), {"kind":"closed","reason":"This handler controls an internal execution or presentation surface."});
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommandLauncher } from "./CommandLauncher.js";
 import { ContextPicker, type CreatedContext, type PickedContextOptions } from "./ContextPicker.js";

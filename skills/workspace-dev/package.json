@@ -5,13 +5,15 @@
   "type": "module",
   "description": "Learn Vibestudio workspace development",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./project-manifest": "./project-manifest.ts"
   },
   "dependencies": {
     "@vibestudio/module-imports": "workspace:*",
     "@workspace/runtime": "workspace:*",
     "@vibestudio/git": "workspace:*",
     "@vibestudio/shared": "workspace:*",
+    "@workspace/test-runtime": "workspace:*",
     "svelte": "^5.56.9"
   }
 }

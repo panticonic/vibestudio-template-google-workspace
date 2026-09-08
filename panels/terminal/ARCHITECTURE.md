@@ -16,7 +16,10 @@ Host sessions are ephemeral and never restored from panel state. Close and unmou
 
 ## Boundaries
 
-- `vscode-upstream/` stores the upstream VS Code source snapshots used while porting behavior.
+- [`../../docs/upstream/vscode-terminal/`](../../docs/upstream/vscode-terminal/) stores the
+  reference-only upstream VS Code source snapshots used while porting behavior. They live outside
+  the executable panel repository so workspace compilation and publication never treat the
+  intentionally partial snapshot as terminal source.
 - `vscodeTerminalFrontend.ts` owns the xterm instance, addons, renderer lifecycle, clipboard, search, serialization, unicode mode, shell integration events, and line-data events.
 - `vscodeTerminalInstance.ts` owns lifecycle wiring between the frontend, process bridge, resize handling, scrollback bootstrap, and panel events.
 - `vscodeTerminalProcess.ts` and `shellAttach.ts` are the vibestudio connectivity boundary. They adapt the shell extension RPC API to the frontend without importing VS Code process management or workbench services.

@@ -7,6 +7,7 @@
  */
 
 import {
+  isRpcConnectionLost,
   contextId,
   rpc,
   panel,
@@ -680,7 +681,7 @@ export default function ChatPanel() {
   );
 
   const prepareInitialAgentRuntime = useCallback(
-    (agents: AvailableAgent[]) => {
+    async (agents: AvailableAgent[]) => {
       if (agents.length === 0) return;
       const preferredSource = panel.stateArgs.get<ChatStateArgs>().agentSource;
       const source =
@@ -695,27 +696,22 @@ export default function ChatPanel() {
       // The panel owns the product choice; the host only prepares immutable
       // bytes at speculative priority. No entity is created and no credential
       // is inspected until the ordinary launch path commits this intent.
-      void rpc
-        .call<{ status: string }>("main", "build.getBuildReport", [
+      try {
+        const report = await rpc.call<{ status: string }>("main", "build.getBuildReport", [
           source,
           ref,
           { priority: "speculative" }
-        ])
-        .then((report) => {
-          if (report.status === "ok") return;
-          preparedAgentRuntimeRefs.current.delete(preparationKey);
-          console.warn("[ChatPanel] Initial agent runtime preparation failed", {
-            source,
-            status: report.status
-          });
-        })
-        .catch((error) => {
-          preparedAgentRuntimeRefs.current.delete(preparationKey);
-          console.warn(
-            "[ChatPanel] Initial agent runtime preparation failed:",
-            error instanceof Error ? error.message : String(error)
-          );
+        ]);
+        if (report.status === "ok") return;
+        preparedAgentRuntimeRefs.current.delete(preparationKey);
+        console.warn("[ChatPanel] Initial agent runtime preparation failed", {
+          source,
+          status: report.status
         });
+      } catch (error) {
+        preparedAgentRuntimeRefs.current.delete(preparationKey);
+        throw error;
+      }
     },
     [resolvedContextId]
   );
@@ -796,8 +792,25 @@ export default function ChatPanel() {
   // intended to accelerate.
   useEffect(() => {
     if (firstAgentModelPreflight === "checking") return;
-    prepareInitialAgentRuntime(availableAgents);
+    void prepareInitialAgentRuntime(availableAgents).catch((error) => {
+      if (!isRpcConnectionLost(error)) {
+        console.warn(
+          "[ChatPanel] Initial agent runtime preparation failed:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    });
   }, [availableAgents, firstAgentModelPreflight, prepareInitialAgentRuntime]);
+
+  useEffect(
+    () =>
+      recoveryCoordinator.registerResubscribeHandler(
+        `chat-initial-agent-runtime:${panel.slotId}`,
+        () => prepareInitialAgentRuntime(availableAgents),
+        { includeCurrentGeneration: false }
+      ),
+    [availableAgents, prepareInitialAgentRuntime]
+  );
 
   // Availability (connected/startable/needs-setup) now arrives on every
   // catalog entry from the model-settings worker — one shared source for all

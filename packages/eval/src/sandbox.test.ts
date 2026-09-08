@@ -137,6 +137,26 @@ describe("executeSandbox", () => {
     expect(result.returnValue).toBe(3);
   });
 
+  it("preserves an explicit null return instead of falling back to the default export", async () => {
+    const result = await executeSandbox(
+      `export default "fallback";
+return null;`,
+      { syntax: "typescript" },
+    );
+
+    expect(result).toMatchObject({ success: true, returnValue: null });
+  });
+
+  it("uses the default export when the eval returns undefined", async () => {
+    const result = await executeSandbox(
+      `export default "fallback";
+return undefined;`,
+      { syntax: "typescript" },
+    );
+
+    expect(result).toMatchObject({ success: true, returnValue: "fallback" });
+  });
+
   it("propagates private-global confinement through the transformed sandbox", async () => {
     // Confinement requires a realm that cannot compile code; node:vm stands in
     // for the codegen-free evaluator isolate.

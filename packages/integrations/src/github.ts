@@ -23,6 +23,9 @@ export const manifest = {
       { url: "https://api.github.com/repos/*/issues/*", methods: ["GET", "PATCH"] },
       { url: "https://api.github.com/repos/*/pulls", methods: ["GET"] },
       { url: "https://api.github.com/repos/*/pulls/*", methods: ["GET"] },
+      { url: "https://api.github.com/repos/*/pages", methods: ["GET", "POST", "PUT"] },
+      { url: "https://api.github.com/repos/*/pages/builds", methods: ["GET", "POST"] },
+      { url: "https://api.github.com/repos/*/pages/builds/*", methods: ["GET"] },
     ],
   },
   webhooks: {
@@ -347,7 +350,40 @@ export interface UpdateIssueParams {
   assignees?: string[];
 }
 
+export interface GitHubPagesSite {
+  html_url: string;
+  status: "built" | "building" | "errored" | null;
+  public: boolean;
+  build_type?: "legacy" | "workflow";
+  source?: { branch: string; path: "/" | "/docs" };
+  cname?: string | null;
+  https_enforced?: boolean;
+}
+export interface GitHubPagesBuild {
+  url: string;
+  status: "queued" | "building" | "built" | "errored";
+  commit: string;
+  error?: { message: string | null };
+  created_at: string;
+  updated_at: string;
+}
+export interface GitHubPagesSource {
+  branch: string;
+  path: "/docs";
+}
+export interface GitHubPagesRepair {
+  provider: "github";
+  accessLevel: "publish-pages";
+  owner: string;
+  repository: string;
+}
+
 export interface GitHubClient {
+  getPages(owner: string, repo: string): Promise<GitHubPagesSite | null>;
+  /** Create branch publication, or verify that its existing owner and source match. */
+  ensurePagesSource(owner: string, repo: string, source: GitHubPagesSource): Promise<GitHubPagesSite>;
+  getLatestPagesBuild(owner: string, repo: string): Promise<GitHubPagesBuild | null>;
+  requestPagesBuild(owner: string, repo: string): Promise<{ url: string; status: string }>;
   /** The underlying URL-credential handle (exposed for `credentialId` access in push correlation). */
   handle(): Promise<UrlCredentialHandle>;
   getUser(): Promise<GitHubUser>;
@@ -366,13 +402,14 @@ export interface GitHubClient {
   ): Promise<GitHubIssue>;
 }
 
-class GitHubApiError extends Error {
+export class GitHubApiError extends Error {
   readonly detail: string;
 
   constructor(
     readonly status: number,
     readonly statusText: string,
-    readonly responseBody: string
+    readonly responseBody: string,
+    readonly repair?: GitHubPagesRepair
   ) {
     const detail = githubApiErrorDetail(responseBody);
     super(`GitHub API request failed: ${status} ${statusText}${detail ? ` - ${detail}` : ""}`);
@@ -448,9 +485,44 @@ export function createGitHubClient(
       const bodyText = await response.text();
       throw new GitHubApiError(response.status, response.statusText, bodyText);
     }
-    return (await response.json()) as T;
+    return (response.status === 204 ? undefined : await response.json()) as T;
   };
 
+  // Separate handles for each exact repository, never the broad account API handle.
+  const pagesHandles = new Map<string, () => Promise<UrlCredentialHandle>>();
+  const pagesFetch = async <T>(owner: string, repo: string, suffix = "", init?: RequestInit): Promise<T> => {
+    if (!/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo) || repo === "." || repo === "..")
+      throw new Error("Pages requires an exact GitHub owner and repository name");
+    const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pages`;
+    let selected = pagesHandles.get(path);
+    if (!selected) {
+      selected = memoizeHandle(() => ({
+        audiences: [{ url: GITHUB_API_BASE + path, match: "exact" }, { url: GITHUB_API_BASE + path + "/", match: "path-prefix" }],
+        label: `GitHub Pages: ${owner}/${repo}`,
+        ...(opts.credentialId ? { credentialId: opts.credentialId } : {}),
+      }));
+      pagesHandles.set(path, selected);
+    }
+    try {
+      return await apiFetch<T>(path + suffix, {
+        ...init, headers: { "X-GitHub-Api-Version": "2026-03-10", ...Object.fromEntries(new Headers(init?.headers)) },
+      }, selected);
+    } catch (error) {
+      if (error instanceof GitHubApiError && error.status === 403)
+        throw new GitHubApiError(error.status, error.statusText, error.responseBody,
+          { provider: "github", accessLevel: "publish-pages", owner, repository: repo });
+      throw error;
+    }
+  };
+  const getPages = async (owner: string, repo: string): Promise<GitHubPagesSite | null> => {
+    try { return await pagesFetch<GitHubPagesSite>(owner, repo); }
+    catch (error) { if (error instanceof GitHubApiError && error.status === 404) return null; throw error; }
+  };
+  const assertPagesSource = (site: GitHubPagesSite, source: GitHubPagesSource): GitHubPagesSite => {
+    if (site.build_type === "workflow" || site.source?.branch !== source.branch || site.source.path !== source.path)
+      throw new Error("This repository already has a different Pages publication owner or source. Review that integration before changing it.");
+    return site;
+  };
   const enc = encodeURIComponent;
   const resolvedRepository = (
     repo: GitHubRepo,
@@ -483,6 +555,29 @@ export function createGitHubClient(
   };
 
   return {
+    getPages,
+    async ensurePagesSource(owner, repo, source) {
+      if (!source.branch.trim() || source.path !== "/docs") throw new Error("Pages publication requires an exact branch and /docs output");
+      const existing = await getPages(owner, repo);
+      if (existing) return assertPagesSource(existing, source);
+      try {
+        const site = await pagesFetch<GitHubPagesSite>(owner, repo, "", {
+          method: "POST", body: JSON.stringify({ build_type: "legacy", source }),
+        });
+        return assertPagesSource(site, source);
+      } catch (error) {
+        // A concurrent or uncertain successful creation is reconciled with the provider.
+        if (!(error instanceof GitHubApiError) || error.status !== 409) throw error;
+        const site = await getPages(owner, repo);
+        if (!site) throw error;
+        return assertPagesSource(site, source);
+      }
+    },
+    async getLatestPagesBuild(owner, repo) {
+      try { return await pagesFetch<GitHubPagesBuild>(owner, repo, "/builds/latest"); }
+      catch (error) { if (error instanceof GitHubApiError && error.status === 404) return null; throw error; }
+    },
+    requestPagesBuild: (owner, repo) => pagesFetch(owner, repo, "/builds", { method: "POST" }),
     handle,
     getUser: () => apiFetch<GitHubUser>("/user", undefined, userHandle),
     listRepos: (opts) =>

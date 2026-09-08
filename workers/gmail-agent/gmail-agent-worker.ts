@@ -610,6 +610,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
    * interpretation and fanout stay here.
    */
   @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver serves installed workspace applications and their agents.",
+    },
     principals: ["host"],
     effect: { kind: "open" },
     tier: "open",
@@ -657,6 +662,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
   }
 
   @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver serves installed workspace applications and their agents.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -691,6 +701,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
   }
 
   @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver serves installed workspace applications and their agents.",
+    },
     principals: ["code"],
     effect: { kind: "open" },
     tier: "open",
@@ -735,6 +750,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
    * the triage/wake pipeline.
    */
   @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver serves installed workspace applications and their agents.",
+    },
     principals: ["host", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -913,6 +933,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
   }
 
   @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver serves installed workspace applications and their agents.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -924,6 +949,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
   }
 
   @rpc({
+    website: {
+      kind: "closed",
+      reason:
+        "This receiver serves installed workspace applications and their agents.",
+    },
     principals: ["host", "user", "code"],
     effect: { kind: "open" },
     tier: "open",
@@ -1053,7 +1083,8 @@ export class GmailAgentWorker extends AgentWorkerBase {
     };
     const setupJson = JSON.stringify(payload);
     if (state.lastSetupJson === setupJson) return;
-    const previouslyNeededAuth = state.lastSetupJson?.includes('"reconnect-required"') ?? false;
+    const previouslyNeededAuth =
+      state.lastSetupJson?.includes('"reconnect-required"') ?? false;
     await this.gmailCards.publishSetup(channelId, payload);
     const fresh = this.getChannelState(channelId);
     fresh.lastSetupJson = setupJson;
@@ -1065,7 +1096,10 @@ export class GmailAgentWorker extends AgentWorkerBase {
     // carries the reconnect affordance — never per poll.
     if (payload.auth.status === "reconnect-required" && !previouslyNeededAuth) {
       await this.escalateReauth(channelId).catch((err) =>
-        console.warn(`[GmailAgentWorker] reauth escalation failed for channel=${channelId}:`, err),
+        console.warn(
+          `[GmailAgentWorker] reauth escalation failed for channel=${channelId}:`,
+          err,
+        ),
       );
     }
   }
@@ -1073,7 +1107,9 @@ export class GmailAgentWorker extends AgentWorkerBase {
   /** The single person on this channel, when there is one — the messaging
    *  plan's `owner` rule; several people means no unambiguous owner. */
   private channelOwnerUserId(channelId: string): string | null {
-    const users = this.rosterSnapshot(channelId).filter((entry) => entry.ref.kind === "user");
+    const users = this.rosterSnapshot(channelId).filter(
+      (entry) => entry.ref.kind === "user",
+    );
     if (users.length !== 1) return null;
     const id = users[0]?.ref.participantId ?? users[0]?.participantId ?? "";
     return id.startsWith("user:") ? id.slice("user:".length) : id || null;

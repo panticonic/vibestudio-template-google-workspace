@@ -33,6 +33,7 @@
       }],
       "requests": [
         { "capability": "credential.use", "resource": { "kind": "prefix", "prefix": "" }, "tier": "gated", "evidence": "intentional-broad" },
+        { "capability": "network.response.read", "resource": { "kind": "origin", "origin": "https://github.com" }, "tier": "gated", "evidence": "bounded-dynamic" },
         { "capability": "network.response.read", "resource": { "kind": "prefix", "prefix": "" }, "tier": "gated", "evidence": "intentional-broad" },
         { "capability": "git.publish", "resource": { "kind": "prefix", "prefix": "workspace-source-change:" }, "tier": "gated", "evidence": "bounded-dynamic" }
       ]

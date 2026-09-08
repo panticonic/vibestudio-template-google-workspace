@@ -321,7 +321,7 @@ export interface PanelHandle<
    * Listen for events from the target panel (untyped fallback).
    * @returns Unsubscribe function
    */
-  on(event: string, listener: (payload: unknown) => void): () => void;
+  on(event: string, listener: (payload: unknown) => void, website: import("@vibestudio/rpc").WebsiteMethodPolicy): () => void;
 
   withContract<C extends PanelContract, Role extends PanelHandleContractRole>(
     contract: C,

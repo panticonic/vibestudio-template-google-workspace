@@ -27,7 +27,7 @@ export { normalizePath, getFileName, resolvePath } from "./pathUtils.js";
 export { buildPanelLink, buildPanelDeepLink, buildPanelShareLink } from "../core/panelLinks.js";
 export type { BuildPanelLinkOptions } from "../core/panelLinks.js";
 export { createGatewayFetch } from "./gatewayFetch.js";
-export type { GatewayFetch, GatewayFetchConfig } from "./gatewayFetch.js";
+export type { GatewayFetch, GatewayFetchConfig, GatewayRpcFetchConfig } from "./gatewayFetch.js";
 
 // Canonical panel lifecycle contract and the structured error thrown by
 // readiness-bearing panel operations.

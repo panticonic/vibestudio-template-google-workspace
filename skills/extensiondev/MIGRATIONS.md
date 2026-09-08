@@ -106,7 +106,7 @@ The canary migrations all follow the same shape:
 - [ ] Delete the in-host service and its registration.
 - [ ] Update every consumer (`ctx.<name>` → `extensions.use<ApiType>(name)`).
 - [ ] Add an integration test that boots a real server.
-- [ ] Declare the extension in the template repository's `meta/template.yml` (`extensions:`).
+- [ ] Declare the extension in the template repository's `meta/vibestudio.yml` (`extensions:`).
 - [ ] Confirm `build.listUnits()` reports the declared extension as available,
       then select its exact live identity from
       `runtime.supervision.list({ kind: "extension" })` and verify

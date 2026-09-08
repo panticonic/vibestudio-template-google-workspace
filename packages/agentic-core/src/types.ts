@@ -63,7 +63,7 @@ export interface ConnectionConfig {
       args: unknown[],
       options?: { signal?: AbortSignal }
     ): Promise<Response>;
-    on(event: string, listener: (event: { payload: unknown }) => void): () => void;
+    on: import("@vibestudio/rpc").RpcClient["on"];
     selfId: string;
     registerResidentSession?: ResidentSessionRegistrar["registerResidentSession"];
   };
