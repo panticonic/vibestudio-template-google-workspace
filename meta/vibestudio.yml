@@ -5,7 +5,6 @@ template:
   dependencies:
     - url: git+https://github.com/panticonic/vibestudio-base.git
   description: Connect Google Workspace and add a Gmail agent.
-  files: []
   name: Google Workspace
   repositories:
     - packages/gmail
