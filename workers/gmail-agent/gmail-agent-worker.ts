@@ -338,7 +338,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
   // ── agent configuration ───────────────────────────────────────────────────
 
   protected override getDefaultModel(): string {
-    return "openai-codex:gpt-5.6-sol";
+    return "openai-codex:gpt-6-sol";
   }
 
   protected override getRespondPolicy(): RespondPolicy {

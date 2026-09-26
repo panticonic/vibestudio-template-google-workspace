@@ -1,5 +1,5 @@
 defaultAgentConfig:
-  model: openai-codex:gpt-5.6-sol
+  model: openai-codex:gpt-6-sol
 systemEpoch: 0
 template:
   dependencies:
