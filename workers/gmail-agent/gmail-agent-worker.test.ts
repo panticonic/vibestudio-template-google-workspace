@@ -505,12 +505,12 @@ class TestGmailAgentWorker extends GmailAgentWorker {
 
 describe("GmailAgentWorker", () => {
   it("uses Luna as the cheap Codex triage tier and keeps Sol as fallback", () => {
-    expect(triageModelCandidates("openai-codex:gpt-5.6-sol")).toEqual([
-      "openai-codex:gpt-5.6-luna",
-      "openai-codex:gpt-5.6-sol",
+    expect(triageModelCandidates("openai-codex:gpt-6-sol")).toEqual([
+      "openai-codex:gpt-6-luna",
+      "openai-codex:gpt-6-sol",
     ]);
-    expect(getBuiltinModel("openai-codex", "gpt-5.6-luna")).toMatchObject({
-      id: "gpt-5.6-luna",
+    expect(getBuiltinModel("openai-codex", "gpt-6-luna")).toMatchObject({
+      id: "gpt-6-luna",
       provider: "openai-codex",
     });
   });
