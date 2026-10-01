@@ -86,7 +86,8 @@
     "@workspace-skills/google-workspace": "workspace:*",
     "@workspace/google-workspace": "workspace:*",
     "@radix-ui/themes": "^3.3.0",
-    "@workspace/gmail": "workspace:*"
+    "@workspace/gmail": "workspace:*",
+    "@workspace/testkit": "workspace:*"
   },
   "type": "module",
   "devDependencies": {
@@ -94,5 +95,9 @@
     "@testing-library/react": "^16.3.2",
     "@vitest/browser": "^3.2.7",
     "vitest": "^3.2.7"
+  },
+  "exports": {
+    ".": "./index.tsx",
+    "./testkit-suite": "./testkit-suite.ts"
   }
 }

@@ -1,4 +1,8 @@
 import {
+  OperationNotice,
+  StatusBadge as OperationBadge,
+} from "@workspace/ui/feedback";
+import {
   Badge,
   Button,
   Callout,
@@ -13,7 +17,7 @@ import {
   PaperPlaneIcon,
   PersonIcon,
 } from "@radix-ui/react-icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type {
   GmailComposeCardState,
   GmailContactCandidate,
@@ -74,6 +78,8 @@ function RecipientField({
   disabled: boolean;
   chat: GmailChat;
 }) {
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [invalid, setInvalid] = useState(false);
   const [suggestions, setSuggestions] = useState<GmailContactCandidate[]>([]);
@@ -149,7 +155,13 @@ function RecipientField({
           background: "var(--color-surface)",
         }}
       >
-        <Text size="1" color="gray" style={{ minWidth: 24 }}>
+        <Text
+          as="label"
+          htmlFor={inputId}
+          size="1"
+          color="gray"
+          style={{ minWidth: 24 }}
+        >
           {label}
         </Text>
         {chips.map((chip) => (
@@ -166,9 +178,10 @@ function RecipientField({
                   cursor: "pointer",
                   padding: 4,
                 }}
-                onClick={() =>
-                  setChips(chips.filter((existing) => existing !== chip))
-                }
+                onClick={() => {
+                  setChips(chips.filter((existing) => existing !== chip));
+                  inputRef.current?.focus();
+                }}
               >
                 <Cross2Icon width={10} height={10} />
               </button>
@@ -176,7 +189,10 @@ function RecipientField({
           </Badge>
         ))}
         <input
+          id={inputId}
+          ref={inputRef}
           aria-label={label}
+          aria-invalid={invalid}
           value={text}
           disabled={disabled}
           placeholder={chips.length === 0 ? "name or address" : ""}
@@ -275,8 +291,19 @@ function RecipientField({
   );
 }
 
-export default function GmailCompose({
-  state,
+interface GmailComposeProps {
+  state: GmailComposeState;
+  expanded: boolean;
+  messageId: string;
+  chat: GmailChat;
+}
+
+export default function GmailCompose(props: GmailComposeProps) {
+  return <ComposeEditor key={props.messageId} {...props} />;
+}
+
+function ComposeEditor({
+  state: projectedState,
   expanded,
   messageId,
   chat,
@@ -286,6 +313,16 @@ export default function GmailCompose({
   messageId: string;
   chat: GmailChat;
 }) {
+  // Accepted send/discard receipts are irreversible facts from the same durable
+  // compose owner. Keep them visible even if its subsequent card publication fails.
+  const [accepted, setAccepted] = useState<{
+    messageId: string;
+    status: "sent" | "discarded";
+  } | null>(null);
+  const state =
+    accepted?.messageId === messageId
+      ? { ...projectedState, status: accepted.status, error: undefined }
+      : projectedState;
   const [to, setTo] = useState<string[]>(splitRecipients(state.to));
   const [cc, setCc] = useState<string[]>(splitRecipients(state.cc));
   const [bcc, setBcc] = useState<string[]>(splitRecipients(state.bcc));
@@ -293,7 +330,10 @@ export default function GmailCompose({
   const [subject, setSubject] = useState(state.subject ?? "");
   const [body, setBody] = useState(state.body ?? "");
   const [reviewingSend, setReviewingSend] = useState(false);
+  const subjectId = useId();
+  const bodyId = useId();
   const [busy, setBusy] = useState<string | null>(null);
+  const [localIntent, setLocalIntent] = useState<"warning" | "error">("error");
   const [localError, setLocalError] = useState<string | null>(null);
   // Cc/Bcc stay hidden until used — visible when they already have values.
   const [showCcBcc, setShowCcBcc] = useState(false);
@@ -356,7 +396,16 @@ export default function GmailCompose({
     setLocalError(null);
     try {
       const result = (await chat.callMethodByHandle("gmail", method, args)) as
-        | { error?: unknown; warning?: string; archiveWarning?: string }
+        | {
+            error?: unknown;
+            warning?: string;
+            archiveWarning?: string;
+            sent?: boolean;
+            id?: string;
+            discarded?: boolean;
+            saved?: boolean;
+            draftId?: string;
+          }
         | undefined;
       if (result?.error)
         throw new Error(
@@ -364,11 +413,24 @@ export default function GmailCompose({
             ? result.error
             : JSON.stringify(result.error),
         );
-      if (result?.warning || result?.archiveWarning)
+      if (
+        result?.sent === true &&
+        typeof result.id === "string" &&
+        result.id.trim()
+      ) {
+        setAccepted({ messageId, status: "sent" });
+        setReviewingSend(false);
+      } else if (result?.discarded === true) {
+        setAccepted({ messageId, status: "discarded" });
+      }
+      if (result?.warning || result?.archiveWarning) {
+        setLocalIntent("warning");
         setLocalError(
           [result.warning, result.archiveWarning].filter(Boolean).join("\n"),
         );
+      }
     } catch (err) {
+      setLocalIntent("error");
       setLocalError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
@@ -401,21 +463,23 @@ export default function GmailCompose({
       {["sending", "delivery-unknown", "saving"].includes(
         state.status ?? "",
       ) ? (
-        <Callout.Root color="amber" size="1">
-          <Callout.Text>
-            {state.status === "saving"
-              ? "Gmail draft confirmation is pending."
-              : "Delivery confirmation is pending. Check Gmail Sent before composing another message."}
+        <OperationNotice
+          intent="warning"
+          actions={
             <Button
               size="1"
               variant="soft"
               disabled={busy !== null}
               onClick={() => void call("checkCompose", { messageId }, "check")}
             >
-              {busy === "check" ? "Checking" : "Check status"}
+              {busy === "check" ? "Checking…" : "Check status"}
             </Button>
-          </Callout.Text>
-        </Callout.Root>
+          }
+        >
+          {state.status === "saving"
+            ? "Gmail draft confirmation is pending."
+            : "Delivery confirmation is pending. Check Gmail Sent before composing another message."}
+        </OperationNotice>
       ) : null}
       {state.status === "review" ? (
         <Callout.Root color="amber" size="1">
@@ -429,12 +493,9 @@ export default function GmailCompose({
         </Callout.Root>
       ) : null}
       {state.error || localError ? (
-        <Callout.Root color="red" size="1">
-          <Callout.Icon>
-            <ExclamationTriangleIcon />
-          </Callout.Icon>
-          <Callout.Text>{state.error ?? localError}</Callout.Text>
-        </Callout.Root>
+        <OperationNotice intent={state.error ? "error" : localIntent}>
+          {state.error ?? localError}
+        </OperationNotice>
       ) : null}
       {state.fromOptions && state.fromOptions.length > 1 ? (
         <Flex align="center" gap="2">
@@ -523,7 +584,11 @@ export default function GmailCompose({
           + Cc/Bcc
         </Button>
       )}
+      <Text as="label" htmlFor={subjectId} size="1" color="gray">
+        Subject
+      </Text>
       <input
+        id={subjectId}
         aria-label="Subject"
         value={subject}
         onChange={(event) => setSubject(event.target.value)}
@@ -540,7 +605,11 @@ export default function GmailCompose({
           color: "var(--gray-12)",
         }}
       />
+      <Text as="label" htmlFor={bodyId} size="1" color="gray">
+        Message body
+      </Text>
       <TextArea
+        id={bodyId}
         aria-label="Message body"
         value={body}
         onChange={(event) => setBody(event.target.value)}
@@ -600,7 +669,7 @@ export default function GmailCompose({
         <Button
           size={actionButtonSize}
           style={actionButtonStyle}
-          variant="ghost"
+          variant={compact ? "soft" : "ghost"}
           color="red"
           disabled={
             busy !== null || (disabled && state.status !== "discarding")
@@ -627,5 +696,25 @@ function StatusBadge({
         : status === "discarded"
           ? "gray"
           : "gray";
-  return <Badge color={color}>{status}</Badge>;
+  const label = {
+    drafting: "Drafting",
+    "delivery-unknown": "Checking delivery",
+    saving: "Saving draft",
+    sending: "Sending",
+    sent: "Sent",
+    saved: "Draft saved",
+    discarded: "Discarded",
+    discarding: "Discarding draft",
+    review: "Ready for review",
+    error: "Needs attention",
+  }[status];
+  return (
+    <OperationBadge
+      intent={
+        color === "green" ? "success" : color === "red" ? "error" : "neutral"
+      }
+    >
+      {label ?? status}
+    </OperationBadge>
+  );
 }

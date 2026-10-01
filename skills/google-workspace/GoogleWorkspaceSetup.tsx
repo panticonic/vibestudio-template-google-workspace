@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -12,7 +12,13 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { GlobeIcon, OpenInNewWindowIcon } from "@radix-ui/react-icons";
-import { openExternal, openPanel } from "@workspace/runtime";
+import { OperationNotice } from "@workspace/ui/feedback";
+import {
+  openExternal,
+  openPanel,
+  panel,
+  buildPanelLink,
+} from "@workspace/runtime";
 import {
   configureGoogleOAuthClient,
   connectGoogle,
@@ -25,7 +31,7 @@ import {
   GOOGLE_WORKSPACE_BROAD_SCOPES,
 } from "@workspace/google-workspace/providers";
 interface GoogleWorkspaceSetupProps {
-  onStatus?: (status: GoogleOnboardingStatus) => void;
+  onStatus?: (status: GoogleOnboardingStatus | null) => void;
 }
 
 const STEPS = [
@@ -55,7 +61,7 @@ const STEPS = [
 ] as const;
 
 function statusLabel(status: GoogleOnboardingStatus | null): string {
-  if (!status) return "Checking…";
+  if (!status) return "Status unavailable";
   if (status.stage === "verified")
     return `Connected${status.email ? ` as ${status.email}` : ""}`;
   if (status.stage === "connected") return "Connected, verification needed";
@@ -75,35 +81,54 @@ export default function GoogleWorkspaceSetup({
       : [...GOOGLE_WORKSPACE_BROAD_SCOPES];
   const [status, setStatus] = useState<GoogleOnboardingStatus | null>(null);
   const [busy, setBusy] = useState<string | null>("status");
+  const [messageIntent, setMessageIntent] = useState<"error" | "success">(
+    "success",
+  );
+  const busyOwner = useRef<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = async (verify = false) => {
-    const next = await getGoogleOnboardingStatus({ verify });
+    let next: GoogleOnboardingStatus;
+    try {
+      next = await getGoogleOnboardingStatus({ verify });
+    } catch (error) {
+      setStatus(null);
+      onStatus?.(null);
+      throw error;
+    }
     setStatus(next);
     onStatus?.(next);
     if (next.error) throw new Error(next.error);
     return next;
   };
 
-  useEffect(() => {
-    void refresh(true)
-      .catch((error) =>
-        setMessage(error instanceof Error ? error.message : String(error)),
-      )
-      .finally(() => setBusy(null));
-  }, []);
-
   const run = async (action: string, operation: () => Promise<void>) => {
+    if (busyOwner.current !== null) return;
+    busyOwner.current = action;
     setBusy(action);
     setMessage(null);
+    setMessageIntent("success");
     try {
       await operation();
     } catch (error) {
+      setMessageIntent("error");
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
+      busyOwner.current = null;
       setBusy(null);
     }
   };
+
+  useEffect(() => {
+    const check = () =>
+      void run("status", async () => {
+        await refresh(true);
+      });
+    check();
+    // Returning from account setup re-observes its owner without restarting a
+    // connection or interrupting a currently pending trusted prompt.
+    return panel.onFocus(check);
+  }, []);
 
   const openStep = (url: string) =>
     run(`open:${url}`, async () => {
@@ -181,7 +206,9 @@ export default function GoogleWorkspaceSetup({
         <Badge color={connected ? "green" : "blue"} variant="soft">
           {status?.stage === "verified" && !connected
             ? "More permissions needed"
-            : statusLabel(status)}
+            : busy === "status"
+              ? "Checking…"
+              : statusLabel(status)}
         </Badge>
       </Flex>
 
@@ -213,80 +240,95 @@ export default function GoogleWorkspaceSetup({
       ))}
       {!connected ? (
         <>
-          <Box>
-            <Text size="2" weight="bold">
-              Where should setup pages open?
-            </Text>
-            <Text as="p" size="1" color="gray">
-              Use your normal browser for existing sign-in, passkeys, or a
-              password manager.
-            </Text>
-            <Flex gap="2" mt="2" wrap="wrap">
-              <Button
-                variant={browser === "internal" ? "solid" : "soft"}
-                onClick={() => setBrowser("internal")}
-              >
-                <GlobeIcon /> Here
-              </Button>
-              <Button
-                variant={browser === "external" ? "solid" : "soft"}
-                onClick={() => setBrowser("external")}
-              >
-                <OpenInNewWindowIcon /> My browser
-              </Button>
-            </Flex>
-          </Box>
-
-          <Grid
-            gap="2"
-            style={{
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))",
-            }}
-          >
-            {STEPS.map((step, index) => (
-              <Box
-                key={step.url}
-                style={{
-                  border: "1px solid var(--gray-6)",
-                  borderRadius: 8,
-                  padding: 12,
-                }}
-              >
-                <Flex
-                  direction="column"
-                  gap="2"
-                  height="100%"
-                  justify="between"
-                >
-                  <Box>
-                    <Text size="2" weight="bold">
-                      {index + 1}. {step.title}
-                    </Text>
-                    <Text as="p" size="1" color="gray">
-                      {index === 1 && workflow === "gmail"
-                        ? "Enable the Gmail API. You can enable other APIs later."
-                        : step.description}
-                    </Text>
-                  </Box>
+          {status?.configured ? (
+            <OperationNotice intent="info">
+              Your Desktop app details are saved. Continue by connecting Google;
+              you can change the app details below if needed.
+            </OperationNotice>
+          ) : null}
+          {!status?.configured ? (
+            <>
+              <Box>
+                <Text size="2" weight="bold">
+                  Where should setup pages open?
+                </Text>
+                <Text as="p" size="1" color="gray">
+                  Use your normal browser for existing sign-in, passkeys, or a
+                  password manager.
+                </Text>
+                <Flex gap="2" mt="2" wrap="wrap">
                   <Button
-                    size="1"
-                    variant="soft"
+                    variant={browser === "internal" ? "solid" : "soft"}
+                    aria-pressed={browser === "internal"}
                     disabled={busy !== null}
-                    onClick={() => void openStep(step.url)}
+                    onClick={() => setBrowser("internal")}
                   >
-                    Open this step
+                    <GlobeIcon /> Here
+                  </Button>
+                  <Button
+                    variant={browser === "external" ? "solid" : "soft"}
+                    aria-pressed={browser === "external"}
+                    disabled={busy !== null}
+                    onClick={() => setBrowser("external")}
+                  >
+                    <OpenInNewWindowIcon /> My browser
                   </Button>
                 </Flex>
               </Box>
-            ))}
-          </Grid>
 
-          <Text size="1" color="gray">
-            On the consent screen, publish to Production so Google does not
-            expire the refresh token after seven days. The app can remain
-            unverified for personal use.
-          </Text>
+              <Grid
+                gap="2"
+                style={{
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))",
+                }}
+              >
+                {STEPS.map((step, index) => (
+                  <Box
+                    key={step.url}
+                    style={{
+                      border: "1px solid var(--gray-6)",
+                      borderRadius: 8,
+                      padding: 12,
+                    }}
+                  >
+                    <Flex
+                      direction="column"
+                      gap="2"
+                      height="100%"
+                      justify="between"
+                    >
+                      <Box>
+                        <Text size="2" weight="bold">
+                          {index + 1}. {step.title}
+                        </Text>
+                        <Text as="p" size="1" color="gray">
+                          {index === 1 && workflow === "gmail"
+                            ? "Enable the Gmail API. You can enable other APIs later."
+                            : step.description}
+                        </Text>
+                      </Box>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        disabled={busy !== null}
+                        aria-label={`Open step ${index + 1}: ${step.title}`}
+                        onClick={() => void openStep(step.url)}
+                      >
+                        Open this step
+                      </Button>
+                    </Flex>
+                  </Box>
+                ))}
+              </Grid>
+
+              <Text size="1" color="gray">
+                On the consent screen, publish to Production so Google does not
+                expire the refresh token after seven days. The app can remain
+                unverified for personal use.
+              </Text>
+            </>
+          ) : null}
 
           <Separator size="4" />
 
@@ -298,10 +340,12 @@ export default function GoogleWorkspaceSetup({
             >
               {busy === "configure"
                 ? "Opening trusted prompt…"
-                : "Save Desktop app details"}
+                : status?.configured
+                  ? "Change Desktop app details"
+                  : "Save Desktop app details"}
             </Button>
             <Button
-              disabled={busy !== null || status?.stage === "needs-setup"}
+              disabled={busy !== null || !status?.readyToConnect}
               onClick={() => void connect()}
             >
               {busy === "connect" ? "Connecting…" : "Connect Google"}
@@ -328,11 +372,48 @@ export default function GoogleWorkspaceSetup({
         </Flex>
       ) : null}
 
-      {message ? (
-        <Text size="1" role="status">
-          {message}
-        </Text>
+      {!status && busy === null ? (
+        <Button
+          variant="soft"
+          onClick={() =>
+            void run("status", async () => {
+              await refresh(true);
+            })
+          }
+        >
+          Check connection
+        </Button>
       ) : null}
+      {busy ? (
+        <OperationNotice>
+          {busy === "connect"
+            ? "Connecting Google. Complete the consent request in your browser; this step stays open while you decide."
+            : busy === "configure"
+              ? "Waiting for your Desktop app details in the trusted prompt."
+              : busy === "verify" || busy === "status"
+                ? "Checking your Google connection…"
+                : "Opening the setup page…"}
+        </OperationNotice>
+      ) : null}
+      {message ? (
+        <OperationNotice intent={messageIntent}>{message}</OperationNotice>
+      ) : null}
+      <Flex gap="3" wrap="wrap">
+        <a
+          href={buildPanelLink("about/credentials", {
+            workspace: { role: "personal" },
+          })}
+        >
+          Manage connected accounts
+        </a>
+        <a
+          href={buildPanelLink("about/permissions", {
+            workspace: { role: "system" },
+          })}
+        >
+          Review saved permissions
+        </a>
+      </Flex>
     </Flex>
   );
 }
