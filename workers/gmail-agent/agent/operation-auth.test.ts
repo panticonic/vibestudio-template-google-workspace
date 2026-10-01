@@ -6,19 +6,16 @@ import { failGmailOperation } from "./error-policy.js";
 describe("gmail operation auth metadata", () => {
   it("maps handler operation names to required Google scopes", () => {
     expect(operationAuth("gmail_modify")?.requiredScopes).toContain(
-      "https://www.googleapis.com/auth/gmail.modify"
+      "https://www.googleapis.com/auth/gmail.modify",
     );
     expect(operationAuth("gmail_draft")?.requiredScopes).toEqual(
       expect.arrayContaining([
         "https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/gmail.settings.basic",
-      ])
+      ]),
     );
     expect(operationAuth("gmail_contacts")?.requiredScopes).toEqual(
-      expect.arrayContaining([
-        "https://www.googleapis.com/auth/contacts",
-        "https://www.googleapis.com/auth/contacts.other.readonly",
-      ])
+      expect.arrayContaining(["https://www.googleapis.com/auth/gmail.modify"]),
     );
     expect(operationAuth("modify")).toBeUndefined();
     expect(operationAuth("draft")).toBeUndefined();
@@ -27,7 +24,7 @@ describe("gmail operation auth metadata", () => {
   it("turns missing-scope failures into concrete reconnect/setup guidance", async () => {
     const action = missingScopeActionForOperation("resolveContact");
     expect(action).toContain("Reconnect Google Workspace");
-    expect(action).toContain("People API");
+    expect(action).toContain("Gmail API");
 
     const result = await failGmailOperation(
       {
@@ -37,12 +34,12 @@ describe("gmail operation auth metadata", () => {
       },
       "ch-1",
       "resolveContact",
-      new GmailApiError("missing scope", "forbidden", { status: 403 })
+      new GmailApiError("missing scope", "forbidden", { status: 403 }),
     );
 
     expect(result.error).toMatchObject({
       code: "forbidden",
-      action: expect.stringContaining("contacts.other.readonly"),
+      action: expect.stringContaining("gmail.modify"),
     });
   });
 });

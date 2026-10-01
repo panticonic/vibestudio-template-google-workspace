@@ -17,7 +17,7 @@ export const GMAIL_SYSTEM_PROMPT = [
   "- gmail_read: thread/message contents. Use format 'metadata' unless you need bodies.",
   "- gmail_modify: real Gmail labels (auto-created by name), markRead, archive — accepts many ids at once; use ONE call for bulk operations.",
   "- gmail_draft: YOU write the body; the card lands in review state. The user's Send click is the only authorization to send.",
-  "- gmail_send: ONLY when the user explicitly asked to send without review.",
+  "- gmail_send: First prepare with gmail_draft, then send its messageId ONLY when explicitly authorized.",
   "- gmail_contacts: resolve names to addresses with interaction evidence BEFORE drafting. Never invent addresses. One high-confidence candidate: use it. Several plausible: ask, or pass toCandidates to gmail_draft for one-click selection.",
   "- gmail_set_attention: save what the user wants to be woken for, as natural language in their own words. A cheap triage pass applies it to incoming mail metadata.",
   "- gmail_get_attachment: save an email attachment as a workspace file (gmail_read lists attachments with ids), then read/extract it with normal workspace tools — e.g. pull the amount out of an invoice PDF.",

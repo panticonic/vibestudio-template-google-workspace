@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GOOGLE_DRIVE_SCOPES } from "@workspace/google-workspace/providers";
 import type { StoredCredentialSummary } from "@workspace/runtime";
 
 const runtimeMock = vi.hoisted(() => ({
@@ -31,6 +32,7 @@ import {
 
 const googleWorkspaceStatus: GoogleDriveOnboardingStatus["googleWorkspace"] = {
   stage: "verified",
+  verification: { valid: true, scopes: [...GOOGLE_DRIVE_SCOPES] },
   configured: true,
   readyToConnect: true,
   connected: true,
@@ -64,18 +66,28 @@ const googleCredential: StoredCredentialSummary = {
 describe("google-drive skill facade", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([googleCredential]);
+    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([
+      googleCredential,
+    ]);
     runtimeMock.credentials.fetch.mockResolvedValue(
       new Response(JSON.stringify({ email: "user@example.com" }), {
         status: 200,
         headers: { "content-type": "application/json" },
-      })
+      }),
     );
-    runtimeMock.credentials.resolveCredential.mockResolvedValue(googleCredential);
-    googleWorkspaceMock.getGoogleOnboardingStatus.mockResolvedValue(googleWorkspaceStatus);
+    runtimeMock.credentials.resolveCredential.mockResolvedValue(
+      googleCredential,
+    );
+    googleWorkspaceMock.getGoogleOnboardingStatus.mockResolvedValue(
+      googleWorkspaceStatus,
+    );
     driveClientMock.createDriveClient.mockReturnValue({
-      handle: vi.fn().mockResolvedValue({ credentialId: "cred-google", fetch: vi.fn() }),
-      about: vi.fn().mockResolvedValue({ user: { emailAddress: "user@example.com" } }),
+      handle: vi
+        .fn()
+        .mockResolvedValue({ credentialId: "cred-google", fetch: vi.fn() }),
+      about: vi
+        .fn()
+        .mockResolvedValue({ user: { emailAddress: "user@example.com" } }),
     });
   });
 
@@ -91,7 +103,9 @@ describe("google-drive skill facade", () => {
 
     expect(status.stage).toBe("needs-google-workspace");
     expect(status.connected).toBe(false);
-    expect(status.nextActions.join(" ")).toContain("Google Workspace onboarding");
+    expect(status.nextActions.join(" ")).toContain(
+      "Google Workspace onboarding",
+    );
   });
 
   it("reports ready when Google Workspace is verified", async () => {
@@ -103,16 +117,35 @@ describe("google-drive skill facade", () => {
     expect(status.credentialId).toBe("cred-google");
   });
 
+  it("keeps a Gmail-only credential out of the Drive-ready state", async () => {
+    googleWorkspaceMock.getGoogleOnboardingStatus.mockResolvedValue({
+      ...googleWorkspaceStatus,
+      verification: {
+        valid: true,
+        scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+      },
+    });
+    const status = await getGoogleDriveOnboardingStatus();
+    expect(status.stage).toBe("needs-google-workspace");
+    expect(status.nextActions.join(" ")).toContain("GOOGLE_DRIVE_SCOPES");
+    expect(driveClientMock.createDriveClient).not.toHaveBeenCalled();
+  });
+
   it("creates a Drive client from the runtime credentials", () => {
     createGoogleDriveClient({ credentialId: "cred-google" });
 
-    expect(driveClientMock.createDriveClient).toHaveBeenCalledWith(runtimeMock.credentials, {
-      credentialId: "cred-google",
-    });
+    expect(driveClientMock.createDriveClient).toHaveBeenCalledWith(
+      runtimeMock.credentials,
+      {
+        credentialId: "cred-google",
+      },
+    );
   });
 
   it("verifies Drive access with a live about call", async () => {
-    const result = await verifyGoogleDriveAccess({ credentialId: "cred-google" });
+    const result = await verifyGoogleDriveAccess({
+      credentialId: "cred-google",
+    });
 
     expect(result).toMatchObject({
       valid: true,
@@ -124,11 +157,15 @@ describe("google-drive skill facade", () => {
 
   it("reports an error status when live Drive verification fails", async () => {
     driveClientMock.createDriveClient.mockReturnValueOnce({
-      handle: vi.fn().mockResolvedValue({ credentialId: "cred-google", fetch: vi.fn() }),
+      handle: vi
+        .fn()
+        .mockResolvedValue({ credentialId: "cred-google", fetch: vi.fn() }),
       about: vi
         .fn()
         .mockRejectedValue(
-          new Error("Google Drive API 400 Bad Request: Invalid field selection rootFolderId")
+          new Error(
+            "Google Drive API 400 Bad Request: Invalid field selection rootFolderId",
+          ),
         ),
     });
 
@@ -140,18 +177,21 @@ describe("google-drive skill facade", () => {
     expect(status.credentialId).toBe("cred-google");
     expect(status.drive).toMatchObject({
       valid: false,
-      error: "Google Drive API 400 Bad Request: Invalid field selection rootFolderId",
+      error:
+        "Google Drive API 400 Bad Request: Invalid field selection rootFolderId",
     });
     expect(status.error).toBe(
-      "Google Drive API 400 Bad Request: Invalid field selection rootFolderId"
+      "Google Drive API 400 Bad Request: Invalid field selection rootFolderId",
     );
     expect(status.warnings).toEqual([
       "Google Drive verification failed: Google Drive API 400 Bad Request: Invalid field selection rootFolderId",
     ]);
     expect(status.nextActions.join(" ")).toContain(
-      "Fix the reported Google Workspace or Drive verification error"
+      "Fix the reported Google Workspace or Drive verification error",
     );
-    expect(status.nextActions.join(" ")).not.toContain("start browsing or syncing files");
+    expect(status.nextActions.join(" ")).not.toContain(
+      "start browsing or syncing files",
+    );
   });
 
   it("formats onboarding status compactly", () => {
@@ -168,6 +208,8 @@ describe("google-drive skill facade", () => {
       warnings: [],
     };
 
-    expect(formatGoogleDriveOnboardingStatus(status)).toContain("Google Drive stage: ready");
+    expect(formatGoogleDriveOnboardingStatus(status)).toContain(
+      "Google Drive stage: ready",
+    );
   });
 });

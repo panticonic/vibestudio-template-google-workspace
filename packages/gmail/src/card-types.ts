@@ -68,7 +68,10 @@ export interface GmailThreadCardState extends GmailThreadState {
 export type GmailComposeStatus =
   | "drafting"
   | "review"
+  | "saving"
   | "sending"
+  | "delivery-unknown"
+  | "discarding"
   | "sent"
   | "saved"
   | "error"
@@ -97,6 +100,9 @@ export interface GmailComposeCardState {
   subject?: string;
   body?: string;
   draftId?: string;
+  /** Stable MIME identity retained while an external result is unresolved. */
+  rfcMessageId?: string;
+  sentMessageId?: string;
   threadId?: string;
   sourceThreadId?: string;
   status: GmailComposeStatus;
@@ -198,7 +204,8 @@ const THREAD_CARD_SCHEMA = {
   required: ["threadId"],
 } as const;
 
-export const GMAIL_THREAD_STATE_SCHEMA: Record<string, unknown> = THREAD_CARD_SCHEMA;
+export const GMAIL_THREAD_STATE_SCHEMA: Record<string, unknown> =
+  THREAD_CARD_SCHEMA;
 
 /** Thread updates are reducer patches (kind-tagged) or partial states. */
 export const GMAIL_THREAD_UPDATE_SCHEMA: Record<string, unknown> = {
@@ -305,7 +312,20 @@ export const GMAIL_COMPOSE_STATE_SCHEMA: Record<string, unknown> = {
     draftId: { type: "string" },
     threadId: { type: "string" },
     sourceThreadId: { type: "string" },
-    status: { enum: ["drafting", "review", "sending", "sent", "saved", "error", "discarded"] },
+    status: {
+      enum: [
+        "drafting",
+        "review",
+        "saving",
+        "sending",
+        "delivery-unknown",
+        "discarding",
+        "sent",
+        "saved",
+        "error",
+        "discarded",
+      ],
+    },
     error: { type: "string" },
     toCandidates: {
       type: "array",
@@ -330,7 +350,20 @@ export const GMAIL_COMPOSE_UPDATE_SCHEMA: Record<string, unknown> = {
   type: "object",
   additionalProperties: true,
   properties: {
-    status: { enum: ["drafting", "review", "sending", "sent", "saved", "error", "discarded"] },
+    status: {
+      enum: [
+        "drafting",
+        "review",
+        "saving",
+        "sending",
+        "delivery-unknown",
+        "discarding",
+        "sent",
+        "saved",
+        "error",
+        "discarded",
+      ],
+    },
     error: { type: "string" },
     draftId: { type: "string" },
     body: { type: "string" },

@@ -1,7 +1,18 @@
-import type { CredentialClient, UrlCredentialHandle } from "@workspace/runtime/credentials";
-import { bindingAudience, googleWorkspaceCredential } from "@workspace/google-workspace/providers";
+import type {
+  CredentialClient,
+  UrlCredentialHandle,
+} from "@workspace/runtime/credentials";
+import {
+  bindingAudience,
+  googleWorkspaceCredential,
+} from "@workspace/google-workspace/providers";
 
-import { BatchHttpError, executeBatch, type BatchPart, type BatchPartResult } from "./batch.js";
+import {
+  BatchHttpError,
+  executeBatch,
+  type BatchPart,
+  type BatchPartResult,
+} from "./batch.js";
 
 const GMAIL_API_PATH_PREFIX = "/gmail/v1/users/me";
 const GMAIL_API_BASE = `https://gmail.googleapis.com${GMAIL_API_PATH_PREFIX}`;
@@ -17,7 +28,13 @@ export type GmailApiErrorCode =
   | "network"
   | "server";
 
-export type GmailResourceKind = "thread" | "message" | "draft" | "history" | "label" | "profile";
+export type GmailResourceKind =
+  | "thread"
+  | "message"
+  | "draft"
+  | "history"
+  | "label"
+  | "profile";
 
 /**
  * Typed Gmail API failure. Every Gmail call failure surfaces as one of these
@@ -33,7 +50,7 @@ export class GmailApiError extends Error {
       status?: number;
       retryAfterMs?: number;
       resource?: GmailResourceKind;
-    } = {}
+    } = {},
   ) {
     super(message);
     this.name = "GmailApiError";
@@ -50,8 +67,13 @@ export class GmailApiError extends Error {
   }
 }
 
-export function isGmailApiError(err: unknown, code?: GmailApiErrorCode): err is GmailApiError {
-  return err instanceof GmailApiError && (code === undefined || err.code === code);
+export function isGmailApiError(
+  err: unknown,
+  code?: GmailApiErrorCode,
+): err is GmailApiError {
+  return (
+    err instanceof GmailApiError && (code === undefined || err.code === code)
+  );
 }
 
 function resourceFromPath(path: string): GmailResourceKind | undefined {
@@ -66,7 +88,7 @@ function resourceFromPath(path: string): GmailResourceKind | undefined {
 
 function classifyHttpFailure(
   status: number,
-  bodyText: string
+  bodyText: string,
 ): { code: GmailApiErrorCode; retryAfterMs?: number } {
   if (status === 401) return { code: "auth-expired" };
   if (status === 403) {
@@ -85,7 +107,7 @@ function httpFailureToError(
   status: number,
   statusText: string,
   bodyText: string,
-  opts: { retryAfterHeader: string | null; resource?: GmailResourceKind }
+  opts: { retryAfterHeader: string | null; resource?: GmailResourceKind },
 ): GmailApiError {
   const { code } = classifyHttpFailure(status, bodyText);
   const retryAfterMs =
@@ -101,7 +123,7 @@ function httpFailureToError(
       status,
       ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
       ...(opts.resource ? { resource: opts.resource } : {}),
-    }
+    },
   );
 }
 
@@ -197,7 +219,10 @@ export interface GmailHistoryEntry {
   messagesAdded?: Array<{ message: GmailMessage }>;
   messagesDeleted?: Array<{ message: GmailHistoryMessageRef }>;
   labelsAdded?: Array<{ message: GmailHistoryMessageRef; labelIds?: string[] }>;
-  labelsRemoved?: Array<{ message: GmailHistoryMessageRef; labelIds?: string[] }>;
+  labelsRemoved?: Array<{
+    message: GmailHistoryMessageRef;
+    labelIds?: string[];
+  }>;
 }
 
 export interface GmailHistoryResponse {
@@ -207,7 +232,11 @@ export interface GmailHistoryResponse {
   [key: string]: unknown;
 }
 
-export type GmailHistoryType = "messageAdded" | "messageDeleted" | "labelAdded" | "labelRemoved";
+export type GmailHistoryType =
+  | "messageAdded"
+  | "messageDeleted"
+  | "labelAdded"
+  | "labelRemoved";
 
 export interface ListHistoryOptions {
   startHistoryId: string;
@@ -363,11 +392,14 @@ function normalizeContactResults(data: PeopleSearchResponse): GoogleContact[] {
   const seen = new Map<string, GoogleContact>();
   for (const result of data.results ?? []) {
     const person = result.person ?? {};
-    const displayName = person.names?.find((name) => name.displayName)?.displayName;
+    const displayName = person.names?.find(
+      (name) => name.displayName,
+    )?.displayName;
     for (const address of person.emailAddresses ?? []) {
       if (!address.value) continue;
       const email = address.value.toLowerCase();
-      if (!seen.has(email)) seen.set(email, { email, ...(displayName ? { displayName } : {}) });
+      if (!seen.has(email))
+        seen.set(email, { email, ...(displayName ? { displayName } : {}) });
     }
   }
   return [...seen.values()];
@@ -379,33 +411,45 @@ export interface GmailClient {
   listSendAs(): Promise<GmailSendAsAlias[]>;
   listLabels(): Promise<GmailLabel[]>;
   createLabel(params: CreateLabelParams): Promise<GmailLabel>;
-  updateLabel(labelId: string, params: Partial<CreateLabelParams>): Promise<GmailLabel>;
+  updateLabel(
+    labelId: string,
+    params: Partial<CreateLabelParams>,
+  ): Promise<GmailLabel>;
   deleteLabel(labelId: string): Promise<void>;
   listMessages(opts?: ListMessagesOptions): Promise<ListMessagesResult>;
   /** True thread-level listing (GET /threads) — refs only, no hydration. */
   listThreads(opts?: ListThreadsOptions): Promise<ListThreadsResult>;
-  search(q: string, opts?: Omit<ListMessagesOptions, "q">): Promise<ListMessagesResult>;
+  search(
+    q: string,
+    opts?: Omit<ListMessagesOptions, "q">,
+  ): Promise<ListMessagesResult>;
   listHistory(opts: ListHistoryOptions): Promise<GmailHistoryResponse>;
   syncSince(historyId: string): Promise<GmailSyncDiff>;
   /** Start (or renew) push notifications to a Cloud Pub/Sub topic. */
   watch(params: WatchParams): Promise<WatchResult>;
   /** Stop push notifications for this mailbox. */
   stopWatch(): Promise<void>;
-  getMessage(messageId: string, opts?: GetMessageOptions): Promise<GmailMessage>;
+  getMessage(
+    messageId: string,
+    opts?: GetMessageOptions,
+  ): Promise<GmailMessage>;
   getThread(threadId: string, opts?: GetThreadOptions): Promise<GmailThread>;
   /** Batched GET /messages/{id} via the multipart batch endpoint. */
   batchGetMessages(
     messageIds: string[],
-    opts?: GetMessageOptions
+    opts?: GetMessageOptions,
   ): Promise<Array<GmailBatchItem<GmailMessage>>>;
   /** Batched GET /threads/{id} via the multipart batch endpoint. */
   batchGetThreads(
     threadIds: string[],
-    opts?: GetThreadOptions
+    opts?: GetThreadOptions,
   ): Promise<Array<GmailBatchItem<GmailThread>>>;
   /** Native POST /messages/batchModify (≤1000 ids, returns no body). */
   batchModify(params: BatchModifyParams): Promise<void>;
-  getAttachment(messageId: string, attachmentId: string): Promise<GmailAttachmentBody>;
+  getAttachment(
+    messageId: string,
+    attachmentId: string,
+  ): Promise<GmailAttachmentBody>;
   sendMessage(params: SendMessageParams): Promise<GmailMessage>;
   createDraft(params: CreateDraftParams): Promise<GmailDraft>;
   listDrafts(opts?: {
@@ -416,13 +460,21 @@ export interface GmailClient {
   getDraft(draftId: string): Promise<GmailDraft>;
   updateDraft(draftId: string, params: CreateDraftParams): Promise<GmailDraft>;
   deleteDraft(draftId: string): Promise<void>;
-  sendDraft(draftId: string): Promise<GmailMessage>;
+  sendDraft(draftId: string, params?: SendMessageParams): Promise<GmailMessage>;
   modifyLabels(params: ModifyLabelsParams): Promise<GmailMessage | GmailThread>;
-  searchContacts(query: string, opts?: SearchContactsOptions): Promise<GoogleContact[]>;
-  searchOtherContacts(query: string, opts?: SearchContactsOptions): Promise<GoogleContact[]>;
+  searchContacts(
+    query: string,
+    opts?: SearchContactsOptions,
+  ): Promise<GoogleContact[]>;
+  searchOtherContacts(
+    query: string,
+    opts?: SearchContactsOptions,
+  ): Promise<GoogleContact[]>;
 }
 
-function toQueryParams(params?: Record<string, string | number | string[] | undefined>): string {
+function toQueryParams(
+  params?: Record<string, string | number | string[] | undefined>,
+): string {
   if (!params) return "";
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -439,14 +491,20 @@ function toQueryParams(params?: Record<string, string | number | string[] | unde
 
 function sanitizeHeaderValue(field: string, value: string): string {
   if (/[\r\n]/.test(value)) {
-    throw new Error(`Gmail sendMessage: ${field} value contains CR/LF - header injection rejected`);
+    throw new GmailApiError(
+      `Gmail sendMessage: ${field} value contains CR/LF - header injection rejected`,
+      "invalid-request",
+    );
   }
   return value;
 }
 
 function sanitizeHeaderName(name: string): string {
   if (!/^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/.test(name)) {
-    throw new Error(`Gmail sendMessage: invalid header name "${name}"`);
+    throw new GmailApiError(
+      `Gmail sendMessage: invalid header name "${name}"`,
+      "invalid-request",
+    );
   }
   return name;
 }
@@ -468,18 +526,26 @@ function encodeBase64Url(value: string): string {
 
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 function buildRawMessage(params: SendMessageParams): string {
-  const f = (field: string, value: string): string => sanitizeHeaderValue(field, value);
+  const f = (field: string, value: string): string =>
+    sanitizeHeaderValue(field, value);
   const rawLines = [
     params.from ? `From: ${f("From", params.from)}` : undefined,
     `To: ${f("To", joinAddressList(params.to) ?? "")}`,
     params.cc ? `Cc: ${f("Cc", joinAddressList(params.cc) ?? "")}` : undefined,
-    params.bcc ? `Bcc: ${f("Bcc", joinAddressList(params.bcc) ?? "")}` : undefined,
+    params.bcc
+      ? `Bcc: ${f("Bcc", joinAddressList(params.bcc) ?? "")}`
+      : undefined,
     params.replyTo ? `Reply-To: ${f("Reply-To", params.replyTo)}` : undefined,
-    params.inReplyTo ? `In-Reply-To: ${f("In-Reply-To", params.inReplyTo)}` : undefined,
+    params.inReplyTo
+      ? `In-Reply-To: ${f("In-Reply-To", params.inReplyTo)}`
+      : undefined,
     params.references
       ? `References: ${f("References", joinAddressList(params.references) ?? "")}`
       : undefined,
@@ -499,7 +565,7 @@ function buildRawMessage(params: SendMessageParams): string {
 
 function appendThread<T extends { raw: string }>(
   payload: T,
-  threadId?: string
+  threadId?: string,
 ): T & { threadId?: string } {
   return threadId ? { ...payload, threadId } : payload;
 }
@@ -514,7 +580,9 @@ function emptyThreadDiff(threadId: string): GmailThreadDiff {
   };
 }
 
-function aggregateHistoryByThread(history: GmailHistoryResponse): GmailThreadDiff[] {
+function aggregateHistoryByThread(
+  history: GmailHistoryResponse,
+): GmailThreadDiff[] {
   const byThread = new Map<string, GmailThreadDiff>();
   const get = (threadId: string): GmailThreadDiff => {
     let diff = byThread.get(threadId);
@@ -527,7 +595,8 @@ function aggregateHistoryByThread(history: GmailHistoryResponse): GmailThreadDif
 
   for (const entry of history.history ?? []) {
     for (const added of entry.messagesAdded ?? []) {
-      if (added.message?.threadId) get(added.message.threadId).messagesAdded.push(added.message);
+      if (added.message?.threadId)
+        get(added.message.threadId).messagesAdded.push(added.message);
     }
     for (const deleted of entry.messagesDeleted ?? []) {
       if (deleted.message?.threadId)
@@ -556,7 +625,7 @@ function aggregateHistoryByThread(history: GmailHistoryResponse): GmailThreadDif
 
 export function createGmailClient(
   credentials: CredentialClient,
-  opts: { credentialId?: string } = {}
+  opts: { credentialId?: string } = {},
 ): GmailClient {
   let handlePromise: Promise<UrlCredentialHandle> | null = null;
   const handle = (): Promise<UrlCredentialHandle> => {
@@ -578,7 +647,7 @@ export function createGmailClient(
   const fetchRaw = async (
     url: string,
     init?: RequestInit,
-    resource?: GmailResourceKind
+    resource?: GmailResourceKind,
   ): Promise<Response> => {
     let auth: UrlCredentialHandle;
     try {
@@ -587,7 +656,7 @@ export function createGmailClient(
       throw new GmailApiError(
         `Gmail credential unavailable: ${err instanceof Error ? err.message : String(err)}`,
         "credential-missing",
-        { ...(resource ? { resource } : {}) }
+        { ...(resource ? { resource } : {}) },
       );
     }
     const headers = new Headers(init?.headers);
@@ -602,7 +671,7 @@ export function createGmailClient(
       throw new GmailApiError(
         `Gmail API request failed: ${err instanceof Error ? err.message : String(err)}`,
         "network",
-        { ...(resource ? { resource } : {}) }
+        { ...(resource ? { resource } : {}) },
       );
     }
     if (!response.ok) {
@@ -618,7 +687,7 @@ export function createGmailClient(
   const fetchJson = async <T>(
     url: string,
     init?: RequestInit,
-    resource?: GmailResourceKind
+    resource?: GmailResourceKind,
   ): Promise<T> => {
     const response = await fetchRaw(url, init, resource);
     return (await response.json()) as T;
@@ -628,13 +697,18 @@ export function createGmailClient(
     fetchJson<T>(`${GMAIL_API_BASE}${path}`, init, resourceFromPath(path));
 
   /** Like apiFetch for endpoints that return 204/empty bodies. */
-  const apiFetchVoid = async (path: string, init?: RequestInit): Promise<void> => {
+  const apiFetchVoid = async (
+    path: string,
+    init?: RequestInit,
+  ): Promise<void> => {
     await fetchRaw(`${GMAIL_API_BASE}${path}`, init, resourceFromPath(path));
   };
 
   // ── batch ──────────────────────────────────────────────────────────────────
 
-  const runBatch = async (parts: BatchPart[]): Promise<Map<string, BatchPartResult>> => {
+  const runBatch = async (
+    parts: BatchPart[],
+  ): Promise<Map<string, BatchPartResult>> => {
     try {
       return await executeBatch((url, init) => fetchRaw(url, init), parts);
     } catch (err) {
@@ -649,19 +723,22 @@ export function createGmailClient(
     }
   };
 
-  const batchPartError = (part: BatchPartResult, resource: GmailResourceKind): GmailApiError => {
+  const batchPartError = (
+    part: BatchPartResult,
+    resource: GmailResourceKind,
+  ): GmailApiError => {
     const { code } = classifyHttpFailure(part.status, part.bodyText);
     return new GmailApiError(
       `Gmail batch item failed: ${part.status}${part.bodyText ? ` - ${part.bodyText.slice(0, 300)}` : ""}`,
       code,
-      { status: part.status, resource }
+      { status: part.status, resource },
     );
   };
 
   const batchGet = async <T>(
     collection: "messages" | "threads",
     ids: string[],
-    opts?: GetMessageOptions
+    opts?: GetMessageOptions,
   ): Promise<Array<GmailBatchItem<T>>> => {
     if (ids.length === 0) return [];
     const query = toQueryParams({
@@ -674,15 +751,20 @@ export function createGmailClient(
       path: `${GMAIL_API_PATH_PREFIX}/${collection}/${encodeURIComponent(id)}${query}`,
     }));
     const results = await runBatch(parts);
-    const resource: GmailResourceKind = collection === "messages" ? "message" : "thread";
+    const resource: GmailResourceKind =
+      collection === "messages" ? "message" : "thread";
     return ids.map((id, index) => {
       const part = results.get(`item-${index}`);
       if (!part) {
         return {
           id,
-          error: new GmailApiError(`Gmail batch item missing from response: ${id}`, "server", {
-            resource,
-          }),
+          error: new GmailApiError(
+            `Gmail batch item missing from response: ${id}`,
+            "server",
+            {
+              resource,
+            },
+          ),
         };
       }
       if (!part.ok) return { id, error: batchPartError(part, resource) };
@@ -697,10 +779,10 @@ export function createGmailClient(
     if (!peopleWarmupPromise) {
       peopleWarmupPromise = Promise.allSettled([
         fetchJson(
-          `${PEOPLE_API_BASE}/people:searchContacts${toQueryParams({ query: "", readMask: "names,emailAddresses" })}`
+          `${PEOPLE_API_BASE}/people:searchContacts${toQueryParams({ query: "", readMask: "names,emailAddresses" })}`,
         ),
         fetchJson(
-          `${PEOPLE_API_BASE}/otherContacts:search${toQueryParams({ query: "", readMask: "names,emailAddresses" })}`
+          `${PEOPLE_API_BASE}/otherContacts:search${toQueryParams({ query: "", readMask: "names,emailAddresses" })}`,
         ),
       ]).then(() => undefined);
     }
@@ -710,7 +792,7 @@ export function createGmailClient(
   const searchPeople = async (
     endpoint: "people:searchContacts" | "otherContacts:search",
     query: string,
-    opts?: SearchContactsOptions
+    opts?: SearchContactsOptions,
   ): Promise<GoogleContact[]> => {
     await warmupPeopleSearch();
     const data = await fetchJson<PeopleSearchResponse>(
@@ -718,12 +800,14 @@ export function createGmailClient(
         query,
         readMask: "names,emailAddresses",
         pageSize: opts?.pageSize ?? 10,
-      })}`
+      })}`,
     );
     return normalizeContactResults(data);
   };
 
-  const listHistory = async (opts: ListHistoryOptions): Promise<GmailHistoryResponse> => {
+  const listHistory = async (
+    opts: ListHistoryOptions,
+  ): Promise<GmailHistoryResponse> => {
     let pageToken: string | undefined;
     const combined: GmailHistoryResponse = { historyId: opts.startHistoryId };
     do {
@@ -734,7 +818,7 @@ export function createGmailClient(
           labelId: opts.labelId,
           historyTypes: opts.historyTypes,
           pageToken,
-        })}`
+        })}`,
       );
       combined.historyId = page.historyId;
       combined.history = [...(combined.history ?? []), ...(page.history ?? [])];
@@ -743,23 +827,35 @@ export function createGmailClient(
     return combined;
   };
 
-  const getMessage = async (messageId: string, opts?: GetMessageOptions): Promise<GmailMessage> => {
+  const getMessage = async (
+    messageId: string,
+    opts?: GetMessageOptions,
+  ): Promise<GmailMessage> => {
     const query = toQueryParams({
       format: opts?.format,
       metadataHeaders: opts?.metadataHeaders,
     });
-    return apiFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}${query}`);
+    return apiFetch<GmailMessage>(
+      `/messages/${encodeURIComponent(messageId)}${query}`,
+    );
   };
 
-  const getThread = async (threadId: string, opts?: GetThreadOptions): Promise<GmailThread> => {
+  const getThread = async (
+    threadId: string,
+    opts?: GetThreadOptions,
+  ): Promise<GmailThread> => {
     const query = toQueryParams({
       format: opts?.format,
       metadataHeaders: opts?.metadataHeaders,
     });
-    return apiFetch<GmailThread>(`/threads/${encodeURIComponent(threadId)}${query}`);
+    return apiFetch<GmailThread>(
+      `/threads/${encodeURIComponent(threadId)}${query}`,
+    );
   };
 
-  const listMessages = async (opts?: ListMessagesOptions): Promise<ListMessagesResult> => {
+  const listMessages = async (
+    opts?: ListMessagesOptions,
+  ): Promise<ListMessagesResult> => {
     const { format = "full", metadataHeaders, ...query } = opts ?? {};
     const data = await apiFetch<{
       messages?: Array<{ id: string; threadId: string }>;
@@ -780,7 +876,7 @@ export function createGmailClient(
     const items = await batchGet<GmailMessage>(
       "messages",
       data.messages.map((message) => message.id),
-      { format, metadataHeaders }
+      { format, metadataHeaders },
     );
     const messages: GmailMessage[] = [];
     for (const item of items) {
@@ -794,17 +890,23 @@ export function createGmailClient(
     };
   };
 
-  const sendMessage = async (params: SendMessageParams): Promise<GmailMessage> =>
+  const sendMessage = async (
+    params: SendMessageParams,
+  ): Promise<GmailMessage> =>
     apiFetch<GmailMessage>("/messages/send", {
       method: "POST",
-      body: JSON.stringify(appendThread({ raw: buildRawMessage(params) }, params.threadId)),
+      body: JSON.stringify(
+        appendThread({ raw: buildRawMessage(params) }, params.threadId),
+      ),
     });
 
   return {
     handle,
     getProfile: () => apiFetch<GmailProfile>("/profile"),
     listSendAs: async () => {
-      const data = await apiFetch<{ sendAs?: GmailSendAsAlias[] }>("/settings/sendAs");
+      const data = await apiFetch<{ sendAs?: GmailSendAsAlias[] }>(
+        "/settings/sendAs",
+      );
       return data.sendAs ?? [];
     },
     listLabels: async () => {
@@ -812,14 +914,19 @@ export function createGmailClient(
       return data.labels ?? [];
     },
     createLabel: (params) =>
-      apiFetch<GmailLabel>("/labels", { method: "POST", body: JSON.stringify(params) }),
+      apiFetch<GmailLabel>("/labels", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
     updateLabel: (labelId, params) =>
       apiFetch<GmailLabel>(`/labels/${encodeURIComponent(labelId)}`, {
         method: "PUT",
         body: JSON.stringify(params),
       }),
     deleteLabel: (labelId) =>
-      apiFetchVoid(`/labels/${encodeURIComponent(labelId)}`, { method: "DELETE" }),
+      apiFetchVoid(`/labels/${encodeURIComponent(labelId)}`, {
+        method: "DELETE",
+      }),
     listMessages,
     listThreads: async (opts) => {
       const data = await apiFetch<{
@@ -832,7 +939,7 @@ export function createGmailClient(
           labelIds: opts?.labelIds,
           maxResults: opts?.maxResults,
           pageToken: opts?.pageToken,
-        })}`
+        })}`,
       );
       return {
         threads: data.threads ?? [],
@@ -845,7 +952,12 @@ export function createGmailClient(
     syncSince: async (historyId) => {
       const rawHistory = await listHistory({
         startHistoryId: historyId,
-        historyTypes: ["messageAdded", "messageDeleted", "labelAdded", "labelRemoved"],
+        historyTypes: [
+          "messageAdded",
+          "messageDeleted",
+          "labelAdded",
+          "labelRemoved",
+        ],
       });
       return {
         historyId: rawHistory.historyId,
@@ -854,27 +966,36 @@ export function createGmailClient(
       };
     },
     watch: async (params) => {
-      const data = await apiFetch<{ historyId: string; expiration: string }>("/watch", {
-        method: "POST",
-        body: JSON.stringify({
-          topicName: params.topicName,
-          ...(params.labelIds ? { labelIds: params.labelIds } : {}),
-          ...(params.labelFilterBehavior
-            ? { labelFilterBehavior: params.labelFilterBehavior.toUpperCase() }
-            : {}),
-        }),
-      });
+      const data = await apiFetch<{ historyId: string; expiration: string }>(
+        "/watch",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            topicName: params.topicName,
+            ...(params.labelIds ? { labelIds: params.labelIds } : {}),
+            ...(params.labelFilterBehavior
+              ? {
+                  labelFilterBehavior: params.labelFilterBehavior.toUpperCase(),
+                }
+              : {}),
+          }),
+        },
+      );
       return { historyId: data.historyId, expiration: Number(data.expiration) };
     },
     stopWatch: () => apiFetchVoid("/stop", { method: "POST" }),
     getMessage,
     getThread,
-    batchGetMessages: (messageIds, opts) => batchGet<GmailMessage>("messages", messageIds, opts),
-    batchGetThreads: (threadIds, opts) => batchGet<GmailThread>("threads", threadIds, opts),
+    batchGetMessages: (messageIds, opts) =>
+      batchGet<GmailMessage>("messages", messageIds, opts),
+    batchGetThreads: (threadIds, opts) =>
+      batchGet<GmailThread>("threads", threadIds, opts),
     batchModify: async (params) => {
       if (params.messageIds.length === 0) return;
       if (params.messageIds.length > 1000) {
-        throw new Error("Gmail batchModify accepts at most 1000 message ids per call");
+        throw new Error(
+          "Gmail batchModify accepts at most 1000 message ids per call",
+        );
       }
       await apiFetchVoid("/messages/batchModify", {
         method: "POST",
@@ -887,36 +1008,58 @@ export function createGmailClient(
     },
     getAttachment: (messageId, attachmentId) =>
       apiFetch<GmailAttachmentBody>(
-        `/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`
+        `/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
       ),
     sendMessage,
     createDraft: (params) =>
       apiFetch<GmailDraft>("/drafts", {
         method: "POST",
         body: JSON.stringify({
-          message: appendThread({ raw: buildRawMessage(params) }, params.threadId),
+          message: appendThread(
+            { raw: buildRawMessage(params) },
+            params.threadId,
+          ),
         }),
       }),
     listDrafts: async (opts) => {
-      const data = await apiFetch<{ drafts?: GmailDraft[]; nextPageToken?: string }>(
-        `/drafts${toQueryParams({ maxResults: opts?.maxResults, pageToken: opts?.pageToken, q: opts?.q })}`
+      const data = await apiFetch<{
+        drafts?: GmailDraft[];
+        nextPageToken?: string;
+      }>(
+        `/drafts${toQueryParams({ maxResults: opts?.maxResults, pageToken: opts?.pageToken, q: opts?.q })}`,
       );
       return { drafts: data.drafts ?? [], nextPageToken: data.nextPageToken };
     },
-    getDraft: (draftId) => apiFetch<GmailDraft>(`/drafts/${encodeURIComponent(draftId)}`),
+    getDraft: (draftId) =>
+      apiFetch<GmailDraft>(`/drafts/${encodeURIComponent(draftId)}`),
     updateDraft: (draftId, params) =>
       apiFetch<GmailDraft>(`/drafts/${encodeURIComponent(draftId)}`, {
         method: "PUT",
         body: JSON.stringify({
-          message: appendThread({ raw: buildRawMessage(params) }, params.threadId),
+          message: appendThread(
+            { raw: buildRawMessage(params) },
+            params.threadId,
+          ),
         }),
       }),
     deleteDraft: (draftId) =>
-      apiFetchVoid(`/drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" }),
-    sendDraft: async (draftId) => {
+      apiFetchVoid(`/drafts/${encodeURIComponent(draftId)}`, {
+        method: "DELETE",
+      }),
+    sendDraft: async (draftId, params) => {
       return apiFetch<GmailMessage>("/drafts/send", {
         method: "POST",
-        body: JSON.stringify({ id: draftId }),
+        body: JSON.stringify({
+          id: draftId,
+          ...(params
+            ? {
+                message: appendThread(
+                  { raw: buildRawMessage(params) },
+                  params.threadId,
+                ),
+              }
+            : {}),
+        }),
       });
     },
     modifyLabels: (params) => {
@@ -934,10 +1077,12 @@ export function createGmailClient(
             addLabelIds: params.addLabelIds ?? [],
             removeLabelIds: params.removeLabelIds ?? [],
           }),
-        }
+        },
       );
     },
-    searchContacts: (query, opts) => searchPeople("people:searchContacts", query, opts),
-    searchOtherContacts: (query, opts) => searchPeople("otherContacts:search", query, opts),
+    searchContacts: (query, opts) =>
+      searchPeople("people:searchContacts", query, opts),
+    searchOtherContacts: (query, opts) =>
+      searchPeople("otherContacts:search", query, opts),
   };
 }

@@ -87,36 +87,129 @@ export interface GmailCardsDeps {
  * so they scroll away with the conversation.
  */
 export class GmailCards {
+  private readonly composeOperations = new Map<string, Promise<unknown>>();
+
   constructor(private readonly deps: GmailCardsDeps) {}
 
+  private composeStateKey(channelId: string, messageId: string): string {
+    return `gmail:compose:${JSON.stringify([channelId, messageId])}`;
+  }
+
+  /** Operation state is durable; the channel card is its projection. */
+  composeState(channelId: string, messageId: string): GmailComposeCardState {
+    const row = this.deps.sql
+      .exec(
+        "SELECT value FROM state WHERE key = ?",
+        this.composeStateKey(channelId, messageId),
+      )
+      .toArray()[0];
+    if (!row)
+      throw new Error("Compose not found. Create a draft before sending.");
+    return JSON.parse(String(row["value"])) as GmailComposeCardState;
+  }
+
+  recordCompose(
+    channelId: string,
+    messageId: string,
+    patch: Partial<GmailComposeCardState>,
+  ): GmailComposeCardState {
+    const state = { ...this.composeState(channelId, messageId), ...patch };
+    this.deps.sql.exec(
+      "INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)",
+      this.composeStateKey(channelId, messageId),
+      JSON.stringify(state),
+    );
+    return state;
+  }
+
+  async publishCompose(channelId: string, messageId: string): Promise<void> {
+    const handle = this.deps.cards.get(channelId, messageId);
+    if (!handle) throw new Error("Compose card not found");
+    await handle.update(this.composeState(channelId, messageId));
+  }
+
+  /** Serialize the whole owned operation, including its remote effect. */
+  async withCompose<T>(
+    channelId: string,
+    messageId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const key = this.composeStateKey(channelId, messageId);
+    const previous = this.composeOperations.get(key);
+    const pending = (async () => {
+      if (previous) await previous.catch(() => undefined);
+      return operation();
+    })();
+    this.composeOperations.set(key, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.composeOperations.get(key) === pending)
+        this.composeOperations.delete(key);
+    }
+  }
+
+  recoverCompose(
+    channelId: string,
+    messageId: string,
+    state: GmailComposeCardState,
+  ): void {
+    this.deps.cards.adoptRecovered(
+      channelId,
+      composeCardKey(messageId),
+      "gmail.compose",
+      messageId,
+    );
+    this.deps.sql.exec(
+      "INSERT OR IGNORE INTO state (key, value) VALUES (?, ?)",
+      this.composeStateKey(channelId, messageId),
+      JSON.stringify({
+        ...state,
+        rfcMessageId: state.rfcMessageId ?? `<${messageId}@vibestudio.local>`,
+      }),
+    );
+  }
+
   /** Publish (or update) the singleton setup/connection card for a channel. */
-  async publishSetup(channelId: string, payload: GmailSetupState): Promise<void> {
+  async publishSetup(
+    channelId: string,
+    payload: GmailSetupState,
+  ): Promise<void> {
     const existing = this.deps.cards.find(channelId, SETUP_CARD_KEY);
     if (existing) {
       await existing.update(payload);
       return;
     }
-    await this.deps.cards.getOrCreate(channelId, "gmail.setup", SETUP_CARD_KEY, payload, {
-      displayMode: "inline",
-    });
+    await this.deps.cards.getOrCreate(
+      channelId,
+      "gmail.setup",
+      SETUP_CARD_KEY,
+      payload,
+      {
+        displayMode: "inline",
+      },
+    );
   }
 
   /** A new immutable digest card per wake turn. */
   async publishDigest(
     channelId: string,
-    payload: GmailDigestCardState
+    payload: GmailDigestCardState,
   ): Promise<CustomMessageHandle> {
     return this.deps.cards.getOrCreate(
       channelId,
       "gmail.digest",
       `gmail:digest:${payload.generatedAt}:${crypto.randomUUID().slice(0, 8)}`,
       payload,
-      { displayMode: "row" }
+      { displayMode: "row" },
     );
   }
 
   /** A new search card per query, created in "searching" state. */
-  async createSearch(channelId: string, query: string): Promise<CustomMessageHandle> {
+  async createSearch(
+    channelId: string,
+    query: string,
+  ): Promise<CustomMessageHandle> {
     const payload: GmailSearchCardState = {
       query,
       status: "searching",
@@ -128,14 +221,14 @@ export class GmailCards {
       "gmail.search",
       `gmail:search:${crypto.randomUUID()}`,
       payload,
-      { displayMode: "row" }
+      { displayMode: "row" },
     );
   }
 
   async updateSearch(
     channelId: string,
     messageId: string,
-    patch: Partial<GmailSearchCardState>
+    patch: Partial<GmailSearchCardState>,
   ): Promise<void> {
     const handle = this.deps.cards.get(channelId, messageId);
     if (handle) await handle.update(patch);
@@ -144,9 +237,12 @@ export class GmailCards {
   /** Publish (or focus) a standalone thread card for a Gmail thread. */
   async publishThread(
     channelId: string,
-    state: GmailThreadCardState
+    state: GmailThreadCardState,
   ): Promise<CustomMessageHandle> {
-    const handle = this.deps.cards.find(channelId, threadCardKey(state.threadId));
+    const handle = this.deps.cards.find(
+      channelId,
+      threadCardKey(state.threadId),
+    );
     if (handle) {
       await handle.update(state);
       return handle;
@@ -156,7 +252,7 @@ export class GmailCards {
       "gmail.thread",
       threadCardKey(state.threadId),
       state,
-      { displayMode: "inline" }
+      { displayMode: "inline" },
     );
   }
 
@@ -164,7 +260,7 @@ export class GmailCards {
   async updateThread(
     channelId: string,
     threadId: string,
-    update: GmailThreadUpdate | GmailThreadCardState | Record<string, unknown>
+    update: GmailThreadUpdate | GmailThreadCardState | Record<string, unknown>,
   ): Promise<void> {
     const handle = this.deps.cards.find(channelId, threadCardKey(threadId));
     if (handle) await handle.update(update);
@@ -172,30 +268,43 @@ export class GmailCards {
 
   async createCompose(
     channelId: string,
-    state: GmailComposeCardState
+    state: GmailComposeCardState,
   ): Promise<CustomMessageHandle> {
     const composeId = crypto.randomUUID();
-    return this.deps.cards.getOrCreate(
+    const ownedState = {
+      ...state,
+      rfcMessageId: `<${composeId}@vibestudio.local>`,
+    };
+    const handle = await this.deps.cards.getOrCreate(
       channelId,
       "gmail.compose",
       composeCardKey(composeId),
-      state,
-      { displayMode: "row" }
+      ownedState,
+      { displayMode: "row" },
     );
+    this.deps.sql.exec(
+      "INSERT INTO state (key, value) VALUES (?, ?)",
+      this.composeStateKey(channelId, handle.messageId),
+      JSON.stringify(ownedState),
+    );
+    return handle;
   }
 
-  composeByMessageId(channelId: string, messageId: string): CustomMessageHandle | null {
+  composeByMessageId(
+    channelId: string,
+    messageId: string,
+  ): CustomMessageHandle | null {
     return this.deps.cards.get(channelId, messageId);
   }
 
   async updateCompose(
     channelId: string,
     messageId: string | undefined,
-    patch: Partial<GmailComposeCardState>
+    patch: Partial<GmailComposeCardState>,
   ): Promise<void> {
-    if (!messageId) return;
-    const handle = this.deps.cards.get(channelId, messageId);
-    if (handle) await handle.update(patch);
+    if (!messageId) throw new Error("Compose messageId is required");
+    this.recordCompose(channelId, messageId, patch);
+    await this.publishCompose(channelId, messageId);
   }
 
   /**
@@ -206,7 +315,7 @@ export class GmailCards {
     channelId: string,
     naturalKey: string,
     typeId: string,
-    messageId: string
+    messageId: string,
   ): void {
     this.deps.cards.adoptRecovered(channelId, naturalKey, typeId, messageId);
   }

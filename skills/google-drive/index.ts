@@ -1,3 +1,4 @@
+import { GOOGLE_DRIVE_SCOPES } from "@workspace/google-workspace/providers";
 import { credentials } from "@workspace/runtime";
 import type { StoredCredentialSummary } from "@workspace/runtime";
 import {
@@ -92,7 +93,7 @@ function getNextActions(
   switch (status.stage) {
     case "needs-google-workspace":
       return [
-        "Complete Google Workspace onboarding and verify the Google credential first.",
+        "Complete Google Workspace onboarding, enable the Drive API, and connect Google with GOOGLE_DRIVE_SCOPES before using Drive.",
       ];
     case "ready":
       return [
@@ -111,12 +112,16 @@ function buildStatus(input: {
   verification?: GoogleDriveVerificationResult;
   warnings?: string[];
 }): GoogleDriveOnboardingStatus {
-  const connected = input.googleWorkspace.stage === "verified";
+  const connected =
+    input.googleWorkspace.stage === "verified" &&
+    GOOGLE_DRIVE_SCOPES.every((scope) =>
+      input.googleWorkspace.verification?.scopes?.includes(scope),
+    );
   const verified = input.verification?.valid === true;
   const stage: GoogleDriveOnboardingStage =
     input.googleWorkspace.stage === "error"
       ? "error"
-      : input.googleWorkspace.stage !== "verified"
+      : !connected
         ? "needs-google-workspace"
         : input.verification && !input.verification.valid
           ? "error"
@@ -180,15 +185,21 @@ export async function getGoogleDriveOnboardingStatus(
     });
     const credentials = googleWorkspace.credentials;
 
-    if (googleWorkspace.stage !== "verified") {
+    if (
+      googleWorkspace.stage !== "verified" ||
+      !GOOGLE_DRIVE_SCOPES.every((scope) =>
+        googleWorkspace.verification?.scopes?.includes(scope),
+      )
+    ) {
       return buildStatus({ googleWorkspace, credentials, warnings });
     }
 
-    const verification = opts.verify
-      ? await verifyGoogleDriveAccess({
-          credentialId: googleWorkspace.credentialId,
-        })
-      : undefined;
+    const verification =
+      (opts.verify ?? true)
+        ? await verifyGoogleDriveAccess({
+            credentialId: googleWorkspace.credentialId,
+          })
+        : undefined;
 
     if (verification && !verification.valid && verification.error) {
       warnings.push(`Google Drive verification failed: ${verification.error}`);

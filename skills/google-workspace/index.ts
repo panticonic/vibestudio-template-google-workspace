@@ -2,7 +2,8 @@ import { credentials } from "@workspace/runtime";
 import type { StoredCredentialSummary } from "@workspace/runtime";
 import {
   bearerTokenInjection,
-  GOOGLE_WORKSPACE_BROAD_SCOPES,
+  GOOGLE_GMAIL_SCOPES,
+  googleBindingsForScopes,
   googleWorkspaceCredential,
 } from "@workspace/google-workspace/providers";
 
@@ -10,9 +11,11 @@ const GOOGLE_PROVIDER_ID = "google-workspace";
 const GOOGLE_OAUTH_CLIENT_CONFIG_ID = "google-workspace";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const GOOGLE_SCOPES = [...GOOGLE_WORKSPACE_BROAD_SCOPES] as const;
+const GOOGLE_SCOPES = [...GOOGLE_GMAIL_SCOPES] as const;
 const GOOGLE_AUDIENCE_ORIGINS = new Set(
-  googleWorkspaceCredential.audiences.map((audience) => new URL(audience.url).origin)
+  googleWorkspaceCredential.audiences.map(
+    (audience) => new URL(audience.url).origin,
+  ),
 );
 
 type RuntimeCredentials = typeof credentials;
@@ -80,7 +83,7 @@ function getCredentialRuntime(): RuntimeCredentials {
   const api = credentials as Partial<RuntimeCredentials> | undefined;
   if (!api) {
     throw new Error(
-      "Vibestudio credential runtime is unavailable: @workspace/runtime did not export credentials."
+      "Vibestudio credential runtime is unavailable: @workspace/runtime did not export credentials.",
     );
   }
   for (const method of [
@@ -93,7 +96,7 @@ function getCredentialRuntime(): RuntimeCredentials {
   ] as const) {
     if (typeof api[method] !== "function") {
       throw new Error(
-        `Vibestudio credential runtime is unavailable: credentials.${method} is missing.`
+        `Vibestudio credential runtime is unavailable: credentials.${method} is missing.`,
       );
     }
   }
@@ -114,11 +117,13 @@ function normalizeCredentialRuntimeError(error: unknown): Error {
   return new Error(
     "Vibestudio credential runtime is unavailable in this context. " +
       "Google Workspace helpers must run in a Vibestudio panel/eval/worker runtime with credentials initialized. " +
-      `Original error: ${message}`
+      `Original error: ${message}`,
   );
 }
 
-async function withCredentialRuntime<T>(fn: (api: RuntimeCredentials) => Promise<T>): Promise<T> {
+async function withCredentialRuntime<T>(
+  fn: (api: RuntimeCredentials) => Promise<T>,
+): Promise<T> {
   try {
     return await fn(getCredentialRuntime());
   } catch (error) {
@@ -139,16 +144,20 @@ function isGoogleCredential(credential: StoredCredentialSummary): boolean {
 }
 
 function getPrimaryCredential(
-  credentials: StoredCredentialSummary[]
+  credentials: StoredCredentialSummary[],
 ): StoredCredentialSummary | undefined {
   return credentials.find((credential) => !credential.revokedAt);
 }
 
-function getCredentialEmail(credential: StoredCredentialSummary | undefined): string | undefined {
+function getCredentialEmail(
+  credential: StoredCredentialSummary | undefined,
+): string | undefined {
   return credential?.accountIdentity?.email;
 }
 
-function hasDurableRefreshToken(credential: StoredCredentialSummary | undefined): boolean {
+function hasDurableRefreshToken(
+  credential: StoredCredentialSummary | undefined,
+): boolean {
   return credential?.lifecycle.canRefresh === true;
 }
 
@@ -160,7 +169,10 @@ function explainGoogleCredentialError(error: unknown): string {
       "Reconnect Google Workspace so Vibestudio can store a durable offline refresh token."
     );
   }
-  if (message.includes("client_not_authorized") || message.includes("oauth-refresh-failed")) {
+  if (
+    message.includes("client_not_authorized") ||
+    message.includes("oauth-refresh-failed")
+  ) {
     return (
       `${message}: Google rejected the stored refresh credential. ` +
       "Reconnect Google Workspace after confirming the OAuth app is published to Production."
@@ -170,7 +182,7 @@ function explainGoogleCredentialError(error: unknown): string {
 }
 
 function getNextActions(
-  status: Pick<GoogleOnboardingStatus, "stage" | "connected" | "configured">
+  status: Pick<GoogleOnboardingStatus, "stage" | "connected" | "configured">,
 ): string[] {
   switch (status.stage) {
     case "needs-setup":
@@ -181,9 +193,13 @@ function getNextActions(
     case "ready-to-connect":
       return ["Use the setup component's Connect button."];
     case "connected":
-      return ["Use the setup component's Verify button before declaring onboarding complete."];
+      return [
+        "Use the setup component's Verify button before declaring onboarding complete.",
+      ];
     case "verified":
-      return ["Continue onboarding with the verified Google Workspace credential."];
+      return [
+        "Continue onboarding with the verified Google Workspace credential.",
+      ];
     case "error":
       return [
         "Fix the reported runtime or credential setup error, then rerun getGoogleOnboardingStatus().",
@@ -217,13 +233,18 @@ function buildStatus(input: {
     email: input.verification?.email ?? getCredentialEmail(primary),
     credentials: input.credentials,
     verification: input.verification,
+    error:
+      input.verification && !input.verification.valid
+        ? (input.verification.error ??
+          "Google could not verify this connection.")
+        : undefined,
     nextActions: [],
     warnings: input.warnings ?? [],
   };
   if (primary && !hasDurableRefreshToken(primary)) {
     status.warnings.push(
       "This Google Workspace credential has no stored refresh token. " +
-        "It may expire after restart or token expiry; reconnect Google Workspace with connectGoogle({ force: true })."
+        "It may expire after restart or token expiry; reconnect Google Workspace with connectGoogle({ force: true }).",
     );
   }
   status.nextActions = getNextActions(status);
@@ -235,7 +256,8 @@ export async function configureGoogleOAuthClient() {
     api.configureClient({
       configId: GOOGLE_OAUTH_CLIENT_CONFIG_ID,
       title: "Configure Google Workspace OAuth",
-      description: "Save the Desktop app OAuth client material for Google Workspace.",
+      description:
+        "Save the Desktop app OAuth client material for Google Workspace.",
       authorizeUrl: GOOGLE_AUTH_URL,
       tokenUrl: GOOGLE_TOKEN_URL,
       fields: [
@@ -244,17 +266,19 @@ export async function configureGoogleOAuthClient() {
           label: "Client ID",
           type: "text",
           required: true,
-          description: "Use installed.client_id from the downloaded Desktop app JSON.",
+          description:
+            "Use installed.client_id from the downloaded Desktop app JSON.",
         },
         {
           name: "clientSecret",
           label: "Client secret",
           type: "secret",
           required: true,
-          description: "Use installed.client_secret from the downloaded Desktop app JSON.",
+          description:
+            "Use installed.client_secret from the downloaded Desktop app JSON.",
         },
       ],
-    })
+    }),
   );
 }
 
@@ -264,39 +288,52 @@ export async function getGoogleOAuthClientStatus() {
       configId: GOOGLE_OAUTH_CLIENT_CONFIG_ID,
       fields: [
         { name: "clientId", label: "Client ID", type: "text", required: true },
-        { name: "clientSecret", label: "Client secret", type: "secret", required: true },
+        {
+          name: "clientSecret",
+          label: "Client secret",
+          type: "secret",
+          required: true,
+        },
       ],
-    })
+    }),
   );
 }
 
-export async function listGoogleCredentials(): Promise<StoredCredentialSummary[]> {
+export async function listGoogleCredentials(): Promise<
+  StoredCredentialSummary[]
+> {
   return withCredentialRuntime(async (api) => {
     const all = await api.listStoredCredentials();
     return all.filter(isGoogleCredential);
   });
 }
 
-export async function revokeGoogleCredential(credentialId: string): Promise<void> {
+export async function revokeGoogleCredential(
+  credentialId: string,
+): Promise<void> {
   await withCredentialRuntime((api) => api.revokeCredential(credentialId));
 }
 
 export async function verifyGoogleCredential(
-  credentialId: string
+  credentialId: string,
 ): Promise<GoogleVerificationResult> {
   try {
     return await withCredentialRuntime(async (api) => {
       const response = await api.fetch(
         "https://www.googleapis.com/oauth2/v1/userinfo?alt=json",
         undefined,
-        { credentialId }
+        { credentialId },
       );
       if (!response.ok) {
-        return { valid: false, credentialId, error: `${response.status} ${response.statusText}` };
+        return {
+          valid: false,
+          credentialId,
+          error: `${response.status} ${response.statusText}`,
+        };
       }
       const body = (await response.json()) as { email?: string };
       const credential = (await listGoogleCredentials()).find(
-        (candidate) => candidate.id === credentialId
+        (candidate) => candidate.id === credentialId,
       );
       return {
         valid: true,
@@ -309,13 +346,15 @@ export async function verifyGoogleCredential(
     return {
       valid: false,
       credentialId,
-      error: explainGoogleCredentialError(normalizeCredentialRuntimeError(error)),
+      error: explainGoogleCredentialError(
+        normalizeCredentialRuntimeError(error),
+      ),
     };
   }
 }
 
 export async function verifyGoogleConnection(
-  connectionId: string
+  connectionId: string,
 ): Promise<GoogleVerificationResult> {
   return verifyGoogleCredential(connectionId);
 }
@@ -332,7 +371,7 @@ export async function checkGoogleConnection(): Promise<GoogleConnectionCheck> {
 }
 
 export async function getGoogleOnboardingStatus(
-  opts: GoogleOnboardingStatusOptions = {}
+  opts: GoogleOnboardingStatusOptions = {},
 ): Promise<GoogleOnboardingStatus> {
   const warnings: string[] = [];
   try {
@@ -341,17 +380,21 @@ export async function getGoogleOnboardingStatus(
       configured = (await getGoogleOAuthClientStatus()).configured;
     } catch (error) {
       warnings.push(
-        `Could not read Google client config: ${error instanceof Error ? error.message : String(error)}`
+        `Could not read Google client config: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 
     const googleCredentials = await listGoogleCredentials();
     const primary = getPrimaryCredential(googleCredentials);
     const verification =
-      opts.verify && primary ? await verifyGoogleCredential(primary.id) : undefined;
+      opts.verify && primary
+        ? await verifyGoogleCredential(primary.id)
+        : undefined;
 
     if (verification && !verification.valid && verification.error) {
-      warnings.push(`Google Workspace verification failed: ${verification.error}`);
+      warnings.push(
+        `Google Workspace verification failed: ${verification.error}`,
+      );
     }
 
     return buildStatus({
@@ -378,12 +421,20 @@ export async function getGoogleOnboardingStatus(
 }
 
 export async function connectGoogle(
-  opts: ConnectGoogleOptions = {}
+  opts: ConnectGoogleOptions = {},
 ): Promise<GoogleConnectionResult> {
   try {
+    const requestedScopes = getDefaultScopes(opts.scopes);
+    let scopes = requestedScopes;
     if (!opts.force) {
       const existing = await getGoogleOnboardingStatus({ verify: true });
-      if (existing.stage === "verified" && existing.credentialId) {
+      const grantedScopes = existing.verification?.scopes ?? [];
+      scopes = [...new Set([...grantedScopes, ...requestedScopes])];
+      if (
+        existing.stage === "verified" &&
+        existing.credentialId &&
+        requestedScopes.every((scope) => grantedScopes.includes(scope))
+      ) {
         return {
           success: true,
           connectionId: existing.credentialId,
@@ -391,7 +442,11 @@ export async function connectGoogle(
           email: existing.email,
         };
       }
-      if (existing.connected && existing.credentialId) {
+      if (
+        existing.connected &&
+        existing.stage !== "verified" &&
+        existing.credentialId
+      ) {
         return {
           success: false,
           connectionId: existing.credentialId,
@@ -413,7 +468,7 @@ export async function connectGoogle(
       };
     }
 
-    const scopes = getDefaultScopes(opts.scopes);
+    const bindings = googleBindingsForScopes(scopes);
     const stored = await withCredentialRuntime((api) =>
       api.connect({
         flow: {
@@ -436,17 +491,17 @@ export async function connectGoogle(
         },
         credential: {
           label: "Google Workspace",
-          audience: googleWorkspaceCredential.audiences,
+          audience: bindings.flatMap((binding) => binding.audience),
           injection: bearerTokenInjection,
-          bindings: googleWorkspaceCredential.bindings,
+          bindings,
           scopes,
           metadata: {
             providerId: GOOGLE_PROVIDER_ID,
-            upstreamAccessMode: "google-workspace-broad",
+            upstreamAccessMode: "google-workspace-selected",
             localBindingCatalog: "google-workspace:v1",
           },
         },
-      })
+      }),
     );
     const verification = await verifyGoogleCredential(stored.id);
     return {
@@ -462,7 +517,9 @@ export async function connectGoogle(
   }
 }
 
-export function formatGoogleOnboardingStatus(status: GoogleOnboardingStatus): string {
+export function formatGoogleOnboardingStatus(
+  status: GoogleOnboardingStatus,
+): string {
   const lines = [
     `Google Workspace stage: ${status.stage}`,
     `configured=${status.configured}`,
@@ -472,9 +529,13 @@ export function formatGoogleOnboardingStatus(status: GoogleOnboardingStatus): st
   if (status.connectionId) lines.push(`connectionId=${status.connectionId}`);
   if (status.email) lines.push(`email=${status.email}`);
   if (status.verification)
-    lines.push(`verification=${status.verification.valid ? "valid" : "invalid"}`);
+    lines.push(
+      `verification=${status.verification.valid ? "valid" : "invalid"}`,
+    );
   if (status.error) lines.push(`error=${status.error}`);
-  if (status.warnings.length) lines.push(`warnings=${status.warnings.join("; ")}`);
-  if (status.nextActions.length) lines.push(`nextActions=${status.nextActions.join(" | ")}`);
+  if (status.warnings.length)
+    lines.push(`warnings=${status.warnings.join("; ")}`);
+  if (status.nextActions.length)
+    lines.push(`nextActions=${status.nextActions.join(" | ")}`);
   return lines.join("\n");
 }

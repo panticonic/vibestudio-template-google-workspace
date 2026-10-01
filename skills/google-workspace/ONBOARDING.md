@@ -8,19 +8,18 @@ calls.
 ## Detect state
 
 ```ts
-import { getGoogleOnboardingStatus }
-  from "@workspace-skills/google-workspace";
+import { getGoogleOnboardingStatus } from "@workspace-skills/google-workspace";
 
 return await getGoogleOnboardingStatus({ verify: true });
 ```
 
-| Stage | Meaning | Action |
-| --- | --- | --- |
-| `needs-setup` | Desktop app details are not saved | Render the setup component |
-| `ready-to-connect` | App details are saved | Keep the component visible; its Connect button owns the call |
-| `connected` | A credential exists but is not verified | Keep the component visible; it verifies directly |
-| `verified` | A live Google identity request succeeded | Continue onboarding |
-| `error` | Status could not be read | Show the concrete error and retry in the component |
+| Stage              | Meaning                                  | Action                                                       |
+| ------------------ | ---------------------------------------- | ------------------------------------------------------------ |
+| `needs-setup`      | Desktop app details are not saved        | Render the setup component                                   |
+| `ready-to-connect` | App details are saved                    | Keep the component visible; its Connect button owns the call |
+| `connected`        | A credential exists but is not verified  | Keep the component visible; it verifies directly             |
+| `verified`         | A live Google identity request succeeded | Continue onboarding                                          |
+| `error`            | Status could not be read                 | Show the concrete error and retry in the component           |
 
 ## Component contract
 
@@ -31,7 +30,7 @@ The component owns the entire user workflow:
 - opens each Console step internally or in the user's normal browser;
 - calls `configureGoogleOAuthClient()` from its button so the host-owned prompt
   collects the client ID and secret;
-- calls `connectGoogle()` from its Connect button;
+- calls `connectGoogle({ scopes })` for the user’s selected Gmail or full Workspace workflow;
 - verifies the live connection;
 - renders pending, success, failure, and retry state.
 
@@ -51,4 +50,4 @@ to the agent for translation into eval code.
   failure.
 
 After Google reaches `verified`, continue to Gmail-specific setup only if the
-user selected a Gmail goal.
+user selected a Gmail goal and the verified credential includes the Gmail scopes. A verified identity alone does not grant a service permission.

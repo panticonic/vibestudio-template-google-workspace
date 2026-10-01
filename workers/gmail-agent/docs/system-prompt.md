@@ -17,7 +17,7 @@ Tools (compose them; prefer few targeted calls):
   archive; ONE call for bulk operations.
 - `gmail_draft` — the agent writes the body; the card lands in review state.
   The user's Send click is the only authorization to send.
-- `gmail_send` — ONLY on an explicit no-review send request.
+- `gmail_send` — Create a compose with `gmail_draft` first, then send its `messageId` ONLY on an explicit send request.
 - `gmail_contacts` — resolve names before drafting; never invent addresses.
 - `gmail_set_attention` — save the user's attention preferences as natural
   language in their own words; a cheap triage pass applies them to incoming

@@ -1,5 +1,9 @@
-import { Badge, Button, Flex, Text, TextArea } from "@radix-ui/themes";
-import { ChevronDownIcon, ChevronRightIcon, DotsHorizontalIcon } from "@radix-ui/react-icons";
+import { Badge, Button, Flex, Text } from "@radix-ui/themes";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  DotsHorizontalIcon,
+} from "@radix-ui/react-icons";
 import { useEffect, useState } from "react";
 import type {
   GmailThreadState,
@@ -12,7 +16,10 @@ import type {
 // are erased and free). Keep in sync with
 // packages/gmail/src/renderers/gmail-thread.reducer.ts — GMAIL_THREAD_UPDATE_SCHEMA
 // validates the update shapes on both sides.
-export function reduce(state: GmailThreadState, update: GmailThreadUpdate): GmailThreadState {
+export function reduce(
+  state: GmailThreadState,
+  update: GmailThreadUpdate,
+): GmailThreadState {
   if (!("kind" in update) || typeof update.kind !== "string") {
     return { ...state, ...update };
   }
@@ -22,7 +29,8 @@ export function reduce(state: GmailThreadState, update: GmailThreadUpdate): Gmai
       return {
         ...state,
         messages,
-        lastSnippet: update.lastSnippet ?? update.message.snippet ?? state.lastSnippet,
+        lastSnippet:
+          update.lastSnippet ?? update.message.snippet ?? state.lastSnippet,
         unreadCount: update.unreadCount ?? state.unreadCount + 1,
         status: state.status === "archived" ? "open" : state.status,
       };
@@ -89,7 +97,7 @@ export function Pill({ state }: { state: GmailThreadState }) {
 
 /**
  * Thread card, mobile-first: auto-loads contents on expand, latest message
- * open, reply box with two primary actions (AI draft / Send with two-tap
+ * open, reply actions that open an owned compose card (manual or AI draft;
  * confirm); Archive / Mark read / Refresh behind one "More" disclosure.
  */
 export default function GmailThread({
@@ -99,14 +107,20 @@ export default function GmailThread({
 }: {
   state: GmailThreadState;
   expanded: boolean;
-  chat: { callMethodByHandle: (handle: string, method: string, args: unknown) => Promise<unknown> };
+  chat: {
+    callMethodByHandle: (
+      handle: string,
+      method: string,
+      args: unknown,
+    ) => Promise<unknown>;
+  };
 }) {
   const [thread, setThread] = useState<ThreadBody | null>(null);
-  const [openMessageIds, setOpenMessageIds] = useState<Set<string>>(() => new Set());
-  const [draft, setDraft] = useState("");
+  const [openMessageIds, setOpenMessageIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirmingSend, setConfirmingSend] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +135,11 @@ export default function GmailThread({
         format: "full",
         includeAttachmentList: true,
       });
-      if (result && typeof result === "object" && Array.isArray((result as ThreadBody).messages)) {
+      if (
+        result &&
+        typeof result === "object" &&
+        Array.isArray((result as ThreadBody).messages)
+      ) {
         const body = result as ThreadBody;
         setThread(body);
         // Latest message opens by default; older ones stay collapsed.
@@ -144,11 +162,15 @@ export default function GmailThread({
     setBusy(label);
     setError(null);
     try {
-      await chat.callMethodByHandle("gmail", method, args);
-      if (method === "gmail_send") {
-        setDraft("");
-        setConfirmingSend(false);
-      }
+      const result = (await chat.callMethodByHandle("gmail", method, args)) as
+        | { error?: unknown }
+        | undefined;
+      if (result?.error)
+        throw new Error(
+          typeof result.error === "string"
+            ? result.error
+            : JSON.stringify(result.error),
+        );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -180,7 +202,10 @@ export default function GmailThread({
         >
           {state.subject}
         </Text>
-        <Badge color={state.status === "archived" ? "gray" : "blue"} style={{ flex: "0 0 auto" }}>
+        <Badge
+          color={state.status === "archived" ? "gray" : "blue"}
+          style={{ flex: "0 0 auto" }}
+        >
           {state.status}
         </Badge>
       </Flex>
@@ -203,7 +228,11 @@ export default function GmailThread({
                   size="2"
                   variant="ghost"
                   color="gray"
-                  style={{ alignSelf: "flex-start", maxWidth: "100%", minHeight: 36 }}
+                  style={{
+                    alignSelf: "flex-start",
+                    maxWidth: "100%",
+                    minHeight: 36,
+                  }}
                   aria-expanded={open}
                   onClick={() => toggleMessage(message.id)}
                 >
@@ -214,7 +243,13 @@ export default function GmailThread({
                 </Button>
                 {open ? (
                   <>
-                    <Text size="2" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    <Text
+                      size="2"
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                      }}
+                    >
                       {message.bodyText ?? message.snippet}
                     </Text>
                     {(message.attachments ?? [])
@@ -226,9 +261,16 @@ export default function GmailThread({
                           gap="2"
                           style={{ minHeight: 36 }}
                         >
-                          <Text size="1" color="gray" truncate style={{ minWidth: 0 }}>
+                          <Text
+                            size="1"
+                            color="gray"
+                            truncate
+                            style={{ minWidth: 0 }}
+                          >
                             📎 {attachment.filename}
-                            {attachment.size ? ` (${Math.ceil(attachment.size / 1024)} KB)` : ""}
+                            {attachment.size
+                              ? ` (${Math.ceil(attachment.size / 1024)} KB)`
+                              : ""}
                           </Text>
                           <Button
                             size="1"
@@ -244,11 +286,15 @@ export default function GmailThread({
                                   mimeType: attachment.mimeType,
                                   threadId: state.threadId,
                                 },
-                                `attach:${attachment.attachmentId}`
-                              ).then(() => setSavedNote(`Saved ${attachment.filename}`))
+                                `attach:${attachment.attachmentId}`,
+                              ).then(() =>
+                                setSavedNote(`Saved ${attachment.filename}`),
+                              )
                             }
                           >
-                            {busy === `attach:${attachment.attachmentId}` ? "Saving…" : "Save"}
+                            {busy === `attach:${attachment.attachmentId}`
+                              ? "Saving…"
+                              : "Save"}
                           </Button>
                         </Flex>
                       ))}
@@ -269,37 +315,29 @@ export default function GmailThread({
         </Text>
       )}
 
-      <TextArea
-        value={draft}
-        onChange={(event) => {
-          setDraft(event.target.value);
-          setConfirmingSend(false);
-        }}
-        placeholder="Reply…"
-        style={{ minHeight: 88, fontSize: 16 }}
-      />
       <Flex gap="2" align="center" wrap="wrap">
         <Button
           size="2"
           disabled={busy !== null}
-          onClick={() => void call("draftReply", { threadId: state.threadId }, "draft")}
+          onClick={() =>
+            void call(
+              "compose",
+              { threadId: state.threadId, sourceThreadId: state.threadId },
+              "compose",
+            )
+          }
         >
-          {busy === "draft" ? "Drafting…" : "AI draft"}
+          {busy === "compose" ? "Opening reply…" : "Write reply"}
         </Button>
         <Button
           size="2"
           variant="soft"
-          color={confirmingSend ? "red" : undefined}
-          disabled={!draft.trim() || busy !== null}
-          onClick={() => {
-            if (!confirmingSend) {
-              setConfirmingSend(true);
-              return;
-            }
-            void call("gmail_send", { threadId: state.threadId, body: draft }, "send");
-          }}
+          disabled={busy !== null}
+          onClick={() =>
+            void call("draftReply", { threadId: state.threadId }, "draft")
+          }
         >
-          {busy === "send" ? "Sending…" : confirmingSend ? "Confirm send" : "Send"}
+          {busy === "draft" ? "Drafting…" : "AI draft"}
         </Button>
         <Button
           size="2"
@@ -318,7 +356,9 @@ export default function GmailThread({
             size="2"
             variant="ghost"
             disabled={busy !== null}
-            onClick={() => void call("markRead", { threadId: state.threadId }, "read")}
+            onClick={() =>
+              void call("markRead", { threadId: state.threadId }, "read")
+            }
           >
             Mark read
           </Button>
@@ -326,7 +366,13 @@ export default function GmailThread({
             size="2"
             variant="ghost"
             disabled={busy !== null}
-            onClick={() => void call("archiveThread", { threadId: state.threadId }, "archive")}
+            onClick={() =>
+              void call(
+                "archiveThread",
+                { threadId: state.threadId },
+                "archive",
+              )
+            }
           >
             Archive
           </Button>
@@ -335,7 +381,9 @@ export default function GmailThread({
             variant="ghost"
             disabled={busy !== null}
             title="Archive now, remind me tomorrow"
-            onClick={() => void call("gmail_snooze", { threadId: state.threadId }, "snooze")}
+            onClick={() =>
+              void call("gmail_snooze", { threadId: state.threadId }, "snooze")
+            }
           >
             {busy === "snooze" ? "Snoozing…" : "Snooze 1d"}
           </Button>

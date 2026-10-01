@@ -37,7 +37,7 @@ console.log(result);
 ```
 
 This opens the browser, waits for the local OAuth callback, and stores the
-resulting credential.
+resulting Gmail credential. For Drive or another service, enable its API and explicitly request its scopes; Gmail-only access does not make other apps ready.
 
 If this reports missing setup, save the Desktop app OAuth client fields with
 the Google setup workflow UI/provider setup path. Do not ask the user to paste
@@ -59,12 +59,11 @@ Expected:
   valid: true,
   email: "user@example.com",
   scopes: [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/calendar",
-    "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/documents",
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/presentations"
+    "https://www.googleapis.com/auth/gmail.settings.basic"
   ]
 }
 ```

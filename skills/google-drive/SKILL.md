@@ -15,7 +15,15 @@ on top of the verified `google-workspace` connection and reuses the staged
 Google Drive has no separate console setup beyond Google Workspace. The user
 must first complete
 [Google Workspace onboarding](../google-workspace/ONBOARDING.md) and
-reach the verified stage.
+reach the verified stage with Drive permissions. Enable the Drive API in that same project, then request Drive access explicitly:
+
+```ts
+import { connectGoogle } from "@workspace-skills/google-workspace";
+import { GOOGLE_DRIVE_SCOPES } from "@workspace/google-workspace/providers";
+await connectGoogle({ scopes: [...GOOGLE_DRIVE_SCOPES] });
+```
+
+This opens a complete Google consent flow and retains previously granted service access. A Gmail-only credential is not ready for Drive.
 
 ## Runtime Helpers
 

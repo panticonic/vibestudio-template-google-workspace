@@ -38,8 +38,11 @@ const googleCredential: StoredCredentialSummary = {
     valueTemplate: "Bearer {token}",
   },
   scopes: [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
   ],
   lifecycle: { state: "active", canRefresh: true },
   metadata: {
@@ -72,7 +75,7 @@ describe("google-workspace skill facade", () => {
       new Response(JSON.stringify({ email: "user@example.com" }), {
         status: 200,
         headers: { "content-type": "application/json" },
-      })
+      }),
     );
   });
 
@@ -121,7 +124,9 @@ describe("google-workspace skill facade", () => {
   });
 
   it("reports connected when a stored Google credential exists", async () => {
-    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([googleCredential]);
+    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([
+      googleCredential,
+    ]);
 
     const status = await getGoogleOnboardingStatus();
 
@@ -132,7 +137,9 @@ describe("google-workspace skill facade", () => {
   });
 
   it("reports verified after a live Google userinfo check succeeds", async () => {
-    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([googleCredential]);
+    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([
+      googleCredential,
+    ]);
 
     const status = await getGoogleOnboardingStatus({ verify: true });
 
@@ -145,15 +152,19 @@ describe("google-workspace skill facade", () => {
   });
 
   it("normalizes unavailable credential RPC failures into structured onboarding errors", async () => {
-    runtimeMock.credentials.listStoredCredentials.mockImplementation(async () => {
-      const rpc = undefined as unknown as { call(): unknown };
-      return rpc.call();
-    });
+    runtimeMock.credentials.listStoredCredentials.mockImplementation(
+      async () => {
+        const rpc = undefined as unknown as { call(): unknown };
+        return rpc.call();
+      },
+    );
 
     const status = await getGoogleOnboardingStatus();
 
     expect(status.stage).toBe("error");
-    expect(status.error).toContain("Vibestudio credential runtime is unavailable");
+    expect(status.error).toContain(
+      "Vibestudio credential runtime is unavailable",
+    );
     expect(status.error).toContain("Original error");
   });
 
@@ -166,10 +177,18 @@ describe("google-workspace skill facade", () => {
         authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
         fields: expect.arrayContaining([
-          expect.objectContaining({ name: "clientId", type: "text", required: true }),
-          expect.objectContaining({ name: "clientSecret", type: "secret", required: true }),
+          expect.objectContaining({
+            name: "clientId",
+            type: "text",
+            required: true,
+          }),
+          expect.objectContaining({
+            name: "clientSecret",
+            type: "secret",
+            required: true,
+          }),
         ]),
-      })
+      }),
     );
   });
 
@@ -192,10 +211,7 @@ describe("google-workspace skill facade", () => {
           clientConfigId: "google-workspace",
           scopes: expect.arrayContaining([
             "https://www.googleapis.com/auth/gmail.modify",
-            "https://www.googleapis.com/auth/calendar",
-            "https://www.googleapis.com/auth/drive",
-            "https://www.googleapis.com/auth/documents",
-            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/gmail.settings.basic",
           ]),
           accountValidation: {
             userinfo: expect.objectContaining({
@@ -213,27 +229,50 @@ describe("google-workspace skill facade", () => {
         credential: expect.objectContaining({
           metadata: expect.objectContaining({
             providerId: "google-workspace",
-            upstreamAccessMode: "google-workspace-broad",
+            upstreamAccessMode: "google-workspace-selected",
             localBindingCatalog: "google-workspace:v1",
           }),
           audience: expect.arrayContaining([
-            { url: "https://gmail.googleapis.com/gmail/v1/users/me/", match: "path-prefix" },
-            { url: "https://www.googleapis.com/calendar/v3/", match: "path-prefix" },
-            { url: "https://docs.googleapis.com/v1/", match: "path-prefix" },
+            {
+              url: "https://gmail.googleapis.com/gmail/v1/users/me/",
+              match: "path-prefix",
+            },
           ]),
           bindings: expect.arrayContaining([
-            expect.objectContaining({ id: "google-gmail", label: "Google Gmail" }),
-            expect.objectContaining({ id: "google-calendar", label: "Google Calendar" }),
-            expect.objectContaining({ id: "google-drive", label: "Google Drive" }),
-            expect.objectContaining({ id: "google-people", label: "Google People" }),
+            expect.objectContaining({
+              id: "google-gmail",
+              label: "Google Gmail",
+            }),
           ]),
         }),
-      })
+      }),
+    );
+  });
+
+  it("reauthorizes a verified connection when the requested workflow needs missing scopes", async () => {
+    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([
+      googleCredential,
+    ]);
+    runtimeMock.credentials.getClientConfigStatus.mockResolvedValue({
+      configured: true,
+    });
+    await connectGoogle({ scopes: ["https://www.googleapis.com/auth/drive"] });
+    expect(runtimeMock.credentials.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flow: expect.objectContaining({
+          scopes: expect.arrayContaining([
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/gmail.modify",
+          ]),
+        }),
+      }),
     );
   });
 
   it("connectGoogle reuses an already verified Google credential instead of launching OAuth again", async () => {
-    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([googleCredential]);
+    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([
+      googleCredential,
+    ]);
 
     const result = await connectGoogle();
 
@@ -260,7 +299,9 @@ describe("google-workspace skill facade", () => {
   });
 
   it("returns structured verification failure when the credential proxy reports expiry", async () => {
-    runtimeMock.credentials.fetch.mockRejectedValue(new Error("credential-expired"));
+    runtimeMock.credentials.fetch.mockRejectedValue(
+      new Error("credential-expired"),
+    );
 
     const result = await verifyGoogleCredential("cred-google");
 
@@ -295,12 +336,14 @@ describe("google-workspace skill facade", () => {
     expect(runtimeMock.credentials.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         flow: expect.objectContaining({ clientConfigId: "google-workspace" }),
-      })
+      }),
     );
   });
 
   it("verifyGoogleCredential returns scopes from the stored credential", async () => {
-    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([googleCredential]);
+    runtimeMock.credentials.listStoredCredentials.mockResolvedValue([
+      googleCredential,
+    ]);
 
     const result = await verifyGoogleCredential("cred-google");
 

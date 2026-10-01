@@ -1,10 +1,15 @@
+import { GOOGLE_GMAIL_SCOPES } from "@workspace/google-workspace/providers";
 import { parent, rpc } from "@workspace/runtime";
 import { addAgentToChannel } from "@workspace-skills/agents";
 import { getGoogleOnboardingStatus } from "@workspace-skills/google-workspace";
 
-const GMAIL_AGENT_SOURCE = "workers/gmail-agent";
-const GMAIL_AGENT_CLASS = "GmailAgentWorker";
-const GMAIL_AGENT_HANDLE = "gmail";
+import {
+  GMAIL_AGENT_SOURCE,
+  GMAIL_AGENT_CLASS,
+  GMAIL_AGENT_HANDLE,
+  gmailAgentObjectKey,
+} from "./chat-state";
+export { gmailAgentObjectKey, gmailChatStateArgs } from "./chat-state";
 
 export interface GmailAgentSetupStatus {
   stage: "needs-google-workspace" | "needs-channel-setup" | "ready" | "error";
@@ -28,7 +33,9 @@ interface GmailAgentSetupArgs {
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 export async function getGmailAgentSetupStatus(): Promise<GmailAgentSetupStatus> {
@@ -37,28 +44,43 @@ export async function getGmailAgentSetupStatus(): Promise<GmailAgentSetupStatus>
     if (status.stage === "needs-setup") {
       return {
         stage: "needs-google-workspace",
-        message: "Google Workspace OAuth setup is required before Gmail can connect.",
+        message:
+          "Google Workspace OAuth setup is required before Gmail can connect.",
         google: status,
       };
     }
     if (status.stage === "ready-to-connect") {
       return {
         stage: "needs-google-workspace",
-        message: "Google Workspace is configured; connect the Gmail credential.",
+        message:
+          "Google Workspace is configured; connect the Gmail credential.",
         google: status,
       };
     }
     if (status.stage === "connected") {
       return {
         stage: "needs-google-workspace",
-        message: "Google Workspace credential exists; verify it before Gmail setup.",
+        message:
+          "Google Workspace credential exists; verify it before Gmail setup.",
         google: status,
       };
     }
     if (status.stage === "verified") {
-      const installedAgents = (await parent.stateArgs.get<Record<string, unknown>>())[
-        "installedAgents"
-      ];
+      if (
+        !GOOGLE_GMAIL_SCOPES.every((scope) =>
+          status.verification?.scopes?.includes(scope),
+        )
+      ) {
+        return {
+          stage: "needs-google-workspace",
+          message:
+            "Connect Gmail permissions before setting up your mail assistant.",
+          google: status,
+        };
+      }
+      const installedAgents = (
+        await parent.stateArgs.get<Record<string, unknown>>()
+      )["installedAgents"];
       const hasGmailAgent =
         Array.isArray(installedAgents) &&
         installedAgents.some((agent) => {
@@ -90,25 +112,24 @@ export async function getGmailAgentSetupStatus(): Promise<GmailAgentSetupStatus>
   }
 }
 
-export function gmailAgentObjectKey(channelId: string): string {
-  return `gmail-${channelId}`;
-}
-
-export async function resolveGmailAgentWorker(channelId: string): Promise<{ targetId: string }> {
+export async function resolveGmailAgentWorker(
+  channelId: string,
+): Promise<{ targetId: string }> {
   const normalized = channelId.trim();
-  if (!normalized) throw new Error("resolveGmailAgentWorker requires channelId");
-  return rpc.call<{ targetId: string }>("main", "workers.resolveDurableObject", [
-    GMAIL_AGENT_SOURCE,
-    GMAIL_AGENT_CLASS,
-    gmailAgentObjectKey(normalized),
-  ]);
+  if (!normalized)
+    throw new Error("resolveGmailAgentWorker requires channelId");
+  return rpc.call<{ targetId: string }>(
+    "main",
+    "workers.resolveDurableObject",
+    [GMAIL_AGENT_SOURCE, GMAIL_AGENT_CLASS, gmailAgentObjectKey(normalized)],
+  );
 }
 
 /** Call any public Gmail agent DO method (attention rules, reads, etc.). */
 export async function callGmailAgent<T = unknown>(
   channelId: string,
   method: string,
-  args: unknown = {}
+  args: unknown = {},
 ): Promise<T> {
   const target = await resolveGmailAgentWorker(channelId);
   return rpc.call<T>(target.targetId, method, [channelId, args]);
@@ -116,9 +137,11 @@ export async function callGmailAgent<T = unknown>(
 
 function updateInstalledAgents(
   existing: unknown,
-  next: InstalledAgentRecord
+  next: InstalledAgentRecord,
 ): InstalledAgentRecord[] {
-  const current = Array.isArray(existing) ? (existing as InstalledAgentRecord[]) : [];
+  const current = Array.isArray(existing)
+    ? (existing as InstalledAgentRecord[])
+    : [];
   return [...current.filter((agent) => agent.handle !== next.handle), next];
 }
 
@@ -135,8 +158,16 @@ export async function setupGmailAgent(args: GmailAgentSetupArgs = {}): Promise<{
   }
   const googleStatus = await getGoogleOnboardingStatus({ verify: true });
   const googleCredentialId = googleStatus.credentialId;
-  if (googleStatus.stage !== "verified" || !googleCredentialId) {
-    throw new Error("setupGmailAgent requires a verified Google Workspace credential");
+  if (
+    googleStatus.stage !== "verified" ||
+    !googleCredentialId ||
+    !GOOGLE_GMAIL_SCOPES.every((scope) =>
+      googleStatus.verification?.scopes?.includes(scope),
+    )
+  ) {
+    throw new Error(
+      "setupGmailAgent requires a verified Google credential with Gmail permissions",
+    );
   }
 
   // Channel-membership mechanics are the general helper's job (per-channel key

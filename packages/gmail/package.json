@@ -8,7 +8,8 @@
     "./agent": "./src/agent.ts",
     "./card-types": "./src/card-types.ts",
     "./test-utils": "./src/test-utils.ts",
-    "./renderers/gmail-thread.reducer": "./src/renderers/gmail-thread.reducer.ts"
+    "./renderers/gmail-thread.reducer": "./src/renderers/gmail-thread.reducer.ts",
+    "./chat-state": "./src/chat-state.ts"
   },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.2",

@@ -21,7 +21,7 @@ choices to the agent for conversion into an eval call.
 
 Use one project throughout:
 
-- Enable Gmail, Calendar, Drive, Docs, Sheets, Slides, and People APIs.
+- For Gmail, enable the Gmail API. For All Workspace apps, also enable Calendar, Drive, Docs, Sheets, Slides, and People APIs.
 - Configure the OAuth consent screen.
 - Publish the app to Production. Testing mode can expire refresh tokens after
   seven days for these user-data scopes.
@@ -37,7 +37,7 @@ The setup component links to:
 - OAuth setup: `https://console.cloud.google.com/auth/overview`
 - OAuth clients: `https://console.cloud.google.com/auth/clients`
 
-It lets the user open each step inside Vibestudio or in their normal browser.
+It defaults to the user’s normal browser and also lets them open each step inside Vibestudio.
 The latter is useful for existing sign-in, passkeys, and password managers.
 
 ## Optional Gmail push notifications

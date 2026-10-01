@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./setup": "./GoogleWorkspaceSetup.tsx"
   },
   "dependencies": {
     "@workspace/runtime": "workspace:*",

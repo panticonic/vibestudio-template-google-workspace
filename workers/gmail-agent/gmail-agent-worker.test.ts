@@ -585,10 +585,10 @@ describe("GmailAgentWorker", () => {
               }),
             }),
             redirect: {
-            host: "localhost",
-            port: 1455,
-            callbackPath: "/auth/callback",
-          },
+              host: "localhost",
+              port: 1455,
+              callbackPath: "/auth/callback",
+            },
             browser: "external",
           }),
           handoffTarget: { callerId: "panel-1", callerKind: "panel" },
@@ -1315,42 +1315,61 @@ describe("GmailAgentWorker", () => {
     expect(payload.messages[0]).not.toHaveProperty("bodyText");
   });
 
-  it("sends Gmail messages without requiring a channel custom message id", async () => {
+  it("sends an owned compose and rejects sends without compose identity", async () => {
     const { instance } = await createTestDO(TestGmailAgentWorker);
     const worker = instance as TestGmailAgentWorker;
+    worker.seedSubscription();
 
+    const missing = await worker.onMethodCall("ch-1", "missing", "gmail_send", {
+      to: "b@example.com",
+      subject: "Hello",
+      body: "Body",
+    });
+    expect(missing.isError).toBe(true);
+    expect(worker.sent).not.toHaveBeenCalled();
+    const compose = await worker.onMethodCall("ch-1", "compose", "compose", {});
     const result = await worker.onMethodCall("ch-1", "call-1", "gmail_send", {
+      messageId: (compose.result as { messageId: string }).messageId,
       to: "b@example.com",
       subject: "Re: Question",
       body: "Done",
     });
 
     expect(result.result).toEqual({ sent: true, id: "sent-1" });
-    expect(worker.sent).toHaveBeenCalledWith({
-      to: "b@example.com",
-      subject: "Re: Question",
-      body: "Done",
-    });
+    expect(worker.sent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "b@example.com",
+        subject: "Re: Question",
+        body: "Done",
+      }),
+    );
   });
 
-  it("resolves inline thread replies from the source thread", async () => {
+  it("resolves compose replies from the source thread", async () => {
     const { instance } = await createTestDO(TestGmailAgentWorker);
     const worker = instance as TestGmailAgentWorker;
+    worker.seedSubscription();
 
+    const compose = await worker.onMethodCall("ch-1", "compose", "compose", {
+      threadId: "thr-1",
+    });
     const result = await worker.onMethodCall("ch-1", "call-1", "gmail_send", {
+      messageId: (compose.result as { messageId: string }).messageId,
       threadId: "thr-1",
       body: "Inline reply",
     });
 
     expect(result.result).toEqual({ sent: true, id: "sent-1" });
-    expect(worker.sent).toHaveBeenCalledWith({
-      to: "a@example.com",
-      subject: "Re: Question",
-      body: "Inline reply",
-      threadId: "thr-1",
-      inReplyTo: "<msg-1@example.com>",
-      references: "<msg-1@example.com>",
-    });
+    expect(worker.sent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "a@example.com",
+        subject: "Re: Question",
+        body: "Inline reply",
+        threadId: "thr-1",
+        inReplyTo: "<msg-1@example.com>",
+        references: "<msg-1@example.com>",
+      }),
+    );
   });
 
   it("uses a one-shot draft generator for reply compose cards", async () => {
@@ -1684,7 +1703,10 @@ describe("GmailAgentWorker", () => {
       { sendAsEmail: "support@example.com", displayName: "Support" },
     ]);
 
+    const compose = await worker.onMethodCall("ch-1", "compose", "compose", {});
+    const messageId = (compose.result as { messageId: string }).messageId;
     const ok = await worker.onMethodCall("ch-1", "call-1", "gmail_send", {
+      messageId,
       to: "b@example.com",
       from: "support@example.com",
       subject: "Hello",
@@ -1695,7 +1717,14 @@ describe("GmailAgentWorker", () => {
       expect.objectContaining({ from: "Support <support@example.com>" }),
     );
 
+    const secondCompose = await worker.onMethodCall(
+      "ch-1",
+      "compose-2",
+      "compose",
+      {},
+    );
     const bad = await worker.onMethodCall("ch-1", "call-2", "gmail_send", {
+      messageId: (secondCompose.result as { messageId: string }).messageId,
       to: "b@example.com",
       from: "spoofed@evil.example",
       subject: "Hello",
@@ -2272,44 +2301,28 @@ describe("GmailAgentWorker", () => {
     );
   });
 
-  it("parks recipient-less saveDraft on a drafting compose card instead of erroring", async () => {
+  it("saves an incomplete owned compose and then updates the same Gmail draft", async () => {
     const { instance } = await createTestDO(TestGmailAgentWorker);
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
-
-    const result = await worker.onMethodCall("ch-1", "call-1", "saveDraft", {
+    const compose = await worker.onMethodCall("ch-1", "compose", "compose", {
       subject: "Quarterly numbers",
       body: "Draft body",
-      toCandidates: [{ email: "alice@example.com", displayName: "Alice" }],
     });
-
-    expect(result.isError).toBeUndefined();
-    expect(result.result).toMatchObject({
-      ok: true,
-      cardCreated: true,
-      note: expect.stringContaining("gmail_contacts"),
+    const messageId = (compose.result as { messageId: string }).messageId;
+    const result = await worker.onMethodCall("ch-1", "save", "saveDraft", {
+      messageId,
     });
-    expect(worker.createDraft).not.toHaveBeenCalled();
-    const compose = worker.published.find(
-      (entry) =>
-        (entry.event.payload as { typeId?: string }).typeId === "gmail.compose",
+    expect(result.result).toMatchObject({ saved: true, draftId: "draft-1" });
+    expect(worker.createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "", subject: "Quarterly numbers" }),
     );
-    expect(compose?.event.payload).toMatchObject({
-      initialState: {
-        status: "drafting",
-        subject: "Quarterly numbers",
-        body: "Draft body",
-        toCandidates: [expect.objectContaining({ email: "alice@example.com" })],
-      },
-    });
-
-    // A complete draft still saves to Gmail.
-    const saved = await worker.onMethodCall("ch-1", "call-2", "saveDraft", {
+    const saved = await worker.onMethodCall("ch-1", "save-2", "saveDraft", {
+      messageId,
       to: "alice@example.com",
-      subject: "Quarterly numbers",
-      body: "Draft body",
     });
     expect(saved.result).toMatchObject({ saved: true, draftId: "draft-1" });
+    expect(worker.createDraft).toHaveBeenCalledTimes(1);
   });
 
   it("includes parsed fromEmail alongside the display from in query results", async () => {

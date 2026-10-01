@@ -26,19 +26,25 @@ export interface GmailOperation {
   auth?: GmailOperationAuth;
   /** Run ensureRecovered (channel replay catch-up) before dispatching. */
   needsRecovery?: boolean;
-  run: (ctx: GmailOperationContext, channelId: string, args: Record<string, unknown>) => unknown;
+  run: (
+    ctx: GmailOperationContext,
+    channelId: string,
+    args: Record<string, unknown>,
+  ) => unknown;
 }
 
-const NO_ARGS = { type: "object", properties: {}, additionalProperties: false } as const;
+const NO_ARGS = {
+  type: "object",
+  properties: {},
+  additionalProperties: false,
+} as const;
 
 const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const GMAIL_WRITE_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
-const GMAIL_SETTINGS_SCOPE = "https://www.googleapis.com/auth/gmail.settings.basic";
-const GOOGLE_CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts";
-const GOOGLE_OTHER_CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts.other.readonly";
+const GMAIL_SETTINGS_SCOPE =
+  "https://www.googleapis.com/auth/gmail.settings.basic";
 
 const GMAIL_API = "Gmail API";
-const PEOPLE_API = "People API";
 
 const GMAIL_READ_AUTH: GmailOperationAuth = {
   requiredScopes: [GMAIL_READ_SCOPE],
@@ -61,12 +67,9 @@ const GMAIL_SEND_AS_AUTH: GmailOperationAuth = {
     "Reconnect Google Workspace from the Gmail setup card so Vibestudio can request Gmail and Gmail settings access.",
 };
 
-const GMAIL_CONTACTS_AUTH: GmailOperationAuth = {
-  requiredScopes: [GMAIL_READ_SCOPE, GOOGLE_CONTACTS_SCOPE, GOOGLE_OTHER_CONTACTS_SCOPE],
-  googleApis: [GMAIL_API, PEOPLE_API],
-  reconnectPrompt:
-    "Reconnect Google Workspace from the Gmail setup card so Vibestudio can request Gmail and Google contacts access.",
-};
+// Address lookup starts with the local mail history. People is an optional
+// fallback and must not gate the useful local workflow.
+const GMAIL_CONTACTS_AUTH: GmailOperationAuth = GMAIL_READ_AUTH;
 
 const SEARCH_SCHEMA = {
   type: "object",
@@ -158,7 +161,7 @@ const SEND_SCHEMA = {
     draftId: { type: "string" },
     toCandidates: CANDIDATES_SCHEMA,
   },
-  required: ["body"],
+  required: ["messageId"],
   additionalProperties: false,
 } as const;
 
@@ -275,8 +278,7 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
   {
     name: "gmail_send",
     description:
-      "Send a Gmail message immediately. Use ONLY when the user explicitly asked to send without review; otherwise use gmail_draft so the user reviews and clicks Send on the compose card. " +
-      "Parameters: { to: string, cc?, bcc?, from? (must be a configured send-as alias), subject: string, body: string, threadId?, messageId? }.",
+      "Send an existing Gmail compose. First use gmail_draft, then pass its messageId. Send ONLY on an explicit user instruction or the compose card's Send click. Edits may be supplied with messageId; saved Gmail drafts are consumed by the send.",
     schema: SEND_SCHEMA,
     exposure: ["tool", "method"],
     auth: GMAIL_SEND_AS_AUTH,
@@ -307,7 +309,8 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
     schema: SET_ATTENTION_SCHEMA,
     exposure: ["tool", "method"],
     // Tool calls default to a dry run; the setAttentionPrefs RPC does not.
-    run: (ctx, channelId, args) => ctx.handlers.setAttention(channelId, { dryRun: true, ...args }),
+    run: (ctx, channelId, args) =>
+      ctx.handlers.setAttention(channelId, { dryRun: true, ...args }),
   },
   {
     name: "gmail_snooze",
@@ -458,10 +461,26 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
     run: (ctx, channelId, args) => ctx.handlers.saveDraft(channelId, args),
   },
   {
+    name: "checkCompose",
+    description: "Reconcile a compose with Gmail without sending again",
+    schema: {
+      type: "object",
+      properties: { messageId: { type: "string" } },
+      required: ["messageId"],
+      additionalProperties: false,
+    },
+    exposure: ["method"],
+    auth: GMAIL_READ_AUTH,
+    needsRecovery: true,
+    run: (ctx, channelId, args) => ctx.handlers.checkCompose(channelId, args),
+  },
+  {
     name: "discardCompose",
-    description: "Mark a Gmail compose card discarded",
+    description: "Discard a compose and delete its owned Gmail draft",
     schema: { type: "object", additionalProperties: true },
     exposure: ["method"],
+    auth: GMAIL_WRITE_AUTH,
+    needsRecovery: true,
     run: (ctx, channelId, args) => ctx.handlers.discardCompose(channelId, args),
   },
   {
@@ -529,7 +548,10 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
     exposure: ["method"],
     needsRecovery: true,
     run: (ctx, channelId, args) =>
-      ctx.handlers.listActionableThreads(channelId, numberArg(record(args), "limit") ?? 6),
+      ctx.handlers.listActionableThreads(
+        channelId,
+        numberArg(record(args), "limit") ?? 6,
+      ),
   },
   {
     name: "setPollInterval",
@@ -541,7 +563,8 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
       additionalProperties: false,
     },
     exposure: ["method"],
-    run: (ctx, channelId, args) => ctx.handlers.setPollInterval(channelId, args),
+    run: (ctx, channelId, args) =>
+      ctx.handlers.setPollInterval(channelId, args),
   },
   {
     name: "getAttentionPrefs",
@@ -578,7 +601,8 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
     },
     exposure: ["participant"],
     auth: GMAIL_READ_AUTH,
-    run: (ctx, channelId, args) => ctx.participantApi.getThread(channelId, args),
+    run: (ctx, channelId, args) =>
+      ctx.participantApi.getThread(channelId, args),
   },
   {
     name: "gmail_getOverview",
@@ -592,12 +616,14 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
   },
   {
     name: "gmail_requestDraft",
-    description: "Agent API: prepare a compose card in review state (never sends)",
+    description:
+      "Agent API: prepare a compose card in review state (never sends)",
     schema: { type: "object", additionalProperties: true },
     exposure: ["participant"],
     auth: GMAIL_SEND_AS_AUTH,
     needsRecovery: true,
-    run: (ctx, channelId, args) => ctx.participantApi.requestDraft(channelId, args),
+    run: (ctx, channelId, args) =>
+      ctx.participantApi.requestDraft(channelId, args),
   },
   {
     name: "gmail_resolveContact",
@@ -612,7 +638,8 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
     exposure: ["participant"],
     auth: GMAIL_CONTACTS_AUTH,
     needsRecovery: true,
-    run: (ctx, channelId, args) => ctx.participantApi.resolveContact(channelId, args),
+    run: (ctx, channelId, args) =>
+      ctx.participantApi.resolveContact(channelId, args),
   },
 ];
 
@@ -620,7 +647,8 @@ export const GMAIL_OPERATIONS: GmailOperation[] = [
 export function buildOperationIndex(): Map<string, GmailOperation> {
   const index = new Map<string, GmailOperation>();
   for (const op of GMAIL_OPERATIONS) {
-    if (index.has(op.name)) throw new Error(`duplicate gmail operation: ${op.name}`);
+    if (index.has(op.name))
+      throw new Error(`duplicate gmail operation: ${op.name}`);
     index.set(op.name, op);
   }
   return index;
@@ -630,11 +658,15 @@ export function toolOperations(): GmailOperation[] {
   return GMAIL_OPERATIONS.filter((op) => op.exposure.includes("tool"));
 }
 
-export function operationAuth(operation: string): GmailOperationAuth | undefined {
+export function operationAuth(
+  operation: string,
+): GmailOperationAuth | undefined {
   return buildOperationIndex().get(operation)?.auth;
 }
 
-export function missingScopeActionForOperation(operation: string): string | undefined {
+export function missingScopeActionForOperation(
+  operation: string,
+): string | undefined {
   const auth = operationAuth(operation);
   if (!auth) return undefined;
   const scopes = auth.requiredScopes.map((scope) => `\`${scope}\``).join(", ");
@@ -643,8 +675,15 @@ export function missingScopeActionForOperation(operation: string): string | unde
 }
 
 /** Methods advertised on the participant descriptor (UI + agent surfaces). */
-export function advertisedMethods(): Array<{ name: string; description: string }> {
+export function advertisedMethods(): Array<{
+  name: string;
+  description: string;
+}> {
   return GMAIL_OPERATIONS.filter(
-    (op) => op.exposure.includes("method") || op.exposure.includes("participant")
-  ).map((op) => ({ name: op.name, description: op.description.split(". ")[0]! }));
+    (op) =>
+      op.exposure.includes("method") || op.exposure.includes("participant"),
+  ).map((op) => ({
+    name: op.name,
+    description: op.description.split(". ")[0]!,
+  }));
 }

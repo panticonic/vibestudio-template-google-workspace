@@ -19,6 +19,7 @@ import {
 import type {
   GmailAttentionPrefs,
   GmailSetupState,
+  GmailComposeCardState,
 } from "@workspace/gmail/card-types";
 import {
   reduce as reduceGmailThread,
@@ -1140,7 +1141,6 @@ export class GmailAgentWorker extends AgentWorkerBase {
 
   private async ensureRecovered(channelId: string): Promise<void> {
     if (this.recoveredChannels.has(channelId)) return;
-    this.recoveredChannels.add(channelId);
 
     const folded = await this.indexOwnCustomMessages(channelId, (typeId) => {
       if (typeId === "gmail.thread") {
@@ -1149,6 +1149,14 @@ export class GmailAgentWorker extends AgentWorkerBase {
       }
       return undefined;
     });
+
+    for (const [messageId, value] of folded.get("gmail.compose") ?? []) {
+      this.gmailCards.recoverCompose(
+        channelId,
+        messageId,
+        value as GmailComposeCardState,
+      );
+    }
 
     const setup = folded.get("gmail.setup");
     if (setup && setup.size > 0) {
@@ -1216,6 +1224,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
         Date.now(),
       );
     }
+    this.recoveredChannels.add(channelId);
   }
 }
 

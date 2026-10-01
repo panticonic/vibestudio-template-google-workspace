@@ -1,6 +1,6 @@
 ---
 name: google-workspace
-description: Set up broad Google Workspace OAuth credentials with staged local bindings for Gmail, Calendar, Drive, Docs, Sheets, Slides, People, and identity.
+description: Set up selected Google Workspace OAuth credentials with staged local bindings for Gmail, Calendar, Drive, Docs, Sheets, Slides, People, and identity.
 onboarding:
   capabilities:
     - id: connection.google-workspace
@@ -34,8 +34,7 @@ onboarding:
 Use this skill to configure and verify Google Workspace OAuth for Gmail,
 Calendar, Drive, Docs, Sheets, Slides, People, and identity. The goal is not
 just "make OAuth work"; guide the user toward a durable setup with a Desktop
-app OAuth client, Production publishing, offline refresh tokens, a broad
-upstream Workspace grant, staged local bindings, and a verified live API call.
+app OAuth client, Production publishing, offline refresh tokens, permissions for the selected workflow, staged local bindings, and a verified live API call.
 
 ## Onboarding Policy
 
@@ -60,12 +59,13 @@ Google offline access and opts into Vibestudio refresh-token persistence. If
 status or verification reports `credential-expired`, replace the old credential
 with `connectGoogle({ force: true })`.
 
-Vibestudio intentionally asks Google for a broad Workspace bundle once, then
-stores separate local bindings: `google-gmail`, `google-calendar`,
-`google-drive`, `google-docs`, `google-sheets`, `google-slides`,
-`google-people`, and `google-identity`. Agents should use the service-specific
-client/helper instead of asking the user to reconnect when moving from Gmail to
-Calendar or Docs.
+The setup card requests Gmail permissions first. **All Workspace apps** opts
+into Calendar, Drive, Docs, Sheets, Slides, and People. `connectGoogle({ scopes })`
+requests a complete selected scope set through a new Desktop-app consent flow;
+Google installed apps do not support incremental authorization. Existing grants
+are retained when expanding the selection. Bindings cover only the selected APIs.
+Verify the stored scopes needed by the next workflow, as identity verification
+alone does not establish access to mail or files.
 
 When the user is setting up Gmail specifically, continue with
 [Gmail onboarding](../../workers/gmail-agent/docs/ONBOARDING.md) after Google
@@ -149,7 +149,8 @@ discover_agents({ query: "email" });
 
 notify({
   to: "agent:gmail@ch-inbox",
-  content: "Can you extract the newsletter senders from the last 20 messages tagged `newsletters`?",
+  content:
+    "Can you extract the newsletter senders from the last 20 messages tagged `newsletters`?",
 });
 ```
 
