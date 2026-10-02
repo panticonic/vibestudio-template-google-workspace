@@ -29,6 +29,9 @@ describe("gmail card render pipeline", () => {
       "react/jsx-dev-runtime": await import("react/jsx-dev-runtime"),
       "@radix-ui/themes": await import("@radix-ui/themes"),
       "@radix-ui/react-icons": await import("@radix-ui/react-icons"),
+      // panels/chat exposes this exact peer alongside React and Radix. Use its
+      // real exports; the doctor must still reject build-service imports.
+      "@workspace/ui/feedback": await import("@workspace/ui/feedback"),
     });
 
     await expect(
