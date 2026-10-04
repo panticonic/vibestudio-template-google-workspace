@@ -42,4 +42,28 @@ describe("gmail operation auth metadata", () => {
       action: expect.stringContaining("gmail.modify"),
     });
   });
+  it("propagates original setup publication failure and retries its debt after auth state is saved", async () => {
+    const state = { syncState: "ok" } as never;
+    const original = new Error("original channel approval cancelled");
+    const publishSetup = vi
+      .fn()
+      .mockRejectedValueOnce(original)
+      .mockResolvedValueOnce(undefined);
+    const deps = {
+      getChannelState: () => state,
+      saveChannelState: vi.fn(),
+      publishSetup,
+    };
+    const expired = new GmailApiError("expired", "auth-expired", {
+      status: 401,
+    });
+    await expect(
+      failGmailOperation(deps, "ch-1", "search", expired),
+    ).rejects.toBe(original);
+    await expect(
+      failGmailOperation(deps, "ch-1", "search", expired),
+    ).resolves.toMatchObject({ error: { code: "auth-expired" } });
+    expect(publishSetup).toHaveBeenCalledTimes(2);
+    expect(deps.saveChannelState).toHaveBeenCalledTimes(1);
+  });
 });

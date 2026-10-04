@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { RpcBoundaryError } from "@vibestudio/rpc";
 import type {
   CredentialClient,
   UrlCredentialHandle,
@@ -74,6 +75,50 @@ function createClient(
 }
 
 describe("Gmail client", () => {
+  it("preserves an original authority failure instead of classifying it as missing Gmail credentials", async () => {
+    const original = new RpcBoundaryError(
+      "Original account approval is pending",
+      "access",
+      "EACQUIRE",
+    );
+    const credentials = {
+      forAudience: async () => {
+        throw original;
+      },
+    } as unknown as CredentialClient;
+    await expect(createGmailClient(credentials).getProfile()).rejects.toBe(
+      original,
+    );
+  });
+  it("keeps original cancellation through credential acquisition without starting HTTP", async () => {
+    const controller = new AbortController();
+    const original = new Error("Original Gmail method cancelled");
+    const fetch = vi.fn();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let release!: () => void;
+    const finishCredential = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const credentials = {
+      forAudience: async () => {
+        entered();
+        await finishCredential;
+        return { credentialId: "cred-1", fetch };
+      },
+    } as unknown as CredentialClient;
+    const pending = createGmailClient(credentials, {
+      signal: controller.signal,
+    }).getProfile();
+    await started;
+    controller.abort(original);
+    release();
+    await expect(pending).rejects.toBe(original);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("lists messages and fetches message details via one batch call", async () => {
     const { client, fetch } = createClient({
       "GET /gmail/v1/users/me/messages?maxResults=2": {

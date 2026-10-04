@@ -6,16 +6,25 @@ import type {
   GmailAttentionPrefs,
 } from "@workspace/gmail/card-types";
 import { DEFAULT_ATTENTION_PREFERENCES } from "../schema.js";
-import { normalizeEmailAddress, type GmailAttentionEvent } from "../sync/thread-model.js";
+import {
+  normalizeEmailAddress,
+  type GmailAttentionEvent,
+} from "../sync/thread-model.js";
 
-const ATTENTION_ACTIONS = ["surface", "summarize", "draft", "archive", "markRead"] as const;
+const ATTENTION_ACTIONS = [
+  "surface",
+  "summarize",
+  "draft",
+  "archive",
+  "markRead",
+] as const;
 
 export function parseActionsJson(value: unknown): GmailAttentionAction[] {
   try {
     const parsed = JSON.parse(String(value ?? "[]")) as unknown;
     return Array.isArray(parsed)
       ? parsed.filter((item): item is GmailAttentionAction =>
-          (ATTENTION_ACTIONS as readonly string[]).includes(String(item))
+          (ATTENTION_ACTIONS as readonly string[]).includes(String(item)),
         )
       : ["surface"];
   } catch {
@@ -64,7 +73,10 @@ export class TriageStore {
 
   getPrefs(channelId: string): GmailAttentionPrefs & { triageModel?: string } {
     const row = this.sql
-      .exec(`SELECT * FROM gmail_attention_prefs WHERE channel_id = ?`, channelId)
+      .exec(
+        `SELECT * FROM gmail_attention_prefs WHERE channel_id = ?`,
+        channelId,
+      )
       .toArray()[0];
     if (!row) {
       return {
@@ -76,7 +88,9 @@ export class TriageStore {
     return {
       preferencesText: String(row["preferences_text"]),
       knownSenderShortcut: Number(row["known_sender_shortcut"] ?? 1) === 1,
-      ...(row["triage_model"] ? { triageModel: String(row["triage_model"]) } : {}),
+      ...(row["triage_model"]
+        ? { triageModel: String(row["triage_model"]) }
+        : {}),
       updatedAt: Number(row["updated_at"] ?? 0),
     };
   }
@@ -85,20 +99,31 @@ export class TriageStore {
   hasSavedPrefs(channelId: string): boolean {
     return (
       this.sql
-        .exec(`SELECT channel_id FROM gmail_attention_prefs WHERE channel_id = ?`, channelId)
+        .exec(
+          `SELECT channel_id FROM gmail_attention_prefs WHERE channel_id = ?`,
+          channelId,
+        )
         .toArray().length > 0
     );
   }
 
   setPrefs(
     channelId: string,
-    prefs: { preferencesText: string; knownSenderShortcut?: boolean; triageModel?: string }
+    prefs: {
+      preferencesText: string;
+      knownSenderShortcut?: boolean;
+      triageModel?: string | null;
+    },
   ): GmailAttentionPrefs {
     const current = this.getPrefs(channelId);
     const next = {
       preferencesText: prefs.preferencesText.slice(0, 4000),
-      knownSenderShortcut: prefs.knownSenderShortcut ?? current.knownSenderShortcut,
-      triageModel: prefs.triageModel ?? current.triageModel,
+      knownSenderShortcut:
+        prefs.knownSenderShortcut ?? current.knownSenderShortcut,
+      triageModel:
+        prefs.triageModel === null
+          ? undefined
+          : (prefs.triageModel ?? current.triageModel),
       updatedAt: this.now(),
     };
     this.sql.exec(
@@ -109,15 +134,20 @@ export class TriageStore {
       next.preferencesText,
       next.knownSenderShortcut ? 1 : 0,
       next.triageModel ?? null,
-      next.updatedAt
+      next.updatedAt,
     );
     return next;
   }
 
   // ── surfaced hits ─────────────────────────────────────────────────────────
 
-  recordHit(channelId: string, threadId: string, decision: GmailAttentionDecision): void {
-    if (!decision.wake || !decision.directiveId || !decision.directiveName) return;
+  recordHit(
+    channelId: string,
+    threadId: string,
+    decision: GmailAttentionDecision,
+  ): void {
+    if (!decision.wake || !decision.directiveId || !decision.directiveName)
+      return;
     this.sql.exec(
       `INSERT OR REPLACE INTO gmail_attention_hits
        (channel_id, thread_id, directive_id, directive_name, reason, actions_json, matched_at)
@@ -128,12 +158,15 @@ export class TriageStore {
       decision.directiveName,
       decision.reason ?? decision.directiveName,
       JSON.stringify(decision.actions ?? ["surface"]),
-      this.now()
+      this.now(),
     );
   }
 
   clearHits(channelId: string): void {
-    this.sql.exec(`DELETE FROM gmail_attention_hits WHERE channel_id = ?`, channelId);
+    this.sql.exec(
+      `DELETE FROM gmail_attention_hits WHERE channel_id = ?`,
+      channelId,
+    );
   }
 
   hits(channelId: string, limit = 8): GmailAttentionHit[] {
@@ -144,7 +177,7 @@ export class TriageStore {
          ORDER BY matched_at DESC
          LIMIT ?`,
         channelId,
-        Math.max(1, Math.min(limit, 50))
+        Math.max(1, Math.min(limit, 50)),
       )
       .toArray();
     return rows.map((row) => ({
@@ -165,7 +198,7 @@ export class TriageStore {
          ORDER BY matched_at DESC
          LIMIT 1`,
         channelId,
-        threadId
+        threadId,
       )
       .toArray()[0];
     return row
@@ -186,7 +219,7 @@ export class TriageStore {
     channelId: string,
     email: string | undefined,
     display: string | undefined,
-    source: "sent-mail" | "send"
+    source: "sent-mail" | "send",
   ): void {
     if (!email) return;
     const now = this.now();
@@ -203,7 +236,7 @@ export class TriageStore {
       display ?? null,
       now,
       now,
-      source
+      source,
     );
   }
 
@@ -214,7 +247,7 @@ export class TriageStore {
       .exec(
         `SELECT email FROM gmail_replied_senders WHERE channel_id = ? AND email = ? LIMIT 1`,
         channelId,
-        email
+        email,
       )
       .toArray()[0];
     return Boolean(row);
@@ -224,16 +257,21 @@ export class TriageStore {
    * Turn dedup: returns true (and records the message key) only the first
    * time a given source surfaces a given thread message.
    */
-  shouldStartTurn(channelId: string, event: GmailAttentionEvent, sourceId: string): boolean {
+  shouldStartTurn(
+    channelId: string,
+    event: GmailAttentionEvent,
+    sourceId: string,
+  ): boolean {
     if (!event.unread || !event.inInbox) return false;
-    const messageKey = event.messageId ?? String(event.internalDate ?? "unknown");
+    const messageKey =
+      event.messageId ?? String(event.internalDate ?? "unknown");
     const row = this.sql
       .exec(
         `SELECT last_message_id FROM gmail_attention_turns
          WHERE channel_id = ? AND thread_id = ? AND directive_id = ?`,
         channelId,
         event.threadId,
-        sourceId
+        sourceId,
       )
       .toArray()[0];
     if (String(row?.["last_message_id"] ?? "") === messageKey) return false;
@@ -245,7 +283,7 @@ export class TriageStore {
       event.threadId,
       sourceId,
       messageKey,
-      this.now()
+      this.now(),
     );
     return true;
   }
@@ -278,7 +316,7 @@ export class TriageStore {
       JSON.stringify(event.labels.slice(0, 20)),
       event.category ?? null,
       event.priorReplyToSender ? 1 : 0,
-      this.now()
+      this.now(),
     );
   }
 
@@ -290,7 +328,7 @@ export class TriageStore {
          ORDER BY enqueued_at ASC
          LIMIT ?`,
         channelId,
-        Math.max(1, limit)
+        Math.max(1, limit),
       )
       .toArray()
       .map((row) => ({
@@ -320,29 +358,36 @@ export class TriageStore {
     const row = this.sql
       .exec(
         `SELECT MIN(enqueued_at) AS oldest FROM gmail_triage_queue WHERE channel_id = ?`,
-        channelId
+        channelId,
       )
       .toArray()[0];
     return row && row["oldest"] !== null ? Number(row["oldest"]) : undefined;
   }
 
-  removeCandidate(channelId: string, threadId: string, messageId: string): void {
+  removeCandidate(
+    channelId: string,
+    threadId: string,
+    messageId: string,
+  ): void {
     this.sql.exec(
       `DELETE FROM gmail_triage_queue WHERE channel_id = ? AND thread_id = ? AND message_id = ?`,
       channelId,
       threadId,
-      messageId
+      messageId,
     );
   }
 
-  bumpCandidateAttempts(channelId: string, candidates: TriageCandidate[]): void {
+  bumpCandidateAttempts(
+    channelId: string,
+    candidates: TriageCandidate[],
+  ): void {
     for (const candidate of candidates) {
       this.sql.exec(
         `UPDATE gmail_triage_queue SET attempts = attempts + 1
          WHERE channel_id = ? AND thread_id = ? AND message_id = ?`,
         channelId,
         candidate.threadId,
-        candidate.messageId
+        candidate.messageId,
       );
     }
   }
@@ -351,7 +396,13 @@ export class TriageStore {
 
   setReminder(
     channelId: string,
-    reminder: { threadId: string; remindAt: number; note?: string; subject?: string; from?: string }
+    reminder: {
+      threadId: string;
+      remindAt: number;
+      note?: string;
+      subject?: string;
+      from?: string;
+    },
   ): void {
     this.sql.exec(
       `INSERT OR REPLACE INTO gmail_reminders
@@ -363,7 +414,7 @@ export class TriageStore {
       reminder.note ?? null,
       reminder.subject ?? null,
       reminder.from ?? null,
-      this.now()
+      this.now(),
     );
   }
 
@@ -377,7 +428,7 @@ export class TriageStore {
     return this.sql
       .exec(
         `SELECT * FROM gmail_reminders WHERE channel_id = ? ORDER BY remind_at ASC`,
-        channelId
+        channelId,
       )
       .toArray()
       .map((row) => ({
@@ -418,38 +469,44 @@ export class TriageStore {
       .exec(
         `SELECT thread_id FROM gmail_reminders WHERE channel_id = ? AND thread_id = ?`,
         channelId,
-        threadId
+        threadId,
       )
       .toArray();
     if (existing.length === 0) return false;
     this.sql.exec(
       `DELETE FROM gmail_reminders WHERE channel_id = ? AND thread_id = ?`,
       channelId,
-      threadId
+      threadId,
     );
     return true;
   }
 
   nextReminderAt(): number | undefined {
-    const row = this.sql.exec(`SELECT MIN(remind_at) AS next FROM gmail_reminders`).toArray()[0];
+    const row = this.sql
+      .exec(`SELECT MIN(remind_at) AS next FROM gmail_reminders`)
+      .toArray()[0];
     return row && row["next"] !== null ? Number(row["next"]) : undefined;
   }
 
   // ── triage run rate bookkeeping ───────────────────────────────────────────
 
-  recordRun(channelId: string, candidates: number, outcome: "ok" | "fallback" | "error"): void {
+  recordRun(
+    channelId: string,
+    candidates: number,
+    outcome: "ok" | "fallback" | "error",
+  ): void {
     const now = this.now();
     this.sql.exec(
       `DELETE FROM gmail_triage_runs WHERE channel_id = ? AND started_at <= ?`,
       channelId,
-      now - 60 * 60 * 1000
+      now - 60 * 60 * 1000,
     );
     this.sql.exec(
       `INSERT INTO gmail_triage_runs (channel_id, started_at, candidates, outcome) VALUES (?, ?, ?, ?)`,
       channelId,
       now,
       candidates,
-      outcome
+      outcome,
     );
   }
 
@@ -458,7 +515,7 @@ export class TriageStore {
       .exec(
         `SELECT COUNT(*) AS count FROM gmail_triage_runs WHERE channel_id = ? AND started_at > ?`,
         channelId,
-        this.now() - 60 * 60 * 1000
+        this.now() - 60 * 60 * 1000,
       )
       .toArray()[0];
     return Number(row?.["count"] ?? 0);

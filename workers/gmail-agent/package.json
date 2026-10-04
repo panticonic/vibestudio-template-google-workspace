@@ -22,7 +22,6 @@
       }
     },
     "exposeModules": [
-      "@workspace/pi-ai",
       "@workspace/runtime",
       "@workspace/pubsub",
       "@workspace/gmail",
@@ -125,6 +124,10 @@
     }
   },
   "dependencies": {
+    "@panticonic/pi-ai": "0.99.2-vibestudio.11",
+    "@panticonic/pi-durable": "0.99.2-vibestudio.11",
+    "@panticonic/pi-chord": "0.99.2-vibestudio.11",
+    "@vibestudio/rpc": "workspace:*",
     "@vibestudio/shared": "workspace:*",
     "@vibestudio/trajectory-identity": "workspace:*",
     "@workspace/runtime": "workspace:*",
@@ -133,12 +136,9 @@
     "@workspace/gmail": "workspace:*",
     "@workspace/pubsub": "workspace:*",
     "@workspace/harness": "workspace:*",
-    "@workspace/pi-core": "workspace:*",
-    "@workspace/pi-ai": "workspace:*",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@workspace/agent-loop": "workspace:*",
     "vitest": "^3.2.7"
   }
 }

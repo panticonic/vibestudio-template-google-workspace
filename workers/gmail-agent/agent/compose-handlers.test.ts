@@ -26,6 +26,7 @@ async function makeHandlers(opts: {
   const refreshThread = opts.refreshThread ?? vi.fn(async () => ({}));
   const sql = (await createInMemorySql()) as unknown as SqlStorage;
   sql.exec("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  CardManager.createTables(sql);
   const publish = vi.fn(async () => ({ id: 1 }));
   const manager = new CardManager({
     sql,

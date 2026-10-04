@@ -78,6 +78,7 @@ export function composeCardKey(composeId: string): string {
 export interface GmailCardsDeps {
   cards: CardManager;
   sql: SqlStorage;
+  composeOperations?: Map<string, Promise<unknown>>;
 }
 
 /**
@@ -87,9 +88,11 @@ export interface GmailCardsDeps {
  * so they scroll away with the conversation.
  */
 export class GmailCards {
-  private readonly composeOperations = new Map<string, Promise<unknown>>();
+  private readonly composeOperations: Map<string, Promise<unknown>>;
 
-  constructor(private readonly deps: GmailCardsDeps) {}
+  constructor(private readonly deps: GmailCardsDeps) {
+    this.composeOperations = deps.composeOperations ?? new Map();
+  }
 
   private composeStateKey(channelId: string, messageId: string): string {
     return `gmail:compose:${JSON.stringify([channelId, messageId])}`;

@@ -1,3 +1,4 @@
+import { RpcBoundaryError, RemoteRpcError } from "@vibestudio/rpc";
 import type {
   CredentialClient,
   UrlCredentialHandle,
@@ -625,7 +626,7 @@ function aggregateHistoryByThread(
 
 export function createGmailClient(
   credentials: CredentialClient,
-  opts: { credentialId?: string } = {},
+  opts: { credentialId?: string; signal?: AbortSignal } = {},
 ): GmailClient {
   let handlePromise: Promise<UrlCredentialHandle> | null = null;
   const handle = (): Promise<UrlCredentialHandle> => {
@@ -649,10 +650,15 @@ export function createGmailClient(
     init?: RequestInit,
     resource?: GmailResourceKind,
   ): Promise<Response> => {
+    opts.signal?.throwIfAborted();
     let auth: UrlCredentialHandle;
     try {
       auth = await handle();
+      opts.signal?.throwIfAborted();
     } catch (err) {
+      opts.signal?.throwIfAborted();
+      if (err instanceof RpcBoundaryError || err instanceof RemoteRpcError)
+        throw err;
       throw new GmailApiError(
         `Gmail credential unavailable: ${err instanceof Error ? err.message : String(err)}`,
         "credential-missing",
@@ -666,8 +672,16 @@ export function createGmailClient(
     }
     let response: Response;
     try {
-      response = await auth.fetch(url, { ...init, headers });
+      const signal =
+        opts.signal && init?.signal
+          ? AbortSignal.any([opts.signal, init.signal])
+          : (opts.signal ?? init?.signal);
+      response = await auth.fetch(url, { ...init, headers, signal });
+      opts.signal?.throwIfAborted();
     } catch (err) {
+      opts.signal?.throwIfAborted();
+      if (err instanceof RpcBoundaryError || err instanceof RemoteRpcError)
+        throw err;
       throw new GmailApiError(
         `Gmail API request failed: ${err instanceof Error ? err.message : String(err)}`,
         "network",

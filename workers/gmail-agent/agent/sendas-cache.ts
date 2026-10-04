@@ -1,4 +1,13 @@
-import type { GmailClient, GmailSendAsAlias } from "@workspace/gmail";
+import {
+  isGmailApiError,
+  type GmailClient,
+  type GmailSendAsAlias,
+} from "@workspace/gmail";
+
+export type SendAsCacheEntry = {
+  aliases: GmailSendAsAlias[];
+  fetchedAt: number;
+};
 
 const SENDAS_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -9,40 +18,50 @@ const SENDAS_CACHE_TTL_MS = 5 * 60 * 1000;
  * working without the settings scope.
  */
 export class SendAsCache {
-  private cache = new Map<string, { aliases: GmailSendAsAlias[]; fetchedAt: number }>();
+  private readonly cache: Map<string, SendAsCacheEntry>;
 
   constructor(
     private readonly deps: {
       gmailFor: (channelId: string) => GmailClient;
       now?: () => number;
-    }
-  ) {}
+      cache?: Map<string, SendAsCacheEntry>;
+      cacheKey?: (channelId: string) => string;
+    },
+  ) {
+    this.cache = deps.cache ?? new Map();
+  }
 
   private now(): number {
     return this.deps.now ? this.deps.now() : Date.now();
   }
 
   invalidate(channelId: string): void {
-    this.cache.delete(channelId);
+    this.cache.delete(this.deps.cacheKey?.(channelId) ?? channelId);
   }
 
   async aliases(channelId: string): Promise<GmailSendAsAlias[]> {
-    const cached = this.cache.get(channelId);
-    if (cached && this.now() - cached.fetchedAt < SENDAS_CACHE_TTL_MS) return cached.aliases;
+    const key = this.deps.cacheKey?.(channelId) ?? channelId;
+    const cached = this.cache.get(key);
+    if (cached && this.now() - cached.fetchedAt < SENDAS_CACHE_TTL_MS)
+      return cached.aliases;
     let aliases: GmailSendAsAlias[] = [];
     try {
       aliases = await this.deps.gmailFor(channelId).listSendAs();
-    } catch {
+    } catch (error) {
+      if (!isGmailApiError(error)) throw error;
       // Missing settings scope or transient failure: behave as if the
       // account had no aliases (no validation, no signature).
     }
-    this.cache.set(channelId, { aliases, fetchedAt: this.now() });
+    this.cache.set(key, { aliases, fetchedAt: this.now() });
     return aliases;
   }
 
   async defaultAlias(channelId: string): Promise<GmailSendAsAlias | undefined> {
     const aliases = await this.aliases(channelId);
-    return aliases.find((alias) => alias.isDefault) ?? aliases.find((alias) => alias.isPrimary);
+    return (
+      aliases.find((alias) => alias.isDefault) ??
+      aliases.find((alias) => alias.isPrimary)
+    );
   }
 
   /** Default-alias signature as plain text ("" when none). */
@@ -55,9 +74,13 @@ export class SendAsCache {
   async fromOptions(channelId: string): Promise<string[]> {
     const aliases = await this.aliases(channelId);
     return [...aliases]
-      .sort((a, b) => Number(b.isDefault ?? false) - Number(a.isDefault ?? false))
+      .sort(
+        (a, b) => Number(b.isDefault ?? false) - Number(a.isDefault ?? false),
+      )
       .map((alias) =>
-        alias.displayName ? `${alias.displayName} <${alias.sendAsEmail}>` : alias.sendAsEmail
+        alias.displayName
+          ? `${alias.displayName} <${alias.sendAsEmail}>`
+          : alias.sendAsEmail,
       );
   }
 
@@ -70,15 +93,19 @@ export class SendAsCache {
     const aliases = await this.aliases(channelId);
     if (aliases.length === 0) return from;
     const bare = (/<([^>]+)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
-    const match = aliases.find((alias) => alias.sendAsEmail.toLowerCase() === bare);
+    const match = aliases.find(
+      (alias) => alias.sendAsEmail.toLowerCase() === bare,
+    );
     if (!match) {
       throw new Error(
         `from address is not a configured send-as alias: ${from} (known: ${aliases
           .map((alias) => alias.sendAsEmail)
-          .join(", ")})`
+          .join(", ")})`,
       );
     }
-    return match.displayName ? `${match.displayName} <${match.sendAsEmail}>` : match.sendAsEmail;
+    return match.displayName
+      ? `${match.displayName} <${match.sendAsEmail}>`
+      : match.sendAsEmail;
   }
 }
 

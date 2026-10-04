@@ -19,7 +19,8 @@
     "@workspace-skills/google-workspace": "workspace:*",
     "@workspace/runtime": "workspace:*",
     "react": "^19.0.0",
-    "@workspace/ui": "workspace:*"
+    "@workspace/ui": "workspace:*",
+    "@vibestudio/rpc": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^3.2.7"

@@ -42,8 +42,8 @@ export class ComposeHandlers {
     body: string | undefined,
   ): Promise<{ body?: string; fromOptions?: string[] }> {
     const [signature, fromOptions] = await Promise.all([
-      this.deps.sendAs.defaultSignature(channelId).catch(() => ""),
-      this.deps.sendAs.fromOptions(channelId).catch(() => [] as string[]),
+      this.deps.sendAs.defaultSignature(channelId),
+      this.deps.sendAs.fromOptions(channelId),
     ]);
     return {
       ...(body ? { body: appendSignature(body, signature) } : {}),

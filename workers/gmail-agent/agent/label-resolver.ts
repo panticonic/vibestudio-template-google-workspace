@@ -19,7 +19,7 @@ const SYSTEM_LABEL_IDS = new Set([
   "CATEGORY_FORUMS",
 ]);
 
-interface LabelCacheEntry {
+export interface LabelCacheEntry {
   byName: Map<string, GmailLabel>;
   byId: Map<string, GmailLabel>;
   fetchedAt: number;
@@ -31,33 +31,39 @@ interface LabelCacheEntry {
  * local-only categories.
  */
 export class LabelResolver {
-  private cache = new Map<string, LabelCacheEntry>();
+  private readonly cache: Map<string, LabelCacheEntry>;
 
   constructor(
     private readonly deps: {
       gmailFor: (channelId: string) => GmailClient;
       now?: () => number;
-    }
-  ) {}
+      cache?: Map<string, LabelCacheEntry>;
+      cacheKey?: (channelId: string) => string;
+    },
+  ) {
+    this.cache = deps.cache ?? new Map();
+  }
 
   private now(): number {
     return this.deps.now ? this.deps.now() : Date.now();
   }
 
   invalidate(channelId: string): void {
-    this.cache.delete(channelId);
+    this.cache.delete(this.deps.cacheKey?.(channelId) ?? channelId);
   }
 
   private async entry(channelId: string): Promise<LabelCacheEntry> {
-    const cached = this.cache.get(channelId);
-    if (cached && this.now() - cached.fetchedAt < LABEL_CACHE_TTL_MS) return cached;
+    const key = this.deps.cacheKey?.(channelId) ?? channelId;
+    const cached = this.cache.get(key);
+    if (cached && this.now() - cached.fetchedAt < LABEL_CACHE_TTL_MS)
+      return cached;
     const labels = await this.deps.gmailFor(channelId).listLabels();
     const fresh: LabelCacheEntry = {
       byName: new Map(labels.map((label) => [label.name.toLowerCase(), label])),
       byId: new Map(labels.map((label) => [label.id, label])),
       fetchedAt: this.now(),
     };
-    this.cache.set(channelId, fresh);
+    this.cache.set(key, fresh);
     return fresh;
   }
 
@@ -68,7 +74,7 @@ export class LabelResolver {
   async resolveIds(
     channelId: string,
     names: string[],
-    opts: { createMissing: boolean }
+    opts: { createMissing: boolean },
   ): Promise<string[]> {
     if (names.length === 0) return [];
     const entry = await this.entry(channelId);

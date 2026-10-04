@@ -379,7 +379,7 @@ export class GmailHandlers {
     const pageToken = stringArg(args, "pageToken");
     const limit = Math.max(1, Math.min(numberArg(args, "limit") ?? 10, 50));
     const cardHandle = mirrorToCard
-      ? await this.deps.cards.createSearch(channelId, q).catch(() => null)
+      ? await this.deps.cards.createSearch(channelId, q)
       : null;
     try {
       const gmail = this.deps.gmailFor(channelId);
@@ -404,15 +404,13 @@ export class GmailHandlers {
       }
       const items = threads.map(searchDigestItem);
       if (cardHandle) {
-        await this.deps.cards
-          .updateSearch(channelId, cardHandle.messageId, {
-            status: "done",
-            results: items,
-            ...(page.resultSizeEstimate !== undefined
-              ? { totalEstimate: page.resultSizeEstimate }
-              : {}),
-          })
-          .catch(() => undefined);
+        await this.deps.cards.updateSearch(channelId, cardHandle.messageId, {
+          status: "done",
+          results: items,
+          ...(page.resultSizeEstimate !== undefined
+            ? { totalEstimate: page.resultSizeEstimate }
+            : {}),
+        });
       }
       return {
         query: q,
@@ -433,13 +431,12 @@ export class GmailHandlers {
         })),
       };
     } catch (err) {
+      if (!isGmailApiError(err)) throw err;
       if (cardHandle) {
-        await this.deps.cards
-          .updateSearch(channelId, cardHandle.messageId, {
-            status: "error",
-            error: err instanceof Error ? err.message : String(err),
-          })
-          .catch(() => undefined);
+        await this.deps.cards.updateSearch(channelId, cardHandle.messageId, {
+          status: "error",
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
       return await this.failGmail(channelId, "search", err);
     }
@@ -913,10 +910,11 @@ export class GmailHandlers {
     status: "ok" | "unavailable",
   ): Promise<void> {
     const state = this.deps.getChannelState(channelId);
-    if (state.peopleApiStatus === status) return;
-    state.peopleApiStatus = status;
-    this.deps.saveChannelState(state);
-    await this.deps.publishSetup(channelId).catch(() => undefined);
+    if (state.peopleApiStatus !== status) {
+      state.peopleApiStatus = status;
+      this.deps.saveChannelState(state);
+    }
+    await this.deps.publishSetup(channelId);
   }
 
   // ── compose / draft / send (implemented in compose-handlers.ts) ─────────
