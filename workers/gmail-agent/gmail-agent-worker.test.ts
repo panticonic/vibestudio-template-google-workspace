@@ -2454,6 +2454,7 @@ describe("GmailAgentWorker", () => {
       googlePubSubTopicName: "projects/p/topics/gmail-push",
     });
     const registered: unknown[] = [];
+    const baseRpc = worker.rpcCall.getMockImplementation()!;
     worker.rpcCall.mockImplementation(
       async (target: string, method: string, args?: unknown[]) => {
         if (
@@ -2464,7 +2465,7 @@ describe("GmailAgentWorker", () => {
           registered.push(args?.[0]);
           return { registered: true };
         }
-        return { id: "cred-1" };
+        return baseRpc(target, method, args);
       },
     );
     const watch = vi.fn(async () => ({

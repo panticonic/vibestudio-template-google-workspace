@@ -5,7 +5,7 @@ import {
   type RespondPolicy,
 } from "@workspace/agentic-do";
 import { Type, type Api, type Model } from "@panticonic/pi-ai";
-import type { ToolRegistration } from "@panticonic/pi-durable";
+import { defineExtension, type ToolRegistration } from "@panticonic/pi-durable";
 import { copyJson, type Context, type JsonValue } from "@panticonic/pi-chord";
 import { BACKGROUND_CONTEXT } from "@panticonic/pi-chord/context";
 import { withRpcAbortSignal, type RpcClient } from "@vibestudio/rpc";
@@ -49,6 +49,7 @@ import { TriageEngine } from "./triage/triage-engine.js";
 import { PeopleStore } from "./people/people-store.js";
 import { WakeQueue, buildWakeDigestPrompt } from "./triage/wake.js";
 import { SyncEngine } from "./sync/sync-engine.js";
+import { createGmailSchedule } from "./schedule.js";
 import {
   GMAIL_MESSAGE_TYPES,
   GMAIL_RETIRED_MESSAGE_TYPES,
@@ -615,6 +616,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
           await op.run(domain.context, channelId, record(args)),
           { omitUndefinedProperties: true },
         );
+        await this.updateGmailSchedule();
         return {
           content: [{ type: "text", text: JSON.stringify(details, null, 2) }],
           details,
@@ -767,16 +769,62 @@ export class GmailAgentWorker extends AgentWorkerBase {
     return wakeTimes.length === 0 ? null : { wakeAt: Math.min(...wakeTimes) };
   }
 
-  protected override nextAlarmAfterRequest(): DoAlarmSchedule | null {
-    const agent = super.nextAlarmAfterRequest();
-    const gmail = this.nextGmailAlarmSchedule();
-    if (agent === null) return gmail;
-    if (gmail === null) return agent;
-    return agent.wakeAt <= gmail.wakeAt ? agent : gmail;
+  private readonly gmailSchedule = createGmailSchedule({
+    nextWake: () => this.nextGmailAlarmSchedule()?.wakeAt ?? null,
+    poll: (context) => this.runGmailScheduledWork(context),
+  });
+
+  protected override nativeProductExtensions() {
+    return [
+      ...super.nativeProductExtensions(),
+      defineExtension({
+        name: "gmail.schedule",
+        tasks: [this.gmailSchedule.task],
+      }),
+    ];
+  }
+
+  protected override agentOptions() {
+    return { ...super.agentOptions(), now: () => this.now() };
+  }
+
+  protected override async nextAlarmAfterRequest(): Promise<undefined> {
+    await this.updateGmailSchedule();
+    return super.nextAlarmAfterRequest();
+  }
+
+  private async updateGmailSchedule(): Promise<void> {
+    await this.gmailSchedule.update(
+      await this.agentSession(),
+      BACKGROUND_CONTEXT,
+    );
   }
 
   override async alarm(): Promise<DoAlarmSchedule | null> {
-    await super.alarm();
+    await this.updateGmailSchedule();
+    return super.alarm();
+  }
+
+  private async runGmailScheduledWork(context: Context): Promise<void> {
+    const rpc = withRpcAbortSignal(this.rpc, context.abortSignal!);
+    const fs = createRpcFs(rpc as never);
+    const domain = this.composeGmailDomain({
+      cards: this.boundCardManager(rpc),
+      gmailFor: (id) =>
+        this.createBoundGmailClient(
+          rpc,
+          this.getGmailCredentialId(id),
+          context,
+        ),
+      cacheKey: (id) =>
+        JSON.stringify([id, this.getGmailCredentialId(id) ?? null]),
+      generateDraftReplyBody: (id, thread) =>
+        this.generateDraftReplyBody(id, thread, context, rpc),
+      runTriageModel: (id, system, prompt) =>
+        this.runTriageModel(id, system, prompt, context, rpc),
+      writeFile: (path, data) => fs.writeFile(path, data),
+      rpc,
+    });
     const now = this.now();
     const rows = this.sql
       .exec(
@@ -788,19 +836,20 @@ export class GmailAgentWorker extends AgentWorkerBase {
       if (String(row["sync_state"] ?? "ok") === "auth-needed") continue;
       const rateLimitedUntil = Number(row["rate_limited_until"] ?? 0);
       if (rateLimitedUntil > now) continue;
-      await this.ensureRecovered(channelId);
-      await this.syncEngine.syncChannel(channelId).catch((err) => {
+      await this.ensureRecovered(channelId, domain.cards, rpc);
+      await domain.sync.syncChannel(channelId).catch((err) => {
         console.error(
           `[GmailAgentWorker] sync failed for channel=${channelId}:`,
           err,
         );
       });
-      await this.ensureWatch(channelId);
+      context.abortSignal?.throwIfAborted();
+      await this.ensureWatch(channelId, rpc, context);
     }
     this.processDueReminders(now);
-    await this.processTriageQueues();
+    await this.processTriageQueues(domain.triage);
     await this.processWakeQueues(now);
-    return this.nextAlarmAfterRequest();
+    context.abortSignal?.throwIfAborted();
   }
 
   // ── push notifications (users.watch → Cloud Pub/Sub → webhook ingress) ───
@@ -813,6 +862,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
   protected async ensureWatch(
     channelId: string,
     rpc?: RpcClient,
+    context: Context = BACKGROUND_CONTEXT,
   ): Promise<void> {
     const caller = rpc ?? this.rpc;
     try {
@@ -831,6 +881,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
             : this.createBoundGmailClient(
                 rpc,
                 this.getGmailCredentialId(channelId),
+                context,
               );
         const result = await gmail.watch({
           topicName,
@@ -1089,11 +1140,13 @@ export class GmailAgentWorker extends AgentWorkerBase {
   }
 
   /** Run the batched LLM triage pass for every channel with queued candidates. */
-  protected async processTriageQueues(): Promise<number | undefined> {
+  protected async processTriageQueues(
+    triage: TriageEngine = this.triage,
+  ): Promise<number | undefined> {
     let nextDelay: number | undefined;
     for (const channelId of this.store.channelsWithPendingCandidates()) {
       try {
-        const { retryInMs } = await this.triage.runTriagePass(channelId);
+        const { retryInMs } = await triage.runTriagePass(channelId);
         nextDelay = minDefined(nextDelay, retryInMs);
       } catch (err) {
         console.error(
@@ -1178,6 +1231,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
     if (op.needsRecovery)
       await this.ensureRecovered(channelId, domain.cards, methodRpc);
     const result = await op.run(domain.context, channelId, record(args));
+    await this.updateGmailSchedule();
     signal.throwIfAborted();
     const isError = Boolean(
       result && typeof result === "object" && "error" in result,
