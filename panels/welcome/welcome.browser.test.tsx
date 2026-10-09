@@ -97,9 +97,7 @@ it.each([320, 390, 1280])(
         "https://console.cloud.google.com/projectcreate",
       ),
     );
-    await page.screenshot({
-      path: `/home/werg/vibestudio/.cache/template-review/template-ui-google-${width}.png`,
-    });
+    await page.screenshot();
   },
 );
 it("does not mistake verified Drive access for Gmail access", async () => {

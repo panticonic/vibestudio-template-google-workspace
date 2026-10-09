@@ -24,23 +24,29 @@ export default function Welcome() {
             Review your inbox, draft a reply, and choose what deserves your
             attention. Drafts wait for your Send action.
           </Text>
-          <Button asChild disabled={!ready}>
-            <a
-              aria-disabled={!ready}
-              href={
-                ready
-                  ? buildPanelLink("panels/chat", {
-                      stateArgs: gmailChatStateArgs(
-                        `google-mail-${panel.slotId}`,
-                        status!.credentialId!,
-                      ),
-                    })
-                  : undefined
-              }
-            >
-              Open Gmail
-            </a>
-          </Button>
+          {ready ? (
+            <Button asChild>
+              <a
+                href={buildPanelLink("panels/chat", {
+                  stateArgs: gmailChatStateArgs(
+                    `google-mail-${panel.slotId}`,
+                    status!.credentialId!,
+                  ),
+                })}
+              >
+                Open Gmail
+              </a>
+            </Button>
+          ) : (
+            <>
+              <Button disabled>Open Gmail</Button>
+              <Text size="1" color="gray">
+                {status?.stage === "verified"
+                  ? "Grant Gmail access in the setup above to continue."
+                  : "Finish connecting Google in the setup above to continue."}
+              </Text>
+            </>
+          )}
         </Flex>
       </AboutPage>
     </AboutThemeRoot>
