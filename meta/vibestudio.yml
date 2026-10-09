@@ -8,11 +8,3 @@ template:
     - url: git+https://github.com/panticonic/vibestudio-base.git
   description: Connect Gmail with your own Google Cloud Desktop OAuth app, then add other Workspace apps as needed.
   name: Google Workspace
-  repositories:
-    - meta
-    - packages/gmail
-    - packages/google-workspace
-    - panels/welcome
-    - skills/google-drive
-    - skills/google-workspace
-    - workers/gmail-agent
