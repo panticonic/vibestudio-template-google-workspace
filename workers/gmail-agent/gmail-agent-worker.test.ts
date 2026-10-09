@@ -714,7 +714,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
   }
 
   async debug(channelId = "ch-1") {
-    return this.getDebugState(channelId);
+    return this.activationDebugState(channelId);
   }
 
   drainWake(now = Date.now()) {
