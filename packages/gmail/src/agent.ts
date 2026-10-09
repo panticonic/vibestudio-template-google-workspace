@@ -1,5 +1,5 @@
 import { GOOGLE_GMAIL_SCOPES } from "@workspace/google-workspace/providers";
-import { parent, rpc } from "@workspace/runtime";
+import { getParent, rpc } from "@workspace/runtime";
 import { addAgentToChannel } from "@workspace-skills/agents";
 import { getGoogleOnboardingStatus } from "@workspace-skills/google-workspace";
 
@@ -79,8 +79,8 @@ export async function getGmailAgentSetupStatus(): Promise<GmailAgentSetupStatus>
         };
       }
       const installedAgents = (
-        await parent.stateArgs.get<Record<string, unknown>>()
-      )["installedAgents"];
+        await getParent()?.stateArgs.get<Record<string, unknown>>()
+      )?.["installedAgents"];
       const hasGmailAgent =
         Array.isArray(installedAgents) &&
         installedAgents.some((agent) => {
@@ -170,6 +170,13 @@ export async function setupGmailAgent(args: GmailAgentSetupArgs = {}): Promise<{
     );
   }
 
+  const parent = getParent();
+  if (!parent) {
+    throw new Error(
+      "Gmail agent setup records the installed agent on its owning panel; run it from a panel-owned context.",
+    );
+  }
+
   // Channel-membership mechanics are the general helper's job (per-channel key
   // `gmail-${channelId}` === gmailAgentObjectKey); we only add the Google-credential
   // prerequisite. `googleCredentialId` is NOT a behavior setting, so it survives
@@ -193,7 +200,7 @@ export async function setupGmailAgent(args: GmailAgentSetupArgs = {}): Promise<{
   });
 
   const stateArgs = await parent.stateArgs.get<Record<string, unknown>>();
-  await parent.stateArgs.set({
+  await parent.stateArgs.patch({
     installedAgents: updateInstalledAgents(stateArgs["installedAgents"], {
       agentId: GMAIL_AGENT_CLASS,
       handle: GMAIL_AGENT_HANDLE,

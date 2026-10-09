@@ -11,7 +11,7 @@ import { BACKGROUND_CONTEXT } from "@panticonic/pi-chord/context";
 import { withRpcAbortSignal, type RpcClient } from "@vibestudio/rpc";
 import { createCredentialClient } from "@workspace/runtime/credentials";
 import { createRpcFs } from "@workspace/runtime/worker/rpc-fs";
-import { rpc } from "@workspace/runtime/worker";
+import { rpc } from "@workspace/runtime/worker/kernel";
 import type {
   DurableObjectContext,
   WebhookDeliveryEvent,

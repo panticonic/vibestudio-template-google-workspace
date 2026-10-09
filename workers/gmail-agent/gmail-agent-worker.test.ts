@@ -369,20 +369,16 @@ class TestGmailAgentWorker extends GmailAgentWorker {
       }
       if (method === "fs.writeFile") {
         const path = args?.[0];
-        const payload = args?.[1] as
-          | { __bin?: boolean; data?: string }
-          | string;
+        const payload = args?.[1] as Uint8Array | string;
         if (typeof path !== "string")
           throw new Error("fs.writeFile path must be a string");
         const data =
           typeof payload === "string"
             ? new TextEncoder().encode(payload)
-            : payload?.__bin === true && typeof payload.data === "string"
-              ? new Uint8Array(Buffer.from(payload.data, "base64"))
+            : payload instanceof Uint8Array
+              ? payload
               : (() => {
-                  throw new Error(
-                    "fs.writeFile requires its actual binary payload",
-                  );
+                  throw new Error("fs.writeFile requires native bytes");
                 })();
         this.writtenFiles.push({ path, data });
         return undefined;

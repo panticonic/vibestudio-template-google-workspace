@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   call: vi.fn(),
 }));
 vi.mock("@workspace/runtime", () => ({
-  parent: { stateArgs: { get: mocks.getState, set: mocks.setState } },
+  getParent: () => ({
+    stateArgs: { get: mocks.getState, patch: mocks.setState },
+  }),
   rpc: { call: mocks.call },
 }));
 vi.mock("@workspace-skills/google-workspace", () => ({
