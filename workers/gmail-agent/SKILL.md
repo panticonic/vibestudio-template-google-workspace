@@ -20,25 +20,26 @@ Use this skill after Google Workspace OAuth is configured. Gmail reuses the
 
 ## Agent Behavior
 
-The Gmail agent is invoked through action-bar controls, custom message pills,
-explicit `@gmail` mentions, direct user follow-ups immediately after one of
-its own messages, and triage wake digests. It should not start a trajectory on
-every message in a 1:1 channel; the worker uses
+The Gmail agent runs when triggered by action-bar controls, custom message
+pills, explicit `@gmail` mentions, a user reply directly after one of its own
+messages, or a triage wake digest. It does not start a trajectory for every
+message in a 1:1 channel; the worker uses
 `respondPolicy = "mentioned-or-followup"`.
 
-Incoming-mail attention is two-stage:
+Incoming mail is screened in two stages:
 
 1. **Deterministic prefilter (free).** Only unread inbox mail is considered.
-   Senders the user has replied to before wake the agent directly (the
-   "known-sender shortcut", on by default).
-2. **Batched LLM triage.** Everything else queues as metadata (from / subject /
-   snippet / labels) and a cheap model pass decides wake / surface / ignore
-   against the user's natural-language attention preferences. Runs are batched
-   (≤25 candidates per call) and rate-capped (≤12/hour); nothing is spent
-   before onboarding completes. On model failure the fallback is _surface_
-   (visible, no wake) — never silent loss.
+   Mail from senders the user has replied to before wakes the agent directly
+   (the "known-sender shortcut", on by default).
+2. **Batched LLM triage.** Everything else is queued as metadata (from,
+   subject, snippet, labels), and a cheap model pass decides wake, surface, or
+   ignore based on the user's attention preferences, written in natural
+   language. Runs are batched (at most 25 candidates per call) and rate-limited
+   (at most 12 per hour). Nothing is spent before onboarding completes. If the
+   model call fails, the message is surfaced (visible, no wake), never silently
+   dropped.
 
-Preferences are plain text in the user's own words, saved by the agent via the
+Preferences are plain text in the user's own words, saved by the agent with the
 `gmail_set_attention` tool. There is no rule engine and no rule editor UI.
 
 ## Runtime Helpers
@@ -61,47 +62,67 @@ Recommended flow:
    `setupGmailAgent({ channelId: chat.channelId })` from the target chat
    context. Do not start another OAuth flow after verification.
 
-The Gmail worker owns its in-channel UI installation. On subscription it
-registers the Gmail custom message renderers, publishes the Gmail action bar,
-and starts first-run attention setup when the channel is not configured yet.
+The Gmail worker installs its own in-channel UI. When it subscribes to a
+channel, it registers the Gmail custom message renderers, publishes the Gmail
+action bar, and starts first-run attention setup if the channel is not yet
+configured.
 
 ## Model Tool Surface
 
-Composable tools (generated from the worker's single operation table):
+These tools are generated from the worker's operation table and can be combined
+freely:
 
-| Tool                   | Purpose                                                                                                                                                                                                                                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gmail_search`         | True thread-level search (`threads.list`) with full query syntax, `limit ≤ 50`, `pageToken` pagination; publishes an ephemeral `gmail.search` card unless `mirrorToCard: false`                                                                                                                                     |
-| `gmail_read`           | Thread/message contents; `format: "metadata"` for headers-only, `"full"` for sanitized bodies; optional attachment list                                                                                                                                                                                             |
-| `gmail_modify`         | Real Gmail labels by name (auto-created), `markRead`, `archive`, optional local-only `localCategory`; accepts many thread/message ids (message ids batch through `messages.batchModify`)                                                                                                                            |
-| `gmail_draft`          | Agent-written drafts onto a compose card (`review` when complete, `drafting` when partial); `mode: "reply"` resolves recipient/subject from the thread; default send-as signature appended visibly at draft time; `from` validated against send-as aliases; `saveToGmail` persists (re-saves update, not duplicate) |
-| `gmail_send`           | Send an owned compose (`messageId` from `gmail_draft`) — ONLY on explicit user request; otherwise the compose card's Send click authorizes; `from?` must be a configured send-as alias                                                                                                                              |
-| `gmail_contacts`       | Name → address candidates with interaction evidence (history first, Google contacts fallback); `mode: "suggest"` for offline typeahead                                                                                                                                                                              |
-| `gmail_set_attention`  | Save natural-language attention preferences (`mode: "replace"` or `"append"`, `knownSenderShortcut`, `markConfigured`); tool calls include a scoped dry run re-evaluating recent surfaced/woken mail under the new text                                                                                             |
-| `gmail_snooze`         | Archive now + reminder wake later (`remindAt` ISO / `inMs`, default 24h); `gmail_list_reminders` lists them                                                                                                                                                                                                         |
-| `gmail_get_attachment` | Save an attachment as a workspace file (sanitized name, 10MB cap, binary-safe) for normal file tooling                                                                                                                                                                                                              |
-| `gmail_publish_digest` | Publish a compact `gmail.digest` card (≤5 rows + `moreCount`)                                                                                                                                                                                                                                                       |
+- `gmail_search`: thread-level search (`threads.list`) with full query syntax,
+  `limit ≤ 50`, and `pageToken` pagination. Publishes an ephemeral
+  `gmail.search` card unless `mirrorToCard: false`.
+- `gmail_read`: thread or message contents. `format: "metadata"` returns
+  headers only; `"full"` returns sanitized bodies. Can list attachments.
+- `gmail_modify`: apply Gmail labels by name (created if missing), `markRead`,
+  `archive`, and an optional local-only `localCategory`. Accepts many thread or
+  message IDs; message IDs are batched through `messages.batchModify`.
+- `gmail_draft`: write a draft onto a compose card (`review` when complete,
+  `drafting` when partial). `mode: "reply"` takes the recipient and subject
+  from the thread. The default send-as signature is appended visibly when the
+  draft is written. `from` is checked against send-as aliases. `saveToGmail`
+  saves the draft to Gmail; saving again updates it instead of duplicating it.
+- `gmail_send`: send a compose the agent owns (`messageId` from
+  `gmail_draft`), ONLY when the user explicitly asks. Otherwise, the user's
+  Send click on the compose card is the authorization. `from?` must be a
+  configured send-as alias.
+- `gmail_contacts`: name → address candidates with interaction evidence
+  (history first, then Google contacts). `mode: "suggest"` gives offline
+  typeahead.
+- `gmail_set_attention`: save attention preferences (`mode: "replace"` or
+  `"append"`, `knownSenderShortcut`, `markConfigured`). Each call includes a
+  scoped dry run that re-evaluates recently surfaced or woken mail under the
+  new text.
+- `gmail_snooze`: archive now and wake with a reminder later (`remindAt` as
+  ISO or `inMs`; default 24h). `gmail_list_reminders` lists reminders.
+- `gmail_get_attachment`: save an attachment as a workspace file (sanitized
+  name, 10MB cap, binary-safe) for use with normal file tools.
+- `gmail_publish_digest`: publish a compact `gmail.digest` card (at most 5 rows
+  plus `moreCount`).
 
 ## Push Notifications
 
-With a generic `webhookIngress` Cloud Pub/Sub subscription targeting
-`workers/gmail-agent:GmailAgentWorker:gmail-push-router` and
+Push needs a generic `webhookIngress` Cloud Pub/Sub subscription that targets
+`workers/gmail-agent:GmailAgentWorker:gmail-push-router`, plus
 `googlePubSubTopicName` in the Gmail agent config (see
-[Google Workspace setup](../../skills/google-workspace/SETUP.md)), the worker starts a
-`users.watch` on subscribe and renews it daily via its alarm. The server only
-verifies/decodes the generic webhook delivery; Gmail mailbox fanout happens in
-the Gmail worker. Pushes sync within seconds; polling stretches to a
-30-minute safety net. Without the topic, history-API polling (default 5 min)
-is the only sync driver.
+[Google Workspace setup](../../skills/google-workspace/SETUP.md)). With both in
+place, the worker starts a `users.watch` when it subscribes and renews it daily
+from its alarm. The server only verifies and decodes the generic webhook
+delivery; the Gmail worker fans it out to the mailbox. Pushes sync within
+seconds, and polling drops to a 30-minute safety net. Without the topic, the
+worker syncs only by polling the history API (every 5 minutes by default).
 
 ## Attention Preference API
 
-Preferences live on the Gmail Durable Object as plain text:
+Preferences are stored as plain text on the Gmail Durable Object:
 
-| Method                                                                                 | Purpose                                                                        |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `getAttentionPrefs(channelId)`                                                         | `{ preferencesText, knownSenderShortcut, updatedAt }`                          |
-| `setAttentionPrefs(channelId, { preferences, knownSenderShortcut?, markConfigured? })` | Save preferences (user-facing callers only; DO callers may read but not write) |
+| Method                                                                                 | Purpose                                                   |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `getAttentionPrefs(channelId)`                                                         | `{ preferencesText, knownSenderShortcut, updatedAt }`     |
+| `setAttentionPrefs(channelId, { preferences, knownSenderShortcut?, markConfigured? })` | Save preferences (user-facing callers only; DOs can read) |
 
 ```typescript
 import { callGmailAgent } from "@workspace/gmail/agent";
@@ -113,8 +134,9 @@ await callGmailAgent(chat.channelId, "setAttentionPrefs", {
 
 ## Channel Method Surface
 
-These methods are callable on the Gmail participant via
-`chat.callMethodByHandle("gmail", method, args)` (and from cards/action bar):
+Call these on the Gmail participant with
+`chat.callMethodByHandle("gmail", method, args)`; cards and the action bar use
+them too:
 
 | Method                              | Args                                  | Purpose                                                                                                        |
 | ----------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -138,7 +160,8 @@ These methods are callable on the Gmail participant via
 
 ## Multi-Agent Participant API
 
-Other agents in the channel get a read-mostly surface (same dispatch):
+Other agents in the channel get a mostly read-only set of methods, called the
+same way:
 
 | Method                 | Args                                   | Purpose                                        |
 | ---------------------- | -------------------------------------- | ---------------------------------------------- |
@@ -148,21 +171,21 @@ Other agents in the channel get a read-mostly surface (same dispatch):
 | `gmail_requestDraft`   | `{ threadId?, to?, subject?, intent }` | Compose card in `review` state                 |
 | `gmail_resolveContact` | `{ name, limit? }`                     | Read-only contact resolution                   |
 
-Agents can prepare mail but never send it: only the user's Send click on the
-compose card (or an explicit user instruction to the Gmail agent) sends.
-Attention-preference writes remain gated to user-facing callers; reads are open.
+Agents can prepare mail but never send it. Only the user's Send click on the
+compose card, or an explicit user instruction to the Gmail agent, sends mail.
+Only user-facing callers can write attention preferences; anyone can read them.
 
 ## Wake Batching
 
-Wake hits (known-sender + triage `wake` verdicts) are queued and debounced
-(~90s) into one digest turn covering all queued hits, capped at 4 wake turns
-per hour per channel. The digest turn writes ONE short chat message and
+Wake hits (known senders plus triage `wake` verdicts) are queued and debounced
+(about 90s) into one digest turn covering all queued hits, with at most 4 wake
+turns per hour per channel. The digest turn writes ONE short chat message and
 publishes ONE `gmail.digest` card via `gmail_publish_digest`.
 
 ## Custom Message Types
 
-The helper package still ships five renderer modules (mobile-first: 44px touch
-targets, single column, ≤2 visible actions, whole-row taps):
+The helper package ships five renderer modules, designed mobile-first: 44px
+touch targets, a single column, at most 2 visible actions, and whole-row taps.
 
 | Type            | Renderer                                               | Display | Notes                                                                 |
 | --------------- | ------------------------------------------------------ | ------- | --------------------------------------------------------------------- |
@@ -173,9 +196,8 @@ targets, single column, ≤2 visible actions, whole-row taps):
 | `gmail.compose` | `../../packages/gmail/src/renderers/gmail-compose.tsx` | row     | Review-before-send, contact autocomplete, `toCandidates` one-click    |
 
 `gmail.digest` and `gmail.search` share
-`../../packages/gmail/src/renderers/thread-row.tsx`. The old
-`gmail.inbox` desk card is retired and tombstoned via `messageType.cleared` on
-UI install.
+`../../packages/gmail/src/renderers/thread-row.tsx`. The old `gmail.inbox` desk
+card is retired; UI install tombstones it with `messageType.cleared`.
 
 ## Action Bar
 

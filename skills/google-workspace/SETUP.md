@@ -1,34 +1,35 @@
 # Google Workspace setup
 
-The normal setup experience is the checked-in
+Set up Google Workspace with the checked-in
 [GoogleWorkspaceSetup.tsx](GoogleWorkspaceSetup.tsx) component. Render it with
-`inline_ui`; do not translate this guide into chat prose or feedback forms.
+`inline_ui`; do not turn this guide into chat prose or feedback forms.
 
-The component owns the workflow:
+The component runs the workflow:
 
 1. It reads the current Google setup state.
 2. It explains and opens the required Google Cloud pages.
-3. Its **Save Desktop app details** button calls
-   `configureGoogleOAuthClient()`; the host-owned prompt collects the client ID
-   and secret.
+3. Its **Save Desktop app details** button calls `configureGoogleOAuthClient()`;
+   the host prompt collects the client ID and secret.
 4. Its **Connect Google** button calls `connectGoogle()`.
-5. It verifies the live connection and keeps errors and retry in the card.
+5. It verifies the live connection and shows errors and retry in the card.
 
-No secret belongs in chat or component state. The component must not return
-choices to the agent for conversion into an eval call.
+Secrets never go in chat or component state. The component must not hand
+choices back to the agent to turn into an eval call.
 
 ## Google Cloud requirements
 
-Use one project throughout:
+Use the same project for every step:
 
-- For Gmail, enable the Gmail API. For All Workspace apps, also enable Calendar, Drive, Docs, Sheets, Slides, and People APIs.
+- For Gmail, enable the Gmail API. For All Workspace apps, also enable the
+  Calendar, Drive, Docs, Sheets, Slides, and People APIs.
 - Configure the OAuth consent screen.
-- Publish the app to Production. Testing mode can expire refresh tokens after
-  seven days for these user-data scopes.
+- Publish the app to Production. In Testing mode, refresh tokens for these
+  user-data scopes can expire after seven days.
 - Create an OAuth client with application type **Desktop app**.
 
-The app may remain unverified for personal use under Google's unverified-app
-user cap. The user may need to continue through Google's **Advanced** warning.
+For personal use the app can stay unverified, within Google's user cap for
+unverified apps. The user may need to click through Google's **Advanced**
+warning.
 
 The setup component links to:
 
@@ -37,8 +38,9 @@ The setup component links to:
 - OAuth setup: `https://console.cloud.google.com/auth/overview`
 - OAuth clients: `https://console.cloud.google.com/auth/clients`
 
-It defaults to the user’s normal browser and also lets them open each step inside Vibestudio.
-The latter is useful for existing sign-in, passkeys, and password managers.
+It opens these in the user's normal browser by default, which is useful for
+existing sign-in, passkeys, and password managers. The user can also open each
+step inside Vibestudio.
 
 ## Optional Gmail push notifications
 
@@ -65,4 +67,4 @@ relay.
    `setupGmailAgent()`.
 
 The Gmail worker renews `users.watch` daily. Without
-`googlePubSubTopicName`, polling remains the sync driver.
+`googlePubSubTopicName`, the worker keeps syncing by polling.

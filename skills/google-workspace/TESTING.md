@@ -1,7 +1,7 @@
 # Testing Google Workspace
 
-After saving the Google OAuth client setup, verify the setup in a Vibestudio
-panel or eval context.
+After saving the Google OAuth client details, verify the setup from a
+Vibestudio panel or eval.
 
 ## Check Configuration And Stored Connection
 
@@ -37,11 +37,13 @@ console.log(result);
 ```
 
 This opens the browser, waits for the local OAuth callback, and stores the
-resulting Gmail credential. For Drive or another service, enable its API and explicitly request its scopes; Gmail-only access does not make other apps ready.
+resulting Gmail credential. For Drive or another service, enable its API and
+request its scopes explicitly; Gmail-only access does not make other apps
+ready.
 
-If this reports missing setup, save the Desktop app OAuth client fields with
-the Google setup workflow UI/provider setup path. Do not ask the user to paste
-client secrets into chat.
+If this reports missing setup, save the Desktop app OAuth client fields through
+the Google setup component. Do not ask the user to paste client secrets into
+chat.
 
 ## Verify With A Live API Call
 

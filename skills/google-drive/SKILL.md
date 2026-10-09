@@ -6,16 +6,16 @@ description: Google Drive file browsing, uploads, permissions, shared drives, an
 # Google Drive Skill
 
 Use this skill when the user wants Vibestudio to work with Google Drive files,
-shared drives, permissions, exports, uploads, or change sync. This skill sits
-on top of the verified `google-workspace` connection and reuses the staged
-`google-drive` binding.
+shared drives, permissions, exports, uploads, or change sync. It builds on the
+verified `google-workspace` connection and reuses the staged `google-drive`
+binding.
 
 ## Prerequisite
 
-Google Drive has no separate console setup beyond Google Workspace. The user
-must first complete
-[Google Workspace onboarding](../google-workspace/ONBOARDING.md) and
-reach the verified stage with Drive permissions. Enable the Drive API in that same project, then request Drive access explicitly:
+Google Drive needs no console setup beyond Google Workspace. The user must
+first complete [Google Workspace onboarding](../google-workspace/ONBOARDING.md)
+and reach the verified stage with Drive permissions. Enable the Drive API in the
+same project, then request Drive access explicitly:
 
 ```ts
 import { connectGoogle } from "@workspace-skills/google-workspace";
@@ -23,7 +23,8 @@ import { GOOGLE_DRIVE_SCOPES } from "@workspace/google-workspace/providers";
 await connectGoogle({ scopes: [...GOOGLE_DRIVE_SCOPES] });
 ```
 
-This opens a complete Google consent flow and retains previously granted service access. A Gmail-only credential is not ready for Drive.
+This runs a full Google consent flow and keeps access already granted to other
+services. A Gmail-only credential is not ready for Drive.
 
 ## Runtime Helpers
 
@@ -42,12 +43,12 @@ Recommended flow:
    first.
 3. If the stage is `ready`, create a Drive client and use the file, permission,
    shared-drive, or change-sync methods as needed.
-4. Run `verifyGoogleDriveAccess()` when you want a live Drive API check before
-   handing the connection to a workflow.
+4. Run `verifyGoogleDriveAccess()` for a live Drive API check before handing
+   the connection to a workflow.
 
 ## What The Client Can Do
 
-The underlying client comes from `@workspace/google-workspace/drive` and supports:
+The client comes from `@workspace/google-workspace/drive` and supports:
 
 - `about()` for account and storage metadata
 - `listFiles()`, `getFile()`, `createFile()`, `updateFile()`, `moveFile()`
@@ -56,8 +57,8 @@ The underlying client comes from `@workspace/google-workspace/drive` and support
   metadata. It returns `{ bytes: Uint8Array, size, mimeType, responseUrl }`.
 - `exportFileBytes()` for Google Docs/Sheets/Slides exports that need bytes,
   MIME type, and filename metadata
-- `downloadFile()`, `exportFile()` when a caller explicitly needs the raw
-  streaming `Response`
+- `downloadFile()`, `exportFile()` when the caller needs the raw streaming
+  `Response`
 - `listPermissions()`, `createPermission()`, `updatePermission()`,
   `deletePermission()`
 - `listDrives()`, `getDrive()`, `createDrive()`, `updateDrive()`,
@@ -65,20 +66,16 @@ The underlying client comes from `@workspace/google-workspace/drive` and support
 - `getStartPageToken()`, `listChanges()`, `startPollingChanges()`
 
 Use the Drive client directly for file operations; use this skill for
-onboarding, readiness checks, and a stable Drive-facing entrypoint. Prefer the
-byte helpers before writing Drive downloads to runtime fs so raw `Response`
-objects do not cross JSON/RPC/tool-result boundaries.
-
-When passing `downloadFileBytes().bytes` into an extension invocation or any
-other RPC/tool boundary, convert or wrap the bytes first. Do not rely on
-`Uint8Array` identity to survive another JSON/RPC hop:
+onboarding, readiness checks, and a stable Drive entry point. Byte-returning
+methods produce native `Uint8Array` values that can pass directly to runtime
+filesystem and extension RPC calls. Keep raw `Response` objects on the side
+that consumes their streaming body.
 
 ```ts
+import { fs } from "@workspace/runtime";
+
 const downloaded = await drive.downloadFileBytes(fileId);
-const extensionBytes = {
-  __bin: true,
-  data: Buffer.from(downloaded.bytes).toString("base64"),
-};
+await fs.writeFile("downloads/drive-file", downloaded.bytes);
 ```
 
 ## Files
@@ -87,8 +84,3 @@ const extensionBytes = {
 | -------------------------------------------------------------------------------------------- | ------------------------------ |
 | [../../packages/google-workspace/src/drive.ts](../../packages/google-workspace/src/drive.ts) | Google Drive API client        |
 | [index.ts](index.ts)                                                                         | Importable Drive skill helpers |
-
-## Reaching this agent from another conversation
-
-The Google agent is directory-discoverable (`discover_agents({ query: "drive" })`)
-and addressable as `agent:<handle>@<channelId>` — see the `messaging` skill.
