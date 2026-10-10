@@ -1,3 +1,4 @@
+import { schemaRpcMock } from "@vibestudio/rpc/test-utils";
 import { describe, expect, it } from "vitest";
 import type { RpcCaller } from "@vibestudio/rpc";
 import {
@@ -42,7 +43,7 @@ function makeMockEnv(
     createdAt: Date.now(),
   } as unknown as StoredCredentialSummary;
 
-  const rpc: RpcCaller = {
+  const rpc: RpcCaller = schemaRpcMock({
     call: (async <T = unknown>(
       _targetId: string,
       method: string,
@@ -53,7 +54,7 @@ function makeMockEnv(
         return credential as unknown as T;
       }
       throw new Error(`unexpected method: ${method}`);
-    }) as RpcCaller["call"],
+    }),
     stream: async (_target: string, method: string, args: unknown[]) => {
       if (method !== "credentials.proxyFetch") {
         throw new Error(`unexpected stream method: ${method}`);
@@ -72,7 +73,7 @@ function makeMockEnv(
       });
       return respond(params.url, params);
     },
-  };
+  });
 
   return { credentials: createCredentialClient(rpc), stats };
 }

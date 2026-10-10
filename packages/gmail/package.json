@@ -9,7 +9,8 @@
     "./card-types": "./src/card-types.ts",
     "./test-utils": "./src/test-utils.ts",
     "./renderers/gmail-thread.reducer": "./src/renderers/gmail-thread.reducer.ts",
-    "./chat-state": "./src/chat-state.ts"
+    "./chat-state": "./src/chat-state.ts",
+    "./agentRpc": "./src/agentRpc.ts"
   },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.2",
@@ -20,7 +21,8 @@
     "@workspace/runtime": "workspace:*",
     "react": "^19.0.0",
     "@workspace/ui": "workspace:*",
-    "@vibestudio/rpc": "workspace:*"
+    "@vibestudio/rpc": "workspace:*",
+    "@vibestudio/shared": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^3.2.7"

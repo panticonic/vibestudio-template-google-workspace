@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { schemaRpcMock } from "@vibestudio/rpc/test-utils";
 import {
   GOOGLE_DRIVE_SCOPES,
   GOOGLE_GMAIL_SCOPES,
@@ -14,7 +15,7 @@ vi.mock("@workspace/runtime", () => ({
   getParent: () => ({
     stateArgs: { get: mocks.getState, patch: mocks.setState },
   }),
-  rpc: { call: mocks.call },
+  rpc: { call: schemaRpcMock({ call: mocks.call }).call },
 }));
 vi.mock("@workspace-skills/google-workspace", () => ({
   getGoogleOnboardingStatus: mocks.status,

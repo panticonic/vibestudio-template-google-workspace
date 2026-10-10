@@ -1,3 +1,5 @@
+import { gmailAgentRpcMethods } from "./agentRpc.js";
+import { mainRpcMethods } from "@vibestudio/service-schemas/mainRpc";
 import { GOOGLE_GMAIL_SCOPES } from "@workspace/google-workspace/providers";
 import { getParent, rpc } from "@workspace/runtime";
 import { addAgentToChannel } from "@workspace-skills/agents";
@@ -118,21 +120,21 @@ export async function resolveGmailAgentWorker(
   const normalized = channelId.trim();
   if (!normalized)
     throw new Error("resolveGmailAgentWorker requires channelId");
-  return rpc.call<{ targetId: string }>(
+  return rpc.call(
     "main",
-    "workers.resolveDurableObject",
+    mainRpcMethods["workers.resolveDurableObject"],
     [GMAIL_AGENT_SOURCE, GMAIL_AGENT_CLASS, gmailAgentObjectKey(normalized)],
   );
 }
 
 /** Call any public Gmail agent DO method (attention rules, reads, etc.). */
-export async function callGmailAgent<T = unknown>(
-  channelId: string,
-  method: string,
-  args: unknown = {},
-): Promise<T> {
+export function callGmailAgent(channelId: string, method: "getAttentionPrefs"): Promise<import("./card-types.js").GmailAttentionPrefs>;
+export function callGmailAgent(channelId: string, method: "setAttentionPrefs", args: unknown): Promise<{ saved: true; preferences: import("./card-types.js").GmailAttentionPrefs }>;
+export async function callGmailAgent(channelId: string, method: "getAttentionPrefs" | "setAttentionPrefs", args?: unknown) {
   const target = await resolveGmailAgentWorker(channelId);
-  return rpc.call<T>(target.targetId, method, [channelId, args]);
+  return method === "getAttentionPrefs"
+    ? rpc.call(target.targetId, gmailAgentRpcMethods.getAttentionPrefs, [channelId])
+    : rpc.call(target.targetId, gmailAgentRpcMethods.setAttentionPrefs, [channelId, args]);
 }
 
 function updateInstalledAgents(

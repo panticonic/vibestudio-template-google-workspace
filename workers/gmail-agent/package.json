@@ -139,6 +139,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@vibestudio/service-schemas": "workspace:*",
     "vitest": "^3.2.7"
   }
 }

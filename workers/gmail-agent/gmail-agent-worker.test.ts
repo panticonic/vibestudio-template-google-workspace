@@ -1,3 +1,5 @@
+import { durableObjectServiceFixture } from "@vibestudio/service-schemas/test-utils";
+import { schemaRpcMock } from "@vibestudio/rpc/test-utils";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +21,8 @@ import {
   type RpcClient,
   type RpcCallOptions,
 } from "@vibestudio/rpc";
+import { wireClientFor } from "@vibestudio/rpc/internal";
+import { createMainRpcCaller } from "@vibestudio/service-schemas/mainRpc";
 import type { JsonValue, Context } from "@panticonic/pi-chord";
 import type { ToolExecutionApi } from "@panticonic/pi-durable";
 import {
@@ -38,10 +42,25 @@ import { GMAIL_MESSAGE_TYPES, GmailCards } from "./cards/cards.js";
 const WORKSPACE_ROOT = path.resolve(__dirname, "../..");
 const testDatabases: Array<{ close(): void; release(): Promise<unknown> }> = [];
 
+function credentialSummaryFixture(id = "cred-1") {
+  return {
+    id,
+    label: "Gmail test credential",
+    audience: [],
+    injection: {
+      type: "header" as const,
+      name: "authorization",
+      valueTemplate: "Bearer {token}",
+    },
+    scopes: [],
+    lifecycle: { state: "active" as const, canRefresh: false },
+  };
+}
+
 const schemaDescriptors = new Map<unknown, Promise<unknown>>();
-async function createTestDO<T>(
-  ...args: Parameters<typeof createRuntimeTestDO<T>>
-): ReturnType<typeof createRuntimeTestDO<T>> {
+async function createTestDO<DOClass extends new (ctx: any, env: any) => object>(
+  ...args: Parameters<typeof createRuntimeTestDO<DOClass>>
+): ReturnType<typeof createRuntimeTestDO<DOClass>> {
   const [ctor, suppliedEnv, options] = args;
   const env = {
     WORKER_SOURCE: "workers/gmail-agent",
@@ -135,6 +154,27 @@ function message(
 }
 
 class TestGmailAgentWorker extends GmailAgentWorker {
+  private resolveProductActivation!: () => void;
+  private readonly productActivationStarted = new Promise<void>((resolve) => {
+    this.resolveProductActivation = resolve;
+  });
+  private productActivation: Promise<void> | undefined;
+
+  protected override activateNativeChannelProduct(
+    channelId: string,
+    context: Context,
+  ): Promise<void> {
+    const activation = super.activateNativeChannelProduct(channelId, context);
+    this.productActivation = activation;
+    this.resolveProductActivation();
+    return activation;
+  }
+
+  async waitForProductActivation(): Promise<void> {
+    await this.productActivationStarted;
+    await this.productActivation;
+  }
+
   protected override get rpcCallerKind(): string | null {
     return "server";
   }
@@ -330,20 +370,20 @@ class TestGmailAgentWorker extends GmailAgentWorker {
       if (method === "runtime.resolveContext") return "ctx-1";
       if (method === "workers.resolveService") {
         if (args?.[0] === "vibestudio.gad.workspace.v1") {
-          return {
-            kind: "durable-object",
+          return durableObjectServiceFixture("do:gad:test", {
             source: "vibestudio/internal",
             className: "GadWorkspaceDO",
             objectKey: "workspace",
-            targetId: "do:gad:test",
-          };
+          });
         }
-        return { kind: "durable-object", targetId: "do:channel:test" };
+        return durableObjectServiceFixture("do:channel:test");
       }
       if (method === "authority.outstandingAcquisitions")
         return { receipts: [], next: null };
       if (method === "workerLog.write") return undefined;
       if (method === "workspace.getAgentsMd") return "";
+      if (method === "workspace.getAgentResources")
+        return { workspacePrompt: "", skills: [] };
       if (method === "workspace.listSkills") return [];
       if (method === "blobstore.putText") {
         const value = String(args?.[0] ?? "");
@@ -351,8 +391,9 @@ class TestGmailAgentWorker extends GmailAgentWorker {
         this.blobs.set(digest, value);
         return { digest, size: value.length };
       }
-      if (method === "credentials.connect") return { id: "cred-1" };
-      if (method === "credentials.resolveCredential") return { id: "cred-1" };
+      if (method === "credentials.connect") return credentialSummaryFixture();
+      if (method === "credentials.resolveCredential")
+        return credentialSummaryFixture();
       if (
         method === "workspace-state.alarmSet" ||
         method === "workspace-state.alarmClear"
@@ -410,45 +451,24 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     args: unknown[],
     options?: RpcCallOptions,
   ) => Promise<Response>;
-  protected override get rpc(): never {
-    return {
-      selfId: this.participantId(),
-      call: this.rpcCall,
-      expose: () => {},
-      exposeAll: () => {},
-      exposeStreaming: () => {},
-      on: () => () => {},
-      status: () => "connected",
-      ready: async () => {},
-      onStatusChange: () => () => {},
-      stream: (
-        target: string,
-        method: string,
-        args: unknown[],
-        options?: RpcCallOptions,
-      ) => {
-        if (this.rpcStream)
-          return this.rpcStream(target, method, args, options);
+  protected override get rpc(): RpcClient {
+    const base = super.rpc;
+    const wire = wireClientFor(base);
+    wire.call = this.rpcCall;
+    wire.stream =
+      this.rpcStream ??
+      (async () => {
         throw new Error("No stream in this Gmail domain fixture");
-      },
-      streamReadable: () => {
-        throw new Error("No stream in this Gmail domain fixture");
-      },
-      emit: async () => {},
-      peer: () => {
-        throw new Error("No peer in this Gmail domain fixture");
-      },
-    } as never;
+      });
+    return base;
   }
 
-  protected override callAgentHost = async <T>(
-    method: string,
-    _args: unknown[],
-  ): Promise<T> => {
-    const image = this.loadedImage();
-    const result =
-      method === "workspace-state.entity.resolveActive"
-        ? {
+  protected override callAgentHost = createMainRpcCaller(
+    schemaRpcMock({
+      call: async (_target, method) => {
+        const image = this.loadedImage();
+        if (method === "workspace-state.entity.resolveActive")
+          return {
             id: image.runtimeId,
             authoritySessionId: "actual-test-owner-session",
             kind: "do",
@@ -460,26 +480,22 @@ class TestGmailAgentWorker extends GmailAgentWorker {
             createdAt: 1,
             status: "active",
             cleanupComplete: false,
-          }
-        : method === "workspace-state.alarmSourceRegister"
-          ? "test-storage-incarnation"
-          : method === "workspace-state.alarmSourcePublish"
-            ? "accepted"
-            : method === "authority.outstandingAcquisitions"
-              ? { receipts: [], next: null }
-              : [
-                    "workspace-state.lifecycleLeaseUpsert",
-                    "workspace-state.lifecycleLeaseClear",
-                    "workerLog.write",
-                  ].includes(method)
-                ? undefined
-                : (() => {
-                    throw new Error(
-                      `Unexpected native host fixture method ${method}`,
-                    );
-                  })();
-    return result as T;
-  };
+          };
+        if (method === "workspace-state.alarmSourceRegister")
+          return "test-storage-incarnation";
+        if (method === "workspace-state.alarmSourcePublish") return "accepted";
+        if (method === "authority.outstandingAcquisitions")
+          return { receipts: [], next: null };
+        if (
+          method === "workspace-state.lifecycleLeaseUpsert" ||
+          method === "workspace-state.lifecycleLeaseClear" ||
+          method === "workerLog.write"
+        )
+          return undefined;
+        throw new Error(`Unexpected native host fixture method ${method}`);
+      },
+    }),
+  );
 
   private readonly accountClients = new Map<string, GmailClient>();
   protected override createGmailClient(credentialId?: string): GmailClient {
@@ -849,8 +865,19 @@ describe("GmailAgentWorker", () => {
       "checkNow",
       {},
     );
-    void execution.catch(() => undefined);
-    await started;
+    await Promise.race([
+      started,
+      execution.then(
+        (result) => {
+          throw new Error(
+            `Gmail check completed without starting its network request: ${JSON.stringify(result)}`,
+          );
+        },
+        (error) => {
+          throw error;
+        },
+      ),
+    ]);
     let cancelJoined = false;
     const cancellation = worker
       .cancelDeliveredMethod("ch-1", "cancel-gmail-network")
@@ -1345,6 +1372,10 @@ describe("GmailAgentWorker", () => {
         replay: false,
       }),
     ).resolves.toMatchObject({ ok: true });
+    // Reasoning-channel subscription returns at committed configuration
+    // readiness. Join the bootstrap task's activation phase before asserting
+    // its first-run turn, which is intentionally submitted after that point.
+    await worker.waitForProductActivation();
 
     expect(worker.published.map((entry) => entry.event.kind)).toEqual([
       "messageType.cleared",

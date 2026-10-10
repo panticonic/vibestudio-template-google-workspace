@@ -1,3 +1,4 @@
+import { gmailAgentRpcMethods, type GmailAgentProtocol } from "@workspace/gmail/agentRpc";
 import {
   AgentWorkerBase,
   installMessageTypes,
@@ -144,7 +145,7 @@ const gmailKnowledgeConfigurationSchema = z
   })
   .strict();
 
-export class GmailAgentWorker extends AgentWorkerBase {
+export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProtocol {
   static override schemaVersion = GMAIL_AGENT_SCHEMA_BASELINE;
 
   private readonly composeOperations = new Map<string, Promise<unknown>>();
@@ -893,7 +894,7 @@ export class GmailAgentWorker extends AgentWorkerBase {
       // Re-register every pass: cloned/restarted workers and recreated router
       // state converge without requiring the generic webhook ingress to know
       // anything about Gmail mailboxes.
-      await caller.call(gmailPushRouterTarget(), "registerPushTarget", [
+      await caller.call(gmailPushRouterTarget(), gmailAgentRpcMethods.registerPushTarget, [
         {
           emailAddress: state.emailAddress,
           source: GMAIL_DO_SOURCE,
@@ -952,11 +953,11 @@ export class GmailAgentWorker extends AgentWorkerBase {
         objectKey: String(row["object_key"]),
       };
       try {
-        const result = (await this.rpc.call(
+        const result = await this.rpc.call(
           gmailTargetId(target),
-          "onGmailPushNotification",
+          gmailAgentRpcMethods.onGmailPushNotification,
           [{ emailAddress: email, historyId }],
-        )) as { synced?: string[] } | undefined;
+        );
         for (const channelId of result?.synced ?? []) synced.add(channelId);
       } catch (err) {
         console.warn(
