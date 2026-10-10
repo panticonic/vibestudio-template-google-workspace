@@ -29,7 +29,6 @@ function makeMockEnv(
   const credential: StoredCredentialSummary = {
     id: "cred-drive",
     label: "Mock Drive",
-    providerId: "mock",
     accountIdentity: { providerUserId: "mock" },
     audience: [],
     injection: {
@@ -40,21 +39,21 @@ function makeMockEnv(
     bindings: [],
     scopes: [],
     metadata: {},
-    createdAt: Date.now(),
-  } as unknown as StoredCredentialSummary;
+    lifecycle: { state: "active", canRefresh: false },
+  };
 
   const rpc: RpcCaller = schemaRpcMock({
-    call: (async <T = unknown>(
+    call: async (
       _targetId: string,
       method: string,
       _args: unknown[],
-    ): Promise<T> => {
+    ): Promise<unknown> => {
       if (method === "credentials.resolveCredential") {
         stats.resolveCalls++;
-        return credential as unknown as T;
+        return credential;
       }
       throw new Error(`unexpected method: ${method}`);
-    }),
+    },
     stream: async (_target: string, method: string, args: unknown[]) => {
       if (method !== "credentials.proxyFetch") {
         throw new Error(`unexpected stream method: ${method}`);

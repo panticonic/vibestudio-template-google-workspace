@@ -1,5 +1,6 @@
 import { durableObjectServiceFixture } from "@vibestudio/service-schemas/test-utils";
 import { schemaRpcMock } from "@vibestudio/rpc/test-utils";
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -20,11 +21,17 @@ import {
   RpcBoundaryError,
   type RpcClient,
   type RpcCallOptions,
+  deserializeRpcFailure,
 } from "@vibestudio/rpc";
 import { wireClientFor } from "@vibestudio/rpc/internal";
 import { createMainRpcCaller } from "@vibestudio/service-schemas/mainRpc";
 import type { JsonValue, Context } from "@panticonic/pi-chord";
 import type { ToolExecutionApi } from "@panticonic/pi-durable";
+import type { NativeInvocationExecution } from "../../packages/agentic-do/src/native-invocation-boundary.js";
+import type {
+  LifecyclePrepareInput,
+  LifecyclePrepareResult,
+} from "@workspace/runtime/worker/durable-base";
 import {
   nativeToolApi,
   nativeToolContext,
@@ -41,6 +48,14 @@ import { GMAIL_MESSAGE_TYPES, GmailCards } from "./cards/cards.js";
 
 const WORKSPACE_ROOT = path.resolve(__dirname, "../..");
 const testDatabases: Array<{ close(): void; release(): Promise<unknown> }> = [];
+
+function channelEndpoint(channelId: string) {
+  return {
+    source: "workers/pubsub-channel",
+    className: "PubSubChannel",
+    objectKey: channelId,
+  };
+}
 
 function credentialSummaryFixture(id = "cred-1") {
   return {
@@ -68,13 +83,25 @@ async function createTestDO<DOClass extends new (ctx: any, env: any) => object>(
     WORKER_EXECUTION_DIGEST: "e".repeat(64),
     ...suppliedEnv,
   };
+  const fixtureImage =
+    options?.props && "image" in options.props
+      ? options.props.image
+      : {
+          effectiveVersion: "a".repeat(64),
+          sourceRef: `state:${"b".repeat(64)}`,
+        };
+  const fixtureProps = {
+    stateArgs: options?.props?.stateArgs ?? null,
+    image: fixtureImage,
+  };
+  const fixtureOptions = { ...(options ?? {}), props: fixtureProps };
   let descriptor = schemaDescriptors.get(ctor);
   if (!descriptor) {
     descriptor = (async () => {
       const probe = await createRuntimeTestDO(
         ctor,
         { ...env, VIBESTUDIO_SCHEMA_PROBE: true },
-        { initialize: false },
+        { initialize: false, props: fixtureProps },
       );
       try {
         const response = await (
@@ -93,22 +120,32 @@ async function createTestDO<DOClass extends new (ctx: any, env: any) => object>(
   const result = await createRuntimeTestDO(
     ctor,
     { ...env, VIBESTUDIO_SCHEMA_DESCRIPTOR: await descriptor },
-    options,
+    fixtureOptions,
   );
   testDatabases.push({
     close: () => result.db.close(),
     release: async () => {
       try {
-        return await (
+        const instance = (
           result.instance as {
-            releaseForLifecycle(input: unknown): Promise<unknown>;
+            releaseForLifecycle(
+              input: LifecyclePrepareInput,
+            ): Promise<LifecyclePrepareResult>;
           }
-        ).releaseForLifecycle({
-          epoch: "test-end",
-          mode: "suspend",
-          reason: "test",
-          deadlineMs: 0,
-        });
+        );
+        let outcome: LifecyclePrepareResult = { status: "ready" };
+        for (const phase of ["quiesce", "peer-obligations", "release"] as const) {
+          outcome = await instance.releaseForLifecycle({
+            epoch: "test-end",
+            phase,
+            mode: "suspend",
+            reason: "test",
+            deadlineMs: 0,
+          });
+          if (outcome.status === "failed")
+            throw deserializeRpcFailure(outcome.failure);
+        }
+        return outcome;
       } finally {
         await (
           result.instance as { closeMethodChannels?(): Promise<void> }
@@ -225,6 +262,10 @@ class TestGmailAgentWorker extends GmailAgentWorker {
   signals: Array<{ participantId: string; content: string; type?: string }> =
     [];
   closedSubscriptions: string[] = [];
+  private readonly joinedRelationships = new Map<
+    string,
+    { relationship: string; revision: number }
+  >();
   gadCalls: Array<{ method: string; args: unknown[] }> = [];
   rawSqlRows: Array<Record<string, unknown>> = [{ seq: null }];
   lifecycleLeaseCalls: Array<{ method: string; input: unknown }> = [];
@@ -387,10 +428,12 @@ class TestGmailAgentWorker extends GmailAgentWorker {
       if (method === "workspace.listSkills") return [];
       if (method === "blobstore.putText") {
         const value = String(args?.[0] ?? "");
-        const digest = `blob-${this.blobs.size + 1}`;
+        const digest = createHash("sha256").update(value).digest("hex");
         this.blobs.set(digest, value);
-        return { digest, size: value.length };
+        return { digest, size: new TextEncoder().encode(value).byteLength };
       }
+      if (method === "blobstore.getText")
+        return this.blobs.get(String(args?.[0])) ?? null;
       if (method === "credentials.connect") return credentialSummaryFixture();
       if (method === "credentials.resolveCredential")
         return credentialSummaryFixture();
@@ -401,9 +444,8 @@ class TestGmailAgentWorker extends GmailAgentWorker {
         return undefined;
       }
       if (
-        _target === "main" &&
-        (method === "workspace-state.lifecycleLeaseUpsert" ||
-          method === "workspace-state.lifecycleLeaseClear")
+        method === "workspace-state.lifecycleLeaseUpsert" ||
+        method === "workspace-state.lifecycleLeaseClear"
       ) {
         this.lifecycleLeaseCalls.push({ method, input: args?.[0] });
         return undefined;
@@ -467,22 +509,26 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     schemaRpcMock({
       call: async (_target, method) => {
         const image = this.loadedImage();
+        const entity = {
+          id: image.runtimeId,
+          authoritySessionId: "actual-test-owner-session",
+          kind: "do" as const,
+          source: {
+            repoPath: image.source,
+            effectiveVersion: "test-gmail-agent-image",
+          },
+          activeExecutionDigest: image.executionDigest,
+          className: image.className,
+          key: image.objectKey,
+          contextId: "ctx-1",
+          createdAt: 1,
+          status: "active" as const,
+          cleanupComplete: false,
+        };
         if (method === "workspace-state.entity.resolveActive")
-          return {
-            id: image.runtimeId,
-            authoritySessionId: "actual-test-owner-session",
-            kind: "do",
-            source: { repoPath: image.source, effectiveVersion: "test" },
-            activeExecutionDigest: image.executionDigest,
-            className: image.className,
-            key: image.objectKey,
-            contextId: "ctx-1",
-            createdAt: 1,
-            status: "active",
-            cleanupComplete: false,
-          };
+          return entity;
         if (method === "workspace-state.alarmSourceRegister")
-          return "test-storage-incarnation";
+          return { incarnation: "test-storage-incarnation", entity };
         if (method === "workspace-state.alarmSourcePublish") return "accepted";
         if (method === "authority.outstandingAcquisitions")
           return { receipts: [], next: null };
@@ -567,13 +613,35 @@ class TestGmailAgentWorker extends GmailAgentWorker {
           generation,
         ),
       relationshipState: async () => null,
-      join: async (input: { participantId: string; revision: number }) => ({
-        ok: true,
-        participantId: input.participantId,
-        revision: input.revision,
-        channelConfig: undefined,
-        envelope: { mode: "initial", logEvents: [], snapshots: [], ready: {} },
-      }),
+      join: async (input: {
+        participantId: string;
+        operationId: string;
+        contextId: string;
+        metadata: Record<string, unknown>;
+        delivery: "all" | "addressed" | "none";
+        endpoint: { kind: "entity"; entityId: string; invocation: "direct" | "mailbox" } | { kind: "session" };
+        applicationConfig: { version: number; value: unknown } | null;
+        replay: boolean;
+      }) => {
+        const { operationId: _operationId, replay: _replay, ...relationship } = input;
+        const relationshipJson = JSON.stringify(relationship);
+        const previous = this.joinedRelationships.get(channelId);
+        const revision =
+          previous?.relationship === relationshipJson
+            ? previous.revision
+            : (previous?.revision ?? 0) + 1;
+        this.joinedRelationships.set(channelId, {
+          relationship: relationshipJson,
+          revision,
+        });
+        return {
+          ok: true,
+          participantId: input.participantId,
+          revision,
+          channelConfig: undefined,
+          envelope: { mode: "initial", logEvents: [], snapshots: [], ready: {} },
+        };
+      },
       leave: async (participantId: string) => {
         this.closedSubscriptions.push(participantId);
         return { ok: true };
@@ -624,9 +692,14 @@ class TestGmailAgentWorker extends GmailAgentWorker {
   seedSubscription(channelId = "ch-1", participantId = "agent-gmail") {
     this.sql.exec(
       `INSERT OR REPLACE INTO subscriptions
-         (channel_id, context_id, revision, subscribed_at, config, relationship_json, participant_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (channel_id, channel_ref_json, context_id, revision, subscribed_at, config, relationship_json, participant_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       channelId,
+      JSON.stringify({
+        source: "workers/pubsub-channel",
+        className: "PubSubChannel",
+        objectKey: channelId,
+      }),
       "ctx-1",
       1,
       Date.now(),
@@ -797,13 +870,14 @@ class NativeToolGmailWorker extends TestGmailAgentWorker {
   protected override async bindNativeToolExecution(
     api: ToolExecutionApi,
     context: Context,
-  ) {
+  ): Promise<NativeInvocationExecution> {
     context.abortSignal?.throwIfAborted();
     this.boundCalls.push(api.callId);
     return {
       invocationId: `native:${api.callId}`,
       commandId: `command:${api.callId}`,
       rpc: this.rpc,
+      cleanupRpc: this.rpc,
     };
   }
   protected override createBoundGmailClient(
@@ -1212,6 +1286,7 @@ describe("GmailAgentWorker", () => {
 
     await worker.subscribeChannel({
       channelId: "ch-1",
+      channelRef: channelEndpoint("ch-1"),
       contextId: "ctx-1",
       replay: false,
       config: { handle: "gmail", googleCredentialId: "google-cred-2" },
@@ -1228,6 +1303,7 @@ describe("GmailAgentWorker", () => {
     const worker = instance as TestGmailAgentWorker;
     const { participantId } = await worker.subscribeChannel({
       channelId: "ch-1",
+      channelRef: channelEndpoint("ch-1"),
       contextId: "ctx-1",
       replay: false,
     });
@@ -1311,6 +1387,7 @@ describe("GmailAgentWorker", () => {
       await expect(
         worker.subscribeChannel({
           channelId: "ch-1",
+          channelRef: channelEndpoint("ch-1"),
           contextId: "ctx-1",
           replay: false,
         }),
@@ -1348,6 +1425,7 @@ describe("GmailAgentWorker", () => {
     await expect(
       worker.subscribeChannel({
         channelId: "ch-1",
+        channelRef: channelEndpoint("ch-1"),
         contextId: "ctx-1",
         replay: false,
       }),
@@ -1368,6 +1446,7 @@ describe("GmailAgentWorker", () => {
     await expect(
       worker.subscribeChannel({
         channelId: "ch-1",
+        channelRef: channelEndpoint("ch-1"),
         contextId: "ctx-1",
         replay: false,
       }),
@@ -1424,6 +1503,7 @@ describe("GmailAgentWorker", () => {
 
     await worker.subscribeChannel({
       channelId: "ch-1",
+      channelRef: channelEndpoint("ch-1"),
       contextId: "ctx-1",
       replay: false,
     });
@@ -2595,8 +2675,12 @@ describe("GmailAgentWorker", () => {
       className: "GmailAgentWorker",
       objectKey: "gmail-ch-1",
     });
+    const originalCall = router.rpcCall.getMockImplementation();
+    if (!originalCall)
+      throw new Error("Gmail router RPC fixture has no canonical handler");
     router.rpcCall.mockImplementation(
-      async (target: string, method: string, args?: unknown[]) => {
+      async (...call: Parameters<typeof originalCall>) => {
+        const [target, method, args] = call;
         if (
           target === "do:workers/gmail-agent:GmailAgentWorker:gmail-ch-1" &&
           method === "onGmailPushNotification"
@@ -2607,7 +2691,7 @@ describe("GmailAgentWorker", () => {
           });
           return { synced: ["ch-1"] };
         }
-        return { id: "cred-1" };
+        return originalCall(...call);
       },
     );
 
