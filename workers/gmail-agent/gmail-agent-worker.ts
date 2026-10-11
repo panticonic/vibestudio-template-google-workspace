@@ -619,7 +619,7 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
         );
         await this.updateGmailSchedule();
         return {
-          content: [{ type: "text", text: JSON.stringify(details, null, 2) }],
+          output: [{ type: "text", text: JSON.stringify(details, null, 2) }],
           details,
         };
       },

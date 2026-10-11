@@ -5,7 +5,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNativeChannelProvider } from "@workspace/testkit/native-channel-provider";
-import { createTestDO as createRuntimeTestDO } from "@workspace/runtime/worker/test-utils";
+import type { createTestDO as createRuntimeTestDO } from "@workspace/runtime/worker/test-utils";
+import { createNativeVesselTestDO } from "@workspace/agentic-do/testing/native-vessel";
 import { createCredentialClient } from "@workspace/runtime/credentials";
 import type { WebhookDeliveryEvent } from "@workspace/runtime/worker";
 import {
@@ -72,7 +73,6 @@ function credentialSummaryFixture(id = "cred-1") {
   };
 }
 
-const schemaDescriptors = new Map<unknown, Promise<unknown>>();
 async function createTestDO<DOClass extends new (ctx: any, env: any) => object>(
   ...args: Parameters<typeof createRuntimeTestDO<DOClass>>
 ): ReturnType<typeof createRuntimeTestDO<DOClass>> {
@@ -90,36 +90,25 @@ async function createTestDO<DOClass extends new (ctx: any, env: any) => object>(
           effectiveVersion: "a".repeat(64),
           sourceRef: `state:${"b".repeat(64)}`,
         };
+  if (!fixtureImage) throw new Error("Gmail fixture requires its loaded image");
   const fixtureProps = {
+    ...options?.props,
+    nativeOwner: options?.props && "nativeOwner" in options.props ? options.props.nativeOwner : {
+      runtimeId: `do:${env.WORKER_SOURCE}:${env.WORKER_CLASS_NAME}:${suppliedEnv?.["__objectKey"] ?? "test-key"}`,
+      contextId: "ctx-1",
+      authoritySessionId: "actual-test-owner-session",
+      incarnation: "test-storage-incarnation",
+      generation: 1,
+      executionDigest: env.WORKER_EXECUTION_DIGEST,
+      effectiveVersion: fixtureImage.effectiveVersion,
+    },
     stateArgs: options?.props?.stateArgs ?? null,
     image: fixtureImage,
   };
   const fixtureOptions = { ...(options ?? {}), props: fixtureProps };
-  let descriptor = schemaDescriptors.get(ctor);
-  if (!descriptor) {
-    descriptor = (async () => {
-      const probe = await createRuntimeTestDO(
-        ctor,
-        { ...env, VIBESTUDIO_SCHEMA_PROBE: true },
-        { initialize: false, props: fixtureProps },
-      );
-      try {
-        const response = await (
-          probe.instance as { fetch(request: Request): Promise<Response> }
-        ).fetch(
-          new Request("http://test/test-key/__vibestudio_schema_descriptor"),
-        );
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-      } finally {
-        probe.db.close();
-      }
-    })();
-    schemaDescriptors.set(ctor, descriptor);
-  }
-  const result = await createRuntimeTestDO(
+  const result = await createNativeVesselTestDO(
     ctor,
-    { ...env, VIBESTUDIO_SCHEMA_DESCRIPTOR: await descriptor },
+    env,
     fixtureOptions,
   );
   testDatabases.push({
@@ -508,27 +497,6 @@ class TestGmailAgentWorker extends GmailAgentWorker {
   protected override callAgentHost = createMainRpcCaller(
     schemaRpcMock({
       call: async (_target, method) => {
-        const image = this.loadedImage();
-        const entity = {
-          id: image.runtimeId,
-          authoritySessionId: "actual-test-owner-session",
-          kind: "do" as const,
-          source: {
-            repoPath: image.source,
-            effectiveVersion: "test-gmail-agent-image",
-          },
-          activeExecutionDigest: image.executionDigest,
-          className: image.className,
-          key: image.objectKey,
-          contextId: "ctx-1",
-          createdAt: 1,
-          status: "active" as const,
-          cleanupComplete: false,
-        };
-        if (method === "workspace-state.entity.resolveActive")
-          return entity;
-        if (method === "workspace-state.alarmSourceRegister")
-          return { incarnation: "test-storage-incarnation", entity };
         if (method === "workspace-state.alarmSourcePublish") return "accepted";
         if (method === "authority.outstandingAcquisitions")
           return { receipts: [], next: null };
