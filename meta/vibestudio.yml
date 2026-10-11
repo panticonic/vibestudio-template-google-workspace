@@ -3,6 +3,7 @@ defaultAgentConfig:
 initPanels:
   - source: panels/welcome
 systemEpoch: 0
+minimumAppVersion: 0.1.84
 template:
   dependencies:
     - url: git+https://github.com/panticonic/vibestudio-base.git
