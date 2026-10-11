@@ -3,8 +3,8 @@
  * default so tests only override what they assert on — adding a method to
  * GmailClient should touch this file, not every consumer's test harness.
  *
- * Exported via the package's "./test-utils" entry; never import from
- * production code (it depends on vitest).
+ * Kept beside its worker tests; never import from production code (it depends
+ * on vitest).
  */
 import { vi } from "vitest";
 
@@ -15,7 +15,7 @@ import type {
   GmailMessage,
   GmailProfile,
   GmailThread,
-} from "./gmail-client.js";
+} from "@workspace/gmail";
 
 export interface FakeGmailClientOptions {
   /** Served by getThread and (per id) by batchGetThreads. */

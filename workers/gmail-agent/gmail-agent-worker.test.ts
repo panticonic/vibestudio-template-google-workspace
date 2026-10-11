@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createNativeChannelProvider } from "@workspace/agentic-do/testing/native-channel-provider";
+import { createNativeChannelProvider } from "@workspace/testkit/native-channel-provider";
 import { createTestDO as createRuntimeTestDO } from "@workspace/runtime/worker/test-utils";
 import { createCredentialClient } from "@workspace/runtime/credentials";
 import type { WebhookDeliveryEvent } from "@workspace/runtime/worker";
@@ -15,7 +15,7 @@ import {
   type GmailMessage,
   type GmailThread,
 } from "@workspace/gmail";
-import { fakeGmailClient } from "@workspace/gmail/test-utils";
+import { fakeGmailClient } from "./testing/gmail-client.js";
 import { AGENTIC_EVENT_PAYLOAD_KIND } from "@workspace/agentic-protocol";
 import {
   RpcBoundaryError,

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CardManager } from "@workspace/agentic-do";
 import { createInMemorySql } from "@workspace/runtime/worker/test-utils";
 import type { SqlStorage } from "@workspace/runtime/worker";
-import { fakeGmailClient } from "@workspace/gmail/test-utils";
+import { fakeGmailClient } from "../testing/gmail-client.js";
 import { GmailApiError } from "@workspace/gmail";
 import { GmailCards, GMAIL_MESSAGE_TYPES } from "../cards/cards.js";
 import { ComposeHandlers } from "./compose-handlers.js";
