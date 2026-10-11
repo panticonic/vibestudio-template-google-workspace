@@ -22,7 +22,8 @@
     "react": "^19.0.0",
     "@workspace/ui": "workspace:*",
     "@vibestudio/rpc": "workspace:*",
-    "@vibestudio/shared": "workspace:*"
+    "@vibestudio/shared": "workspace:*",
+    "@vibestudio/service-schemas": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^3.2.7"
