@@ -448,8 +448,8 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
     channelId: string,
     thread: GmailThread,
     context: Context = BACKGROUND_CONTEXT,
-    toolRpc: RpcClient = this.rpc,
     selected: string = this.getAgentSettings().model,
+    parent?: import("@panticonic/pi-durable").ToolExecutionApi,
   ): Promise<string> {
     const colon = selected.indexOf(":");
     if (colon < 1)
@@ -463,17 +463,13 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
     return generateDraftReplyBodyLlm({
       thread,
       generate: (transcript) =>
-        this.withNativeModelConnection(
+        this.completeNativeModel(
           channelId,
           model,
-          (prepared, connection) =>
-            this.nativeModels().complete(prepared, transcript, {
-              ...connection.options,
-              temperature: 0.2,
-              maxTokens: 300,
-            }),
+          transcript,
+          { temperature: 0.2, maxTokens: 300 },
           context,
-          toolRpc,
+          parent,
         ),
     });
   }
@@ -488,10 +484,10 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
     systemPrompt: string,
     userPrompt: string,
     context: Context = BACKGROUND_CONTEXT,
-    toolRpc: RpcClient = this.rpc,
     channelModelRef: string = this.getAgentSettings().model,
     override: string | null = this.store.getPrefs(channelId).triageModel ??
       null,
+    parent?: import("@panticonic/pi-durable").ToolExecutionApi,
   ): Promise<string> {
     const candidates = triageModelCandidates(
       channelModelRef,
@@ -509,22 +505,16 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
     }
     if (!model)
       throw new Error(`No triage model metadata for: ${candidates.join(", ")}`);
-    const response = await this.withNativeModelConnection(
+    const response = await this.completeNativeModel(
       channelId,
       model,
-      (prepared, connection) =>
-        this.nativeModels().complete(
-          prepared,
-          {
-            systemPrompt,
-            messages: [
-              { role: "user", timestamp: Date.now(), content: userPrompt },
-            ],
-          },
-          { ...connection.options, temperature: 0, maxTokens: 800 },
-        ),
+      {
+        systemPrompt,
+        messages: [{ role: "user", timestamp: Date.now(), content: userPrompt }],
+      },
+      { temperature: 0, maxTokens: 800 },
       context,
-      toolRpc,
+      parent,
     );
     return modelReplyText(response);
   }
@@ -595,8 +585,8 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
               id,
               thread,
               context,
-              toolRpc,
               offer["modelRef"] as string,
+              api,
             ),
           runTriageModel: (id, system, prompt) =>
             this.runTriageModel(
@@ -604,9 +594,9 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
               system,
               prompt,
               context,
-              toolRpc,
               offer["modelRef"] as string,
               offer["triageModel"] as string | null,
+              api,
             ),
           writeFile: (path, data) => fs.writeFile(path, data),
           rpc: toolRpc,
@@ -820,9 +810,9 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
       cacheKey: (id) =>
         JSON.stringify([id, this.getGmailCredentialId(id) ?? null]),
       generateDraftReplyBody: (id, thread) =>
-        this.generateDraftReplyBody(id, thread, context, rpc),
+        this.generateDraftReplyBody(id, thread, context),
       runTriageModel: (id, system, prompt) =>
-        this.runTriageModel(id, system, prompt, context, rpc),
+        this.runTriageModel(id, system, prompt, context),
       writeFile: (path, data) => fs.writeFile(path, data),
       rpc,
     });
@@ -1223,9 +1213,9 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
       cacheKey: (id) => JSON.stringify([id, credentialId ?? null]),
       shareAccountCaches: credentialId !== undefined,
       generateDraftReplyBody: (id, thread) =>
-        this.generateDraftReplyBody(id, thread, context, methodRpc),
+        this.generateDraftReplyBody(id, thread, context),
       runTriageModel: (id, system, prompt) =>
-        this.runTriageModel(id, system, prompt, context, methodRpc),
+        this.runTriageModel(id, system, prompt, context),
       writeFile: (path, data) => fs.writeFile(path, data),
       rpc: methodRpc,
     });

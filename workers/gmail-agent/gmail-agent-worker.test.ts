@@ -7,7 +7,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNativeChannelProvider } from "@workspace/testkit/native-channel-provider";
 import type { createTestDO as createRuntimeTestDO } from "@workspace/runtime/worker/test-utils";
 import { createNativeVesselTestDO } from "@workspace/agentic-do/testing/native-vessel";
-import { createCredentialClient } from "@workspace/runtime/credentials";
+import {
+  createCredentialClient,
+  type StoredCredentialSummary,
+} from "@workspace/runtime/credentials";
 import type { WebhookDeliveryEvent } from "@workspace/runtime/worker";
 import {
   GmailApiError,
@@ -25,7 +28,10 @@ import {
   deserializeRpcFailure,
 } from "@vibestudio/rpc";
 import { wireClientFor } from "@vibestudio/rpc/internal";
-import { createMainRpcCaller } from "@vibestudio/service-schemas/mainRpc";
+import {
+  createMainRpcCaller,
+  mainRpcMethods,
+} from "@vibestudio/service-schemas/mainRpc";
 import type { JsonValue, Context } from "@panticonic/pi-chord";
 import type { ToolExecutionApi } from "@panticonic/pi-durable";
 import type { NativeInvocationExecution } from "../../packages/agentic-do/src/native-invocation-boundary.js";
@@ -37,6 +43,8 @@ import {
   nativeToolApi,
   nativeToolContext,
 } from "@workspace/harness/testing/native-tool";
+import { BACKGROUND_CONTEXT } from "@panticonic/pi-chord/context";
+import { fauxAssistantMessage } from "@panticonic/pi-ai";
 import { builtinModels } from "@panticonic/pi-ai/providers/all";
 
 import {
@@ -58,7 +66,7 @@ function channelEndpoint(channelId: string) {
   };
 }
 
-function credentialSummaryFixture(id = "cred-1") {
+function credentialSummaryFixture(id = "cred-1"): StoredCredentialSummary {
   return {
     id,
     label: "Gmail test credential",
@@ -72,6 +80,9 @@ function credentialSummaryFixture(id = "cred-1") {
     lifecycle: { state: "active" as const, canRefresh: false },
   };
 }
+
+const RESOLVE_NATIVE_MODEL_METHOD =
+  mainRpcMethods["credentials.resolveNativeModel"].name;
 
 async function createTestDO<DOClass extends new (ctx: any, env: any) => object>(
   ...args: Parameters<typeof createRuntimeTestDO<DOClass>>
@@ -349,7 +360,6 @@ class TestGmailAgentWorker extends GmailAgentWorker {
   unreadableRendererSources = false;
   rendererReadFailure: Error | undefined;
   rendererSourceOverrides = new Map<string, string | Uint8Array | null>();
-  useBaseDraftGeneration = false;
   triageResponses: string[] = [];
   triageCalls: Array<{ channelId: string; userPrompt: string }> = [];
   /** Captured workspace writes (this.fs is getter-only, so override here). */
@@ -534,13 +544,26 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     return client;
   }
 
+  onModelCredentialCard?: () => void;
+  modelsForNativeInferenceTest() {
+    return this.nativeModels();
+  }
+  nativeDraftForTest() {
+    return super.generateDraftReplyBody("ch-1", this.fakeThread);
+  }
+  nativeTriageForTest() {
+    return super.runTriageModel(
+      "ch-1",
+      "Triage the inbox",
+      "Email batch",
+      BACKGROUND_CONTEXT,
+    );
+  }
+
   protected override generateDraftReplyBody(
-    channelId: string,
-    thread: GmailThread,
+    _channelId: string,
+    _thread: GmailThread,
   ): Promise<string> {
-    if (this.useBaseDraftGeneration) {
-      return super.generateDraftReplyBody(channelId, thread);
-    }
     return this.draftBodies();
   }
 
@@ -633,6 +656,12 @@ class TestGmailAgentWorker extends GmailAgentWorker {
         opts?: unknown,
       ) => {
         this.published.push({ participantId, event, opts });
+        if (
+          event.kind === "ui.inline_rendered" &&
+          (event.payload as { props?: { providerId?: string } } | undefined)
+            ?.props?.providerId
+        )
+          this.onModelCredentialCard?.();
         return { id: this.published.length };
       },
       sendSignal: async (
@@ -1853,37 +1882,114 @@ describe("GmailAgentWorker", () => {
     });
   });
 
-  it("emits a connect-only credential card for one-shot draft generation without entering external wait", async () => {
+  it("parks Gmail drafting on model setup, then resumes its native task with the exact prompt", async () => {
     const { instance } = await createTestDO(TestGmailAgentWorker);
     const worker = instance as TestGmailAgentWorker;
     worker.seedSubscription();
-    worker.useBaseDraftGeneration = true;
+    let connected = false;
     const originalCall = worker.rpcCall.getMockImplementation()!;
     worker.rpcCall.mockImplementation(
       async (...args: Parameters<typeof originalCall>) => {
-        if (args[1] === "credentials.resolveCredential") return null;
+        if (args[0] === "main" && args[1] === RESOLVE_NATIVE_MODEL_METHOD)
+          return connected
+            ? credentialSummaryFixture("model-credential")
+            : null;
+        if (args[0] === "main" && args[1] === "credentials.connect") {
+          connected = true;
+          return credentialSummaryFixture("model-credential");
+        }
         return originalCall(...args);
       },
     );
-
-    await expect(
-      worker.deliveredMethod("ch-1", "call-1", "draftReply", {
-        threadId: "thr-1",
-      }),
-    ).rejects.toMatchObject({
-      name: "NativeModelCredentialMissing",
-      message: "No model credential configured for openai-codex",
+    const complete = vi
+      .spyOn(worker.modelsForNativeInferenceTest(), "complete")
+      .mockResolvedValue(fauxAssistantMessage("The drafted reply"));
+    let cardReady!: () => void;
+    const card = new Promise<void>((resolve) => {
+      cardReady = resolve;
     });
-    const inlineUi = worker.published.find(
-      (entry) => entry.event.kind === "ui.inline_rendered",
+    worker.onModelCredentialCard = cardReady;
+    const draft = worker.nativeDraftForTest();
+    await Promise.race([
+      card,
+      draft.then(() => {
+        throw new Error("Draft completed before model setup");
+      }),
+    ]);
+    expect(complete).not.toHaveBeenCalled();
+    expect(
+      worker.published.find(
+        (entry) => entry.event.kind === "ui.inline_rendered",
+      )?.event.payload,
+    ).toMatchObject({
+      props: { providerId: "openai-codex", resumeAfterConnect: true },
+    });
+    await worker.deliveredMethod(
+      "ch-1",
+      "connect-model",
+      "connectModelCredential",
+      { providerId: "openai-codex" },
     );
-    expect(inlineUi?.event.payload).toMatchObject({
-      uiType: "inline",
-      props: expect.objectContaining({
-        providerId: "openai-codex",
-        resumeAfterConnect: false,
+    await expect(draft).resolves.toBe("The drafted reply");
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "openai-codex", id: "gpt-6-sol" }),
+      expect.objectContaining({
+        systemPrompt: expect.stringContaining("reply"),
+        messages: [
+          expect.objectContaining({
+            role: "user",
+            content: expect.stringContaining("Private full email body"),
+          }),
+        ],
       }),
-    });
+      expect.objectContaining({
+        temperature: 0.2,
+        maxTokens: 300,
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("runs Gmail triage through the native model task with its selected cheap model and options", async () => {
+    const { instance } = await createTestDO(TestGmailAgentWorker);
+    const worker = instance as TestGmailAgentWorker;
+    worker.seedSubscription();
+    const originalCall = worker.rpcCall.getMockImplementation()!;
+    worker.rpcCall.mockImplementation(
+      async (...args: Parameters<typeof originalCall>) => {
+        if (args[0] === "main" && args[1] === RESOLVE_NATIVE_MODEL_METHOD)
+          return credentialSummaryFixture("model-credential");
+        return originalCall(...args);
+      },
+    );
+    const complete = vi
+      .spyOn(worker.modelsForNativeInferenceTest(), "complete")
+      .mockResolvedValue(
+        fauxAssistantMessage('[{"threadId":"thr-1","action":"ignore"}]'),
+      );
+    await expect(worker.nativeTriageForTest()).resolves.toBe(
+      '[{"threadId":"thr-1","action":"ignore"}]',
+    );
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "openai-codex",
+        id: triageModelCandidates("openai-codex:gpt-6-sol")[0]!
+          .split(":")
+          .slice(1)
+          .join(":"),
+      }),
+      {
+        systemPrompt: "Triage the inbox",
+        messages: [
+          expect.objectContaining({ role: "user", content: "Email batch" }),
+        ],
+      },
+      expect.objectContaining({
+        temperature: 0,
+        maxTokens: 800,
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it("fetches sanitized thread contents for renderer expansion", async () => {
