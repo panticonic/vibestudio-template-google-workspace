@@ -5,6 +5,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNativeChannelProvider } from "@workspace/testkit/native-channel-provider";
+import { channelClientRpcMethods } from "@workspace/pubsub/rpc-contract";
 import type { createTestDO as createRuntimeTestDO } from "@workspace/runtime/worker/test-utils";
 import { createNativeVesselTestDO } from "@workspace/agentic-do/testing/native-vessel";
 import {
@@ -83,6 +84,7 @@ function credentialSummaryFixture(id = "cred-1"): StoredCredentialSummary {
 
 const RESOLVE_NATIVE_MODEL_METHOD =
   mainRpcMethods["credentials.resolveNativeModel"].name;
+const CHANNEL_PUBLISH_METHOD = channelClientRpcMethods.publish.name;
 
 async function createTestDO<DOClass extends new (ctx: any, env: any) => object>(
   ...args: Parameters<typeof createRuntimeTestDO<DOClass>>
@@ -406,6 +408,12 @@ class TestGmailAgentWorker extends GmailAgentWorker {
             published: [],
           };
         }
+      }
+      if (
+        _target === "do:workers/pubsub-channel:PubSubChannel:ch-1" &&
+        method === CHANNEL_PUBLISH_METHOD
+      ) {
+        return { id: this.published.length + 1 };
       }
       if (method === "runtime.resolveContext") return "ctx-1";
       if (method === "workers.resolveService") {
