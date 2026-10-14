@@ -261,6 +261,21 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     event: { kind?: string; payload?: unknown };
     opts?: unknown;
   }> = [];
+  onModelCredentialCard?: () => void;
+  private recordPublished(
+    participantId: string,
+    event: { kind?: string; payload?: unknown },
+    opts?: unknown,
+  ) {
+    this.published.push({ participantId, event, opts });
+    if (
+      event.kind === "ui.inline_rendered" &&
+      (event.payload as { props?: { providerId?: string } } | undefined)?.props
+        ?.providerId
+    )
+      this.onModelCredentialCard?.();
+    return { id: this.published.length };
+  }
   signals: Array<{ participantId: string; content: string; type?: string }> =
     [];
   closedSubscriptions: string[] = [];
@@ -413,7 +428,11 @@ class TestGmailAgentWorker extends GmailAgentWorker {
         _target === "do:workers/pubsub-channel:PubSubChannel:ch-1" &&
         method === CHANNEL_PUBLISH_METHOD
       ) {
-        return { id: this.published.length + 1 };
+        return this.recordPublished(
+          args?.[0] as string,
+          args?.[2] as { kind?: string; payload?: unknown },
+          args?.[3],
+        );
       }
       if (method === "runtime.resolveContext") return "ctx-1";
       if (method === "workers.resolveService") {
@@ -552,12 +571,68 @@ class TestGmailAgentWorker extends GmailAgentWorker {
     return client;
   }
 
-  onModelCredentialCard?: () => void;
   modelsForNativeInferenceTest() {
     return this.nativeModels();
   }
   nativeDraftForTest() {
     return super.generateDraftReplyBody("ch-1", this.fakeThread);
+  }
+  async observeNativeModelCredentialWait(providerId: string) {
+    const harness = await this.agentSession(BACKGROUND_CONTEXT);
+    let resolve!: () => void;
+    let reject!: (error: unknown) => void;
+    let settled = false;
+    const promise = new Promise<void>((onResolve, onReject) => {
+      resolve = onResolve;
+      reject = onReject;
+    });
+    const accepts = (task: unknown) => {
+      if (!task || typeof task !== "object" || !("state" in task)) return false;
+      const state = task.state;
+      if (!state || typeof state !== "object") return false;
+      const waiting =
+        ("status" in state && state.status === "waiting") ||
+        ("kind" in state && state.kind === "waiting");
+      if (!waiting || !("condition" in state)) return false;
+      const condition = state.condition;
+      return (
+        !!condition &&
+        typeof condition === "object" &&
+        "kind" in condition &&
+        condition.kind === "input" &&
+        "kinds" in condition &&
+        Array.isArray(condition.kinds) &&
+        condition.kinds.includes(
+          `vibestudio.model-credential-change:${providerId}`,
+        )
+      );
+    };
+    const stop = harness.subscribeCommits((commit) => {
+      if (
+        !settled &&
+        commit.changes.some(
+          (change) => change.type === "task" && accepts(change.value),
+        )
+      ) {
+        settled = true;
+        resolve();
+      }
+    });
+    void harness.inspect(BACKGROUND_CONTEXT).then(
+      (snapshot) => {
+        if (!settled && snapshot.tasks.some(accepts)) {
+          settled = true;
+          resolve();
+        }
+      },
+      (error) => {
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
+      },
+    );
+    return { promise, stop };
   }
   nativeTriageForTest() {
     return super.runTriageModel(
@@ -662,16 +737,7 @@ class TestGmailAgentWorker extends GmailAgentWorker {
         participantId: string,
         event: { kind?: string; payload?: unknown },
         opts?: unknown,
-      ) => {
-        this.published.push({ participantId, event, opts });
-        if (
-          event.kind === "ui.inline_rendered" &&
-          (event.payload as { props?: { providerId?: string } } | undefined)
-            ?.props?.providerId
-        )
-          this.onModelCredentialCard?.();
-        return { id: this.published.length };
-      },
+      ) => this.recordPublished(participantId, event, opts),
       sendSignal: async (
         participantId: string,
         content: string,
@@ -1917,28 +1983,38 @@ describe("GmailAgentWorker", () => {
       cardReady = resolve;
     });
     worker.onModelCredentialCard = cardReady;
-    const draft = worker.nativeDraftForTest();
-    await Promise.race([
-      card,
-      draft.then(() => {
-        throw new Error("Draft completed before model setup");
-      }),
-    ]);
-    expect(complete).not.toHaveBeenCalled();
-    expect(
-      worker.published.find(
-        (entry) => entry.event.kind === "ui.inline_rendered",
-      )?.event.payload,
-    ).toMatchObject({
-      props: { providerId: "openai-codex", resumeAfterConnect: true },
-    });
-    await worker.deliveredMethod(
-      "ch-1",
-      "connect-model",
-      "connectModelCredential",
-      { providerId: "openai-codex" },
+    const credentialWait = await worker.observeNativeModelCredentialWait(
+      "openai-codex",
     );
-    await expect(draft).resolves.toBe("The drafted reply");
+    try {
+      const draft = worker.nativeDraftForTest();
+      await Promise.all([
+        credentialWait.promise,
+        Promise.race([
+          card,
+          draft.then(() => {
+            throw new Error("Draft completed before model setup");
+          }),
+        ]),
+      ]);
+      expect(complete).not.toHaveBeenCalled();
+      expect(
+        worker.published.find(
+          (entry) => entry.event.kind === "ui.inline_rendered",
+        )?.event.payload,
+      ).toMatchObject({
+        props: { providerId: "openai-codex", resumeAfterConnect: true },
+      });
+      await worker.deliveredMethod(
+        "ch-1",
+        "connect-model",
+        "connectModelCredential",
+        { providerId: "openai-codex" },
+      );
+      await expect(draft).resolves.toBe("The drafted reply");
+    } finally {
+      credentialWait.stop();
+    }
     expect(complete).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "openai-codex", id: "gpt-6-sol" }),
       expect.objectContaining({
