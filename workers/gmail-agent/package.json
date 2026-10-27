@@ -133,9 +133,9 @@
     }
   },
   "dependencies": {
-    "@panticonic/pi-ai": "1.2.0-vibestudio.1",
-    "@panticonic/pi-durable": "1.2.0-vibestudio.1",
-    "@panticonic/pi-chord": "1.2.0-vibestudio.1",
+    "@panticonic/pi-ai": "1.2.0-vibestudio.2",
+    "@panticonic/pi-durable": "1.2.0-vibestudio.2",
+    "@panticonic/pi-chord": "1.2.0-vibestudio.2",
     "@vibestudio/rpc": "workspace:*",
     "@vibestudio/shared": "workspace:*",
     "@vibestudio/trajectory-identity": "workspace:*",
