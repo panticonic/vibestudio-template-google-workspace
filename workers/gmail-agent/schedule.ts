@@ -1,4 +1,5 @@
 import type { Context } from "@panticonic/pi-chord";
+import { withAbortSignal } from "@panticonic/pi-chord/context";
 import {
   defineDoc,
   defineTask,
@@ -43,7 +44,7 @@ export function createGmailSchedule(host: {
         );
       },
       poll: async (_current, runtime, context) => {
-        await host.poll({ ...context, abortSignal: runtime.signal });
+        await host.poll(withAbortSignal(runtime.signal, context));
         const until = host.nextWake();
         await runtime.commit(
           () =>

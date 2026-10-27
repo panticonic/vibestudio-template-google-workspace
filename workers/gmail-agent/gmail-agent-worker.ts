@@ -8,7 +8,7 @@ import {
 import { Type, type Api, type Model } from "@panticonic/pi-ai";
 import { defineExtension, type ToolRegistration } from "@panticonic/pi-durable";
 import { copyJson, type Context, type JsonValue } from "@panticonic/pi-chord";
-import { BACKGROUND_CONTEXT } from "@panticonic/pi-chord/context";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@panticonic/pi-chord/context";
 import { withRpcAbortSignal, type RpcClient } from "@vibestudio/rpc";
 import { createCredentialClient } from "@workspace/runtime/credentials";
 import { createRpcFs } from "@workspace/runtime/worker/rpc-fs";
@@ -1202,7 +1202,7 @@ export class GmailAgentWorker extends AgentWorkerBase implements GmailAgentProto
     const op = this.operationIndex.get(methodName);
     if (!op) return null;
     signal.throwIfAborted();
-    const context: Context = { ...BACKGROUND_CONTEXT, abortSignal: signal };
+    const context: Context = withAbortSignal(signal, BACKGROUND_CONTEXT);
     const methodRpc = withRpcAbortSignal(this.rpc, signal);
     const credentialId = this.getGmailCredentialId(channelId);
     const gmail = this.createBoundGmailClient(methodRpc, credentialId, context);
