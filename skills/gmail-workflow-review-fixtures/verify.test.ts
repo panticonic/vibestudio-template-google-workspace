@@ -50,10 +50,10 @@ describe("Gmail workflow review verification", () => {
     expect(
       new Set(gmailWorkflowWorlds.map((world) => world.request.kind)),
     ).toEqual(new Set(["setup", "read", "attention", "compose", "sync"]));
-    expect(
-      new Set(
-        gmailWorkflowWorlds.map((world) => world.expected.findings[0].code),
-      ).size,
-    ).toBe(gmailWorkflowWorlds.length);
+    const codes = gmailWorkflowWorlds.map(
+      (world) => world.expected.findings[0]?.code,
+    );
+    expect(codes).not.toContain(undefined);
+    expect(new Set(codes).size).toBe(gmailWorkflowWorlds.length);
   });
 });
