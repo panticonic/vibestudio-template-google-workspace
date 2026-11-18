@@ -86,6 +86,29 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 describe("createDriveClient", () => {
+  it("passes an explicit permission continuation to the canonical read endpoint", async () => {
+    const { credentials, stats } = makeMockEnv(() =>
+      jsonResponse({
+        permissions: [{ id: "second-audience", type: "user", role: "reader" }],
+        nextPageToken: "next-receipt",
+      }),
+    );
+    const page = await createDriveClient(credentials).listPermissions(
+      "owned-file",
+      {
+        pageToken: "observed-token",
+        fields: "nextPageToken,permissions(id,type,role)",
+      },
+    );
+    expect(page.nextPageToken).toBe("next-receipt");
+    const request = new URL(stats.fetchCalls[0]!.url);
+    expect(request.pathname.endsWith("/files/owned-file/permissions")).toBe(
+      true,
+    );
+    expect(request.searchParams.get("pageToken")).toBe("observed-token");
+    expect(stats.fetchCalls[0]!.method).toBe("GET");
+  });
+
   it("memoizes the Drive credential handle across method calls", async () => {
     const { credentials, stats } = makeMockEnv((url) => {
       if (url.endsWith("/about?fields=kind,user,storageQuota")) {

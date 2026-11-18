@@ -134,6 +134,7 @@ export interface DrivePermission {
 
 export interface DrivePermissionList {
   permissions?: DrivePermission[];
+  nextPageToken?: string;
   [key: string]: unknown;
 }
 
@@ -246,6 +247,7 @@ export interface DriveCopyFileOptions extends DriveFileMutationOptions {
 export interface DriveListPermissionsOptions {
   supportsAllDrives?: boolean;
   fields?: string;
+  pageToken?: string;
 }
 
 export interface DrivePermissionMutationOptions {
@@ -539,6 +541,7 @@ function getPermissionsQuery(
   return buildQuery({
     supportsAllDrives: options.supportsAllDrives ?? true,
     fields: normalizeFields(options.fields),
+    pageToken: "pageToken" in options ? options.pageToken : undefined,
     sendNotificationEmail:
       "sendNotificationEmail" in options
         ? (options as DrivePermissionMutationOptions).sendNotificationEmail

@@ -189,3 +189,6 @@ Use these once Google Workspace is verified:
 | -------------- | ------------------------------------------------------------------------------------- |
 | `google-drive` | Browse, upload, share, export, or sync Google Drive files                             |
 | `gmail`        | Set up the Gmail channel agent, custom message pills, action bar, and Gmail workflows |
+
+For a status report that can continue into a scoped Drive task, use the
+[typed Workspace and Drive workflow](../google-drive/driveWorkflow/DECOMPOSITION.md).

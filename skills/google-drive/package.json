@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./drive-workflow-binding": "./drive-workflow-binding.ts",
+    "./drive-workflow-worlds": "./drive-workflow-worlds.ts"
   },
   "dependencies": {
     "@workspace/google-workspace": "workspace:*",

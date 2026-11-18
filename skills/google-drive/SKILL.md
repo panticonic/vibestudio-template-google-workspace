@@ -84,3 +84,11 @@ await fs.writeFile("downloads/drive-file", downloaded.bytes);
 | -------------------------------------------------------------------------------------------- | ------------------------------ |
 | [../../packages/google-workspace/src/drive.ts](../../packages/google-workspace/src/drive.ts) | Google Drive API client        |
 | [index.ts](index.ts)                                                                         | Importable Drive skill helpers |
+
+## Typed workflows
+
+[Google Workspace and Drive workflow](driveWorkflow/DECOMPOSITION.md) connects
+readiness, folder inventory, direct sharing review, and checkpoint continuation.
+A Vibestudio caller uses [the Drive workflow binding](drive-workflow-binding.ts)
+to grant a selected folder, file, or change checkpoint. The workflow returns
+observations and any pagination limits, while the setup panel handles consent.
