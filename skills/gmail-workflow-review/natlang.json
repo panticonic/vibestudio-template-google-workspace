@@ -1,0 +1,7 @@
+{
+  "schema": "natlang.package/v2",
+  "name": "vibestudio-gmail-workflow-review",
+  "version": "0.1.0",
+  "serviceBinding": "explicit",
+  "targets": { "main": { "entry": "reviewGmailWorkflow.nl" } }
+}
