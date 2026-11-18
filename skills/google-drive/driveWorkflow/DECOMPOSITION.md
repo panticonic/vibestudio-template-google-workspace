@@ -12,3 +12,12 @@ Google Workspace setup separates observed OAuth readiness from the user's next a
 | Validate task outcomes | Independent scenario expectations and raw client request observations. |
 
 The caller retains OAuth, UI, file mutations, permission changes and durable storage. The workflow reads metadata, permissions, and change pages through the canonical Drive client. Paging has a caller-owned per-run request cap and matching observed tokens. Partial lists cannot establish completion, and a change cursor advances only after a terminal page.
+
+The live setup review composes Drive readiness with the welcome panel in the same workspace. The
+entry reads the workspace credential state, then delegates the journey to `reviewSetupJourney`.
+That lambda calls the existing `explainReadiness` for the next account action and delegates the
+browser evidence to `reviewSetupPanel`. The browser lambda calls the exact `observeSetupPanel`
+service bridge and chooses the check-specific lambda for owner routes, the Gmail launch gate, or
+viewport overflow. Evidence collection through CDP, viewport changes, and reloading the assigned
+panel are typed TypeScript operations. They accept no arbitrary selectors, URLs, or panel IDs
+from the model.

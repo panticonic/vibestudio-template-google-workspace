@@ -57,7 +57,40 @@ export type GoogleSharingRequest = {
   allowWriters: boolean;
 };
 export type GoogleSyncRequest = { kind: "sync"; cursor: string; goal: string };
+export type GoogleSetupCheck =
+  | { kind: "owners" }
+  | { kind: "launch-gate"; afterReload: boolean }
+  | { kind: "viewport"; width: number };
+export type GoogleSetupReceipt = {
+  id: string;
+  check: GoogleSetupCheck;
+  stage: string;
+  accountOwner: boolean;
+  permissionsOwner: boolean;
+  gmailEnabled: boolean;
+  inheritedLaunch: boolean | null;
+  overflow: boolean;
+  viewportWidth: number | null;
+};
+export type GoogleSetupFinding = {
+  check: GoogleSetupCheck;
+  code:
+    | "owner-routes"
+    | "owner-route-missing"
+    | "gmail-closed"
+    | "gmail-open"
+    | "gmail-inconsistent-after-reload"
+    | "viewport-fits"
+    | "viewport-overflow";
+  evidenceId: string;
+};
+export type GoogleSetupJourneyRequest = {
+  kind: "setup-journey";
+  goal: string;
+  checks: GoogleSetupCheck[];
+};
 export type GoogleWorkflowRequest =
+  | GoogleSetupJourneyRequest
   | { kind: "setup"; goal: string }
   | GoogleInventoryRequest
   | GoogleSharingRequest
@@ -74,4 +107,5 @@ export type GoogleWorkflowReport = {
   ids: string[];
   findings: string[];
   checkpoint: string | null;
+  panelFindings?: GoogleSetupFinding[];
 };

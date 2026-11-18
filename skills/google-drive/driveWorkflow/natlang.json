@@ -3,7 +3,11 @@
   "name": "google-workspace-workflow",
   "version": "0.1.0",
   "description": "Readiness, Drive review and change continuation in a caller-owned Google Workspace.",
-  "targets": { "main": { "entry": "guideGoogleWorkspace.nl" } },
+  "targets": {
+    "main": {
+      "entry": "guideGoogleWorkspace.nl"
+    }
+  },
   "serviceBinding": "explicit",
   "serviceScopes": {
     "googleWorkspaceRead": [
@@ -11,6 +15,9 @@
       "guideGoogleWorkspace/inspectFolder.nl",
       "guideGoogleWorkspace/reviewSharing.nl",
       "guideGoogleWorkspace/continueSync.nl"
+    ],
+    "googleSetupPanel": [
+      "guideGoogleWorkspace/reviewSetupJourney/reviewSetupPanel/observeSetupPanel.nl"
     ]
   }
 }

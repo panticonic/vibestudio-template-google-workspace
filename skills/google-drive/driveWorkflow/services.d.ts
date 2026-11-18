@@ -1,4 +1,7 @@
 declare module "natlang:services" {
+  export const googleSetupPanel: {
+    observe(): Promise<import("./types.js").GoogleSetupReceipt[]>;
+  };
   export const googleWorkspaceRead: {
     readiness(): Promise<import("./types.js").GoogleReadiness>;
     listFolder(

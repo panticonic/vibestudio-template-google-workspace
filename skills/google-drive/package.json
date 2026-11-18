@@ -5,11 +5,17 @@
   "exports": {
     ".": "./index.ts",
     "./drive-workflow-binding": "./drive-workflow-binding.ts",
-    "./drive-workflow-worlds": "./drive-workflow-worlds.ts"
+    "./drive-workflow-worlds": "./drive-workflow-worlds.ts",
+    "./live-setup-journey": "./live-setup-journey.ts"
   },
   "dependencies": {
     "@workspace/google-workspace": "workspace:*",
     "@workspace/runtime": "workspace:*",
-    "@workspace-skills/google-workspace": "workspace:*"
+    "@workspace-skills/google-workspace": "workspace:*",
+    "@workspace/testkit": "workspace:*"
+  },
+  "devDependencies": {
+    "@workspace/natlang": "workspace:*",
+    "vitest": "^3.2.7"
   }
 }
