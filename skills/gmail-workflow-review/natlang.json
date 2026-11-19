@@ -3,5 +3,6 @@
   "name": "vibestudio-gmail-workflow-review",
   "version": "0.1.0",
   "serviceBinding": "explicit",
+  "serviceScopes": { "gmailComposeHistory": ["inspectComposeHistory.nl"] },
   "targets": { "main": { "entry": "reviewGmailWorkflow.nl" } }
 }

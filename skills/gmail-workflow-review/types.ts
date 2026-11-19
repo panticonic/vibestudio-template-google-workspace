@@ -189,3 +189,37 @@ export type GmailReviewRequest =
   | GmailAttention
   | GmailCompose
   | GmailSync;
+
+export type ComposeHistoryRequest = { goal: string; operationId: string };
+
+export type ComposeHistoryState = {
+  status: "drafting" | "review" | "saving" | "saved" | "sending" | "delivery-unknown" | "sent" | "discarding" | "discarded" | "error";
+  recipientPresent: boolean;
+  alias: "default" | "configured" | "unknown";
+  draftId: string | null;
+  mimeIdentity: boolean;
+  sentIdentity: boolean;
+};
+
+export type ComposeHistoryReceipt = {
+  channelId: string;
+  messageId: string;
+  events: {
+    id: string;
+    seq: number;
+    state: ComposeHistoryState;
+    event: "start" | "update" | "failed-update";
+  }[];
+};
+
+export type ComposeHistoryDecision = {
+  action: "resolve-recipient" | "review-draft" | "draft-recorded" | "wait" |
+    "reconcile-delivery" | "delivery-recorded" | "discarded" | "hold";
+  reason: string;
+};
+
+export type ComposeHistoryReport = {
+  receipt: ComposeHistoryReceipt;
+  decision: ComposeHistoryDecision;
+  evidenceIds: string[];
+};

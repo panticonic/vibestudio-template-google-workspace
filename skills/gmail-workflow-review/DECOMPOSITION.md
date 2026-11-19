@@ -12,3 +12,16 @@ The Gmail worker's tools and channel receivers retain their own authorization an
 | Sync | Interpret the matched mailbox's history or verified router state. | Caller and mailbox match flags, watch and polling state, baseline or incremental history result. |
 
 The runtime supplies scoped evidence. Typed natural-language lambdas decide what it supports. The fixture verifier compares each status, finding and evidence citation to an independently authored expected result.
+
+## Channel compose history
+
+The caller assigns one channel, an exact compose message ID, its owner, and an ordered
+bounded set of native envelopes. The binding checks the context, envelope identity,
+sender and sequence, then folds the supplied compose state using the same shallow
+update semantics as the renderer. It projects status and presence evidence without
+forwarding subject, body or recipient addresses.
+
+The Natlang workflow interprets the current card, distinguishes accepted draft
+identity from interrupted delivery, and chooses the next review action. It can
+explain a saved or sent status at that cursor. The supplied history contains
+workspace card evidence; external Gmail reconciliation remains its own operation.

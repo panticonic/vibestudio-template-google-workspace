@@ -132,6 +132,11 @@ await callGmailAgent(chat.channelId, "setAttentionPrefs", {
 });
 ```
 
+Use the shared Natlang [compose history review](../../skills/gmail-workflow-review/inspectComposeHistory.nl)
+to inspect an assigned compose card at a specific channel cursor. It reads
+durable card events, verifies draft lineage, and decides when reconciliation is
+required before any retry.
+
 ## Channel Method Surface
 
 Call these on the Gmail participant with
