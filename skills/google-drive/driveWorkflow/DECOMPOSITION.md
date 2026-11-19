@@ -21,3 +21,11 @@ service bridge and chooses the check-specific lambda for owner routes, the Gmail
 viewport overflow. Evidence collection through CDP, viewport changes, and reloading the assigned
 panel are typed TypeScript operations. They accept no arbitrary selectors, URLs, or panel IDs
 from the model.
+
+Setup choice journeys exercise the real app-scope selector, the browser
+preference buttons, and reload. The caller specifies allowed steps. The
+panel bridge returns a before and after observation for each step. The
+Natlang program checks the consent boundary, then delegates comparison
+of the two choices and the resulting guidance to a nested lambda. The
+browser bridge clicks only the controls that set a local preference.
+The user owns any subsequent action that opens Google or requests consent.

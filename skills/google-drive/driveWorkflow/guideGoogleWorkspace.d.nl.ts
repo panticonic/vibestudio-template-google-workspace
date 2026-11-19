@@ -63,7 +63,17 @@ type GoogleSharingRequest = {
 type GoogleSyncRequest = { kind: "sync"; cursor: string; goal: string };
 type GoogleSetupCheck = | { kind: "owners" }
   | { kind: "launch-gate"; afterReload: boolean }
-  | { kind: "viewport"; width: number };
+  | { kind: "viewport"; width: number }
+  | { kind: "scope-choice"; scope: "gmail" | "workspace" }
+  | { kind: "browser-choice"; opening: "here" | "external" }
+  | { kind: "choice-reload" };
+type GoogleSetupControls = {
+  scope: "gmail" | "workspace";
+  opening: "here" | "external";
+  guidance: "gmail" | "workspace" | "unknown";
+  connectEnabled: boolean;
+  gmailEnabled: boolean;
+};
 type GoogleSetupReceipt = {
   id: string;
   check: GoogleSetupCheck;
@@ -74,6 +84,7 @@ type GoogleSetupReceipt = {
   inheritedLaunch: boolean | null;
   overflow: boolean;
   viewportWidth: number | null;
+  controls?: { before: GoogleSetupControls; after: GoogleSetupControls };
 };
 type GoogleSetupFinding = {
   check: GoogleSetupCheck;
@@ -84,7 +95,12 @@ type GoogleSetupFinding = {
     | "gmail-open"
     | "gmail-inconsistent-after-reload"
     | "viewport-fits"
-    | "viewport-overflow";
+    | "viewport-overflow"
+    | "setup-scope-confirmed"
+    | "setup-browser-confirmed"
+    | "setup-defaults-restored"
+    | "setup-choice-inconsistent"
+    | "setup-gate-open";
   evidenceId: string;
 };
 type GoogleSetupJourneyRequest = {
@@ -111,5 +127,5 @@ type GoogleWorkflowReport = {
   checkpoint: string | null;
   panelFindings?: GoogleSetupFinding[];
 };
-declare const fn: NatlangFunction<[request: GoogleWorkflowRequest], GoogleWorkflowReport> & { readonly continueSync: NatlangFunction<[request: GoogleSyncRequest], GoogleWorkflowReport> & { readonly latestChanges: ((changes: GoogleChange[]) => GoogleChange[]) & {  }; readonly summarizeDelta: NatlangFunction<[changes: GoogleChange[]], { ids: string[]; findings: string[] }> }; readonly explainReadiness: NatlangFunction<[goal: string, readiness: GoogleReadiness], GoogleWorkflowReport>; readonly inspectFolder: NatlangFunction<[request: GoogleInventoryRequest], GoogleWorkflowReport> & { readonly eligibleRows: ((request: GoogleInventoryRequest, rows: GoogleFolderRow[]) => GoogleFolderRow[]) & {  }; readonly selectRows: NatlangFunction<[request: GoogleInventoryRequest, rows: GoogleFolderRow[]], string[]> }; readonly reviewSetupJourney: NatlangFunction<[request: GoogleSetupJourneyRequest, readiness: GoogleReadiness], GoogleWorkflowReport> & { readonly reviewSetupPanel: NatlangFunction<[checks: GoogleSetupCheck[]], GoogleSetupFinding[]> & { readonly inspectLaunchGate: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding>; readonly inspectOwnerRoutes: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding>; readonly inspectViewport: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding>; readonly observeSetupPanel: NatlangFunction<[], GoogleSetupReceipt[]> }; readonly explainReadiness: NatlangFunction<[goal: string, readiness: GoogleReadiness], GoogleWorkflowReport> }; readonly reviewSharing: NatlangFunction<[request: GoogleSharingRequest], GoogleWorkflowReport> & { readonly classifyAccess: NatlangFunction<[request: GoogleSharingRequest, permissions: GooglePermission[]], string[]> } };
+declare const fn: NatlangFunction<[request: GoogleWorkflowRequest], GoogleWorkflowReport> & { readonly continueSync: NatlangFunction<[request: GoogleSyncRequest], GoogleWorkflowReport> & { readonly latestChanges: ((changes: GoogleChange[]) => GoogleChange[]) & {  }; readonly summarizeDelta: NatlangFunction<[changes: GoogleChange[]], { ids: string[]; findings: string[] }> }; readonly explainReadiness: NatlangFunction<[goal: string, readiness: GoogleReadiness], GoogleWorkflowReport>; readonly inspectFolder: NatlangFunction<[request: GoogleInventoryRequest], GoogleWorkflowReport> & { readonly eligibleRows: ((request: GoogleInventoryRequest, rows: GoogleFolderRow[]) => GoogleFolderRow[]) & {  }; readonly selectRows: NatlangFunction<[request: GoogleInventoryRequest, rows: GoogleFolderRow[]], string[]> }; readonly reviewSetupJourney: NatlangFunction<[request: GoogleSetupJourneyRequest, readiness: GoogleReadiness], GoogleWorkflowReport> & { readonly reviewSetupPanel: NatlangFunction<[checks: GoogleSetupCheck[]], GoogleSetupFinding[]> & { readonly inspectLaunchGate: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding>; readonly inspectOwnerRoutes: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding>; readonly inspectSetupChoices: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding> & { readonly compareSetupChoices: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding> }; readonly inspectViewport: NatlangFunction<[receipt: GoogleSetupReceipt], GoogleSetupFinding>; readonly observeSetupPanel: NatlangFunction<[], GoogleSetupReceipt[]> }; readonly explainReadiness: NatlangFunction<[goal: string, readiness: GoogleReadiness], GoogleWorkflowReport> }; readonly reviewSharing: NatlangFunction<[request: GoogleSharingRequest], GoogleWorkflowReport> & { readonly classifyAccess: NatlangFunction<[request: GoogleSharingRequest, permissions: GooglePermission[]], string[]> } };
 export default fn;

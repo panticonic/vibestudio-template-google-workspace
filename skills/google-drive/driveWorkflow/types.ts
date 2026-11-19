@@ -60,7 +60,17 @@ export type GoogleSyncRequest = { kind: "sync"; cursor: string; goal: string };
 export type GoogleSetupCheck =
   | { kind: "owners" }
   | { kind: "launch-gate"; afterReload: boolean }
-  | { kind: "viewport"; width: number };
+  | { kind: "viewport"; width: number }
+  | { kind: "scope-choice"; scope: "gmail" | "workspace" }
+  | { kind: "browser-choice"; opening: "here" | "external" }
+  | { kind: "choice-reload" };
+export type GoogleSetupControls = {
+  scope: "gmail" | "workspace";
+  opening: "here" | "external";
+  guidance: "gmail" | "workspace" | "unknown";
+  connectEnabled: boolean;
+  gmailEnabled: boolean;
+};
 export type GoogleSetupReceipt = {
   id: string;
   check: GoogleSetupCheck;
@@ -71,6 +81,7 @@ export type GoogleSetupReceipt = {
   inheritedLaunch: boolean | null;
   overflow: boolean;
   viewportWidth: number | null;
+  controls?: { before: GoogleSetupControls; after: GoogleSetupControls };
 };
 export type GoogleSetupFinding = {
   check: GoogleSetupCheck;
@@ -81,7 +92,12 @@ export type GoogleSetupFinding = {
     | "gmail-open"
     | "gmail-inconsistent-after-reload"
     | "viewport-fits"
-    | "viewport-overflow";
+    | "viewport-overflow"
+    | "setup-scope-confirmed"
+    | "setup-browser-confirmed"
+    | "setup-defaults-restored"
+    | "setup-choice-inconsistent"
+    | "setup-gate-open";
   evidenceId: string;
 };
 export type GoogleSetupJourneyRequest = {

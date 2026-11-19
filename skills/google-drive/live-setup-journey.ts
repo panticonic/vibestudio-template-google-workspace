@@ -3,6 +3,8 @@ import { audit, evalInPanel, setViewport, waitFor } from "@workspace/testkit";
 import { createGoogleWorkspaceRead } from "./drive-workflow-binding.js";
 import type {
   GoogleReadiness,
+  GoogleSetupCheck,
+  GoogleSetupControls,
   GoogleSetupFinding,
   GoogleSetupJourneyRequest,
   GoogleSetupReceipt,
@@ -13,6 +15,7 @@ type LaunchView = {
   accountLink: string | null;
   permissionsLink: string | null;
   gmailEnabled: boolean;
+  controls: GoogleSetupControls | null;
   stage: "needs-setup" | "needs-consent" | "other";
 };
 type SetupWorld = {
@@ -27,10 +30,22 @@ const readSetup = `(() => {
   if (!text.includes("Your Gmail assistant") || text.includes("Checking your Google connection…")) return null;
   const links = Array.from(document.querySelectorAll("a"));
   const route = (label) => links.find(a => a.textContent.trim() === label)?.getAttribute("href") ?? null;
-  const launch = Array.from(document.querySelectorAll("button")).find(b => b.textContent.trim() === "Open Gmail");
+  const buttons = Array.from(document.querySelectorAll("button"));
+  const button = (label) => buttons.find(b => b.textContent.trim() === label);
+  const launch = button("Open Gmail");
   const gmail = route("Open Gmail");
   if (!gmail && (!launch || !launch.disabled)) return null;
+  const scopeLabel = document.querySelector("#google-workflow")?.textContent?.trim();
+  const scope = scopeLabel === "Gmail" ? "gmail" : scopeLabel === "All Workspace apps" ? "workspace" : null;
+  const opening = button("Here")?.getAttribute("aria-pressed") === "true" ? "here"
+    : button("My browser")?.getAttribute("aria-pressed") === "true" ? "external" : null;
+  const guidance = text.includes("Enable the Gmail API. You can enable other APIs later.") ? "gmail"
+    : text.includes("Turn on Gmail, Calendar, Drive, Docs, Sheets, Slides, and People.") ? "workspace" : "unknown";
+  const connect = button("Connect Google");
   return {
+    controls: scope && opening && connect
+      ? { scope, opening, guidance, connectEnabled: !connect.disabled, gmailEnabled: Boolean(gmail) }
+      : null,
     accountLink: route("Manage connected accounts"),
     permissionsLink: route("Review saved permissions"),
     gmailEnabled: Boolean(gmail),
@@ -68,6 +83,82 @@ export function prepareGoogleSetupJourney(
     return readiness;
   }
 
+  async function observeChoice(
+    check: Extract<
+      GoogleSetupCheck,
+      { kind: "scope-choice" | "browser-choice" | "choice-reload" }
+    >,
+  ) {
+    const { controls: before } = await readPanel();
+    if (!before) throw new Error("Google setup controls are unavailable");
+    if (check.kind === "choice-reload") {
+      await panel.reload();
+    } else if (
+      check.kind === "scope-choice"
+        ? before.scope !== check.scope
+        : before.opening !== check.opening
+    ) {
+      const session = await panel.cdp.session();
+      try {
+        if (check.kind === "scope-choice") {
+          await session.page.locator("#google-workflow").click();
+          await session.page
+            .getByRole("option", {
+              name: check.scope === "gmail" ? "Gmail" : "All Workspace apps",
+              exact: true,
+            })
+            .click();
+        } else {
+          await session.page
+            .getByRole("button", {
+              name: check.opening === "here" ? "Here" : "My browser",
+              exact: true,
+            })
+            .click();
+        }
+      } finally {
+        await session.close();
+      }
+    }
+    const view = await readPanel();
+    if (!view.controls)
+      throw new Error("Google setup choices could not be read back");
+    return { view, controls: { before, after: view.controls } };
+  }
+
+  function matchesChoices(
+    row: GoogleSetupReceipt,
+    previous: GoogleSetupControls | undefined,
+  ) {
+    const { controls, check } = row;
+    if (!controls) return false;
+    const { before, after } = controls;
+    if (
+      before.scope !== (previous?.scope ?? "gmail") ||
+      before.opening !== (previous?.opening ?? "external")
+    )
+      return false;
+    if (
+      [before, after].some(
+        (value) =>
+          value.connectEnabled ||
+          value.gmailEnabled ||
+          value.guidance !== value.scope,
+      )
+    )
+      return false;
+    switch (check.kind) {
+      case "scope-choice":
+        return after.scope === check.scope && after.opening === before.opening;
+      case "browser-choice":
+        return after.opening === check.opening && after.scope === before.scope;
+      case "choice-reload":
+        return after.scope === "gmail" && after.opening === "external";
+      default:
+        return false;
+    }
+  }
+
   async function observe() {
     if (opened) throw new Error("Read the assigned Google panel once");
     if (!readiness) throw new Error("Observe Google account readiness first");
@@ -86,7 +177,13 @@ export function prepareGoogleSetupJourney(
         inheritedLaunch = (await readPanel()).gmailEnabled;
         await panel.reload();
       }
-      const view = await readPanel();
+      const choice =
+        check.kind === "scope-choice" ||
+        check.kind === "browser-choice" ||
+        check.kind === "choice-reload"
+          ? await observeChoice(check)
+          : null;
+      const view = choice?.view ?? (await readPanel());
       const layout = check.kind === "viewport" ? await audit(panel) : null;
       receipts.push({
         id: `${contextId}:google-setup:${index + 1}`,
@@ -98,6 +195,7 @@ export function prepareGoogleSetupJourney(
         inheritedLaunch,
         overflow: layout?.horizontalOverflow ?? false,
         viewportWidth: layout?.viewport.width ?? null,
+        ...(choice ? { controls: choice.controls } : {}),
       });
     }
     return structuredClone(receipts);
@@ -124,7 +222,7 @@ export function prepareGoogleSetupJourney(
       driveNeedsSetup: readiness?.state === "needs-setup",
       browserAgrees:
         receipts.length === checks.length &&
-        receipts.every((row) => {
+        receipts.every((row, index) => {
           if (row.stage !== readiness?.state || row.gmailEnabled) return false;
           switch (row.check.kind) {
             case "owners":
@@ -135,6 +233,19 @@ export function prepareGoogleSetupJourney(
               );
             case "viewport":
               return row.viewportWidth === row.check.width && !row.overflow;
+            default:
+              return matchesChoices(
+                row,
+                receipts
+                  .slice(0, index)
+                  .reverse()
+                  .find(
+                    (receipt) =>
+                      receipt.controls ||
+                      (receipt.check.kind === "launch-gate" &&
+                        receipt.check.afterReload),
+                  )?.controls?.after,
+              );
           }
         }),
       reportMatches:
