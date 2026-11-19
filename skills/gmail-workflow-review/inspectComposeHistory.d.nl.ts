@@ -134,7 +134,7 @@ type GmailCompose = GmailTask & {
     | {
         kind: "draft";
         id: string;
-        origin: "gmail-agent" | "participant";
+        origin: "gmail-agent" | "participant" | "channel-readback";
         beforeDraft: string | null;
         afterDraft: string | null;
       }
@@ -212,6 +212,11 @@ type ComposeHistoryReport = {
   receipt: ComposeHistoryReceipt;
   decision: ComposeHistoryDecision;
   evidenceIds: string[];
+};
+type ComposeAuditKind = "draft" | "reconcile";
+type ComposeAuditReport = {
+  history: ComposeHistoryReport;
+  review: GmailReview;
 };
 declare const fn: NatlangFunction<[request: ComposeHistoryRequest], ComposeHistoryReport> & { readonly assessComposeState: NatlangFunction<[events: ComposeHistoryReceipt["events"]], ComposeHistoryDecision> & { readonly checkDelivery: NatlangFunction<[state: ComposeHistoryState], ComposeHistoryDecision>; readonly checkDraft: NatlangFunction<[state: ComposeHistoryState, event: "start" | "update" | "failed-update", priorDraftId: string | null], ComposeHistoryDecision> }; readonly citeComposeHistory: NatlangFunction<[events: ComposeHistoryReceipt["events"], decision: ComposeHistoryDecision], string[]> };
 export default fn;

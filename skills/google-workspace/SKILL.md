@@ -192,3 +192,6 @@ Use these once Google Workspace is verified:
 
 For a status report that can continue into a scoped Drive task, use the
 [typed Workspace and Drive workflow](../google-drive/driveWorkflow/DECOMPOSITION.md).
+
+The [readiness and setup callable](../google-drive/driveWorkflow/guideGoogleWorkspace.nl)
+starts from the workspace's actual readiness readback.

@@ -136,7 +136,7 @@ export type GmailCompose = GmailTask & {
     | {
         kind: "draft";
         id: string;
-        origin: "gmail-agent" | "participant";
+        origin: "gmail-agent" | "participant" | "channel-readback";
         beforeDraft: string | null;
         afterDraft: string | null;
       }
@@ -222,4 +222,10 @@ export type ComposeHistoryReport = {
   receipt: ComposeHistoryReceipt;
   decision: ComposeHistoryDecision;
   evidenceIds: string[];
+};
+
+export type ComposeAuditKind = "draft" | "reconcile";
+export type ComposeAuditReport = {
+  history: ComposeHistoryReport;
+  review: GmailReview;
 };

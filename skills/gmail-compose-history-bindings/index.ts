@@ -3,8 +3,10 @@ import { AGENTIC_EVENT_PAYLOAD_KIND, storedAgenticEventSchema } from "@workspace
 import { channelClientRpcMethods } from "@workspace/pubsub/rpc-contract";
 import { contextId, rpc } from "@workspace/runtime";
 import type {
+  ComposeAuditKind,
   ComposeHistoryReceipt,
   ComposeHistoryState,
+  GmailCompose,
 } from "../gmail-workflow-review/types.js";
 
 type Assignment = {
@@ -85,14 +87,47 @@ export function bindGmailComposeHistory(input: Assignment) {
     return { channelId, messageId, events };
   }
 
+  function assignedReceipt(id: string) {
+    if (id !== request.operationId)
+      throw new Error("Read only the caller's assigned compose history");
+    return pending ??= read();
+  }
+
   return {
     request,
     services: {
       gmailComposeHistory: {
         async read(id: string): Promise<ComposeHistoryReceipt> {
-          if (id !== request.operationId)
-            throw new Error("Read only the caller's assigned compose history");
-          return structuredClone(await (pending ??= read()));
+          return structuredClone(await assignedReceipt(id));
+        },
+      },
+      gmailComposeAudit: {
+        async project(id: string, kind: ComposeAuditKind): Promise<GmailCompose> {
+          const receipt = await assignedReceipt(id);
+          const latest = receipt.events.at(-1)!;
+          const { status, recipientPresent, alias, draftId } = latest.state;
+          if (status !== "drafting" && status !== "review" && status !== "saved" &&
+            status !== "sending" && status !== "delivery-unknown" && status !== "sent")
+            throw new Error("The current compose stage has no review projection");
+          const target = {
+            id: receipt.events[0]!.id, channelId, accountRef: "channel-only:" + channelId,
+          };
+          const beforeDraft = receipt.events.slice(0, -1).findLast(({ state }) => state.draftId !== null)
+            ?.state.draftId ?? null;
+          if (kind !== "draft" && kind !== "reconcile")
+            throw new Error("Select draft or delivery reconciliation evidence");
+          return {
+            kind: "compose",
+            goal,
+            scope: { target, observed: { ...target, id: latest.id, binding: "channel-readback" } },
+            card: {
+              id: latest.id, messageId: receipt.messageId, requestedMessageId: messageId,
+              ownedByChannel: true, state: status, hasRecipient: recipientPresent, alias,
+            },
+            readback: kind === "draft"
+              ? { kind, id: latest.id, origin: "channel-readback", beforeDraft, afterDraft: draftId }
+              : { kind, id: latest.id, providerProof: "not-checked" },
+          };
         },
       },
     },

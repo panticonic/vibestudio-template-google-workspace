@@ -59,3 +59,20 @@ it("rejects a native update belonging to another participant", async () => {
   const { request, services } = fixture();
   await expect(services.gmailComposeHistory.read(request.operationId)).rejects.toThrow("assigned compose lineage");
 });
+
+it("projects the typed review from the same owned receipt without another channel read", async () => {
+  configure(envelope(13, "custom.updated", { update: { status: "delivery-unknown" } }));
+  const { request, services } = fixture();
+  await expect(services.gmailComposeAudit.project("outside", "reconcile")).rejects.toThrow("assigned");
+  expect(call).not.toHaveBeenCalled();
+  const receipt = await services.gmailComposeHistory.read(request.operationId);
+  const reads = call.mock.calls.length;
+  const projected = await services.gmailComposeAudit.project(request.operationId, "reconcile");
+  expect(call).toHaveBeenCalledTimes(reads);
+  expect(projected.scope.target.channelId).toBe(receipt.channelId);
+  expect(projected.card.messageId).toBe(receipt.messageId);
+  expect(projected.readback).toEqual({
+    kind: "reconcile", id: receipt.events.at(-1)!.id, providerProof: "not-checked",
+  });
+  expect(JSON.stringify(projected)).not.toMatch(/private|recipient@example/u);
+});

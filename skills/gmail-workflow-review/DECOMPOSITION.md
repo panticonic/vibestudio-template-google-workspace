@@ -25,3 +25,11 @@ The Natlang workflow interprets the current card, distinguishes accepted draft
 identity from interrupted delivery, and chooses the next review action. It can
 explain a saved or sent status at that cursor. The supplied history contains
 workspace card evidence; external Gmail reconciliation remains its own operation.
+
+## Managed compose audit
+
+The audit first calls the channel-history skill, then selects a draft or delivery
+readback and calls the Gmail workflow review with that evidence. The channel
+adapter builds the typed readback from the same persisted cursor and carries the
+assigned channel coordinate into the scope. The audit reports both decisions and
+their original evidence IDs. Delivery attempts require a separate provider check.
