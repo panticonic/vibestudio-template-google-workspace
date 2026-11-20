@@ -30,7 +30,12 @@ import {
   GOOGLE_GMAIL_SCOPES,
   GOOGLE_WORKSPACE_BROAD_SCOPES,
 } from "@workspace/google-workspace/providers";
+export type ReadOnlyGoogleOnboarding = (options: {
+  verify: boolean;
+}) => Promise<GoogleOnboardingStatus>;
+
 interface GoogleWorkspaceSetupProps {
+  readOnlyOnboarding?: ReadOnlyGoogleOnboarding;
   onStatus?: (status: GoogleOnboardingStatus | null) => void;
 }
 
@@ -72,6 +77,7 @@ function statusLabel(status: GoogleOnboardingStatus | null): string {
 
 export default function GoogleWorkspaceSetup({
   onStatus,
+  readOnlyOnboarding,
 }: GoogleWorkspaceSetupProps = {}) {
   const [browser, setBrowser] = useState<"internal" | "external">("external");
   const [workflow, setWorkflow] = useState<"gmail" | "workspace">("gmail");
@@ -90,7 +96,9 @@ export default function GoogleWorkspaceSetup({
   const refresh = async (verify = false) => {
     let next: GoogleOnboardingStatus;
     try {
-      next = await getGoogleOnboardingStatus({ verify });
+      next = await (readOnlyOnboarding ?? getGoogleOnboardingStatus)({
+        verify,
+      });
     } catch (error) {
       setStatus(null);
       onStatus?.(null);
@@ -103,7 +111,11 @@ export default function GoogleWorkspaceSetup({
   };
 
   const run = async (action: string, operation: () => Promise<void>) => {
-    if (busyOwner.current !== null) return;
+    if (
+      busyOwner.current !== null ||
+      (readOnlyOnboarding && action !== "status" && action !== "verify")
+    )
+      return;
     busyOwner.current = action;
     setBusy(action);
     setMessage(null);

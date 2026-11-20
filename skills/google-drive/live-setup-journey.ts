@@ -11,10 +11,23 @@ import type {
   GoogleWorkflowReport,
 } from "./driveWorkflow/types.js";
 
-type LaunchView = {
+export type GoogleWelcomeView = {
   accountLink: string | null;
   permissionsLink: string | null;
   gmailEnabled: boolean;
+  gmailLink: string | null;
+  scope: "gmail" | "workspace" | null;
+  opening: "here" | "external" | null;
+  accountActions: string[];
+  marker:
+    | "unconfigured"
+    | "configured"
+    | "unverified"
+    | "coverage-gap"
+    | "connected"
+    | "attention"
+    | "unavailable";
+  warning: boolean;
   controls: GoogleSetupControls | null;
   stage: "needs-setup" | "needs-consent" | "other";
 };
@@ -49,9 +62,33 @@ const readSetup = `(() => {
     accountLink: route("Manage connected accounts"),
     permissionsLink: route("Review saved permissions"),
     gmailEnabled: Boolean(gmail),
+    gmailLink: gmail,
+    scope,
+    opening,
+    accountActions: ["Save Desktop app details","Change Desktop app details","Connect Google","Check connection","Verify connection"]
+      .filter(name => button(name) && !button(name).disabled),
+    marker: text.includes("Google Cloud setup needed") ? "unconfigured"
+      : text.includes("App details saved") ? "configured"
+      : text.includes("Connected, verification needed") ? "unverified"
+      : text.includes("More permissions needed") ? "coverage-gap"
+      : links.some(link => link.textContent.trim() === "Open Gmail") || text.includes("Connected as ") ? "connected"
+      : text.includes("Needs attention") ? "attention" : "unavailable",
+    warning: Boolean(document.querySelector('[role="alert"]')) ||
+      ["no stored refresh token", "last consent attempt was declined"].some(message => text.includes(message)),
     stage: text.includes("Google Cloud setup needed") ? "needs-setup" : text.includes("App details saved") ? "needs-consent" : "other",
   };
 })()`;
+
+export function readGoogleWelcome(
+  panel: PanelHandle,
+): Promise<GoogleWelcomeView> {
+  return waitFor(
+    async () =>
+      (await evalInPanel<GoogleWelcomeView | null>(panel, readSetup)) ??
+      undefined,
+    { label: "Google setup and Gmail gate settle" },
+  );
+}
 
 export function prepareGoogleSetupJourney(
   panel: PanelHandle,
@@ -69,13 +106,7 @@ export function prepareGoogleSetupJourney(
   let readiness: GoogleReadiness | undefined;
   let opened = false;
 
-  async function readPanel() {
-    return await waitFor(
-      async () =>
-        (await evalInPanel<LaunchView | null>(panel, readSetup)) ?? undefined,
-      { label: "Google setup and Gmail gate settle" },
-    );
-  }
+  const readPanel = () => readGoogleWelcome(panel);
 
   async function readReadiness() {
     if (readiness) throw new Error("Read the assigned Google readiness once");

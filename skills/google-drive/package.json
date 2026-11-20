@@ -9,13 +9,16 @@
     "./live-setup-journey": "./live-setup-journey.ts",
     "./live-drive-checkpoint": "./live-drive-checkpoint.ts",
     "./live-drive-sharing": "./live-drive-sharing.ts",
-    "./open-goal-drive": "./open-goal-drive.ts"
+    "./open-goal-drive": "./open-goal-drive.ts",
+    "./open-setup-profile": "./open-setup-profile.ts",
+    "./open-google-setup-managed": "./open-google-setup-managed.ts"
   },
   "dependencies": {
     "@workspace/google-workspace": "workspace:*",
     "@workspace/runtime": "workspace:*",
     "@workspace-skills/google-workspace": "workspace:*",
-    "@workspace/testkit": "workspace:*"
+    "@workspace/testkit": "workspace:*",
+    "@workspace/gmail": "workspace:*"
   },
   "devDependencies": {
     "@workspace/natlang": "workspace:*",

@@ -1,0 +1,10 @@
+{
+  "schema": "natlang.package/v2",
+  "name": "vibestudio-open-google-setup",
+  "version": "0.1.0",
+  "targets": { "main": { "entry": "workOnGoogleSetupGoal.nl" } },
+  "serviceBinding": "explicit",
+  "serviceScopes": {
+    "openGoogleSetup": ["workOnGoogleSetupGoal.nl", "workOnGoogleSetupGoal/workThroughSetupView.nl", "workOnGoogleSetupGoal/stageSetupHandoff.nl"]
+  }
+}

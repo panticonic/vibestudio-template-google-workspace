@@ -3,10 +3,16 @@ import { Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { gmailChatStateArgs } from "@workspace/gmail/chat-state";
 import { buildPanelLink, panel } from "@workspace/runtime";
 import { AboutThemeRoot, AboutPage } from "@workspace/about-shared/ui";
-import GoogleWorkspaceSetup from "@workspace-skills/google-workspace/setup";
+import GoogleWorkspaceSetup, {
+  type ReadOnlyGoogleOnboarding,
+} from "@workspace-skills/google-workspace/setup";
 import { GOOGLE_GMAIL_SCOPES } from "@workspace/google-workspace/providers";
 import type { GoogleOnboardingStatus } from "@workspace-skills/google-workspace";
-export default function Welcome() {
+export function WelcomeView({
+  readOnlyOnboarding,
+}: {
+  readOnlyOnboarding?: ReadOnlyGoogleOnboarding;
+}) {
   const [status, setStatus] = useState<GoogleOnboardingStatus | null>(null);
   const ready =
     status?.stage === "verified" &&
@@ -17,7 +23,10 @@ export default function Welcome() {
   return (
     <AboutThemeRoot>
       <AboutPage title="Google Workspace">
-        <GoogleWorkspaceSetup onStatus={setStatus} />
+        <GoogleWorkspaceSetup
+          onStatus={setStatus}
+          readOnlyOnboarding={readOnlyOnboarding}
+        />
         <Flex direction="column" gap="2" mt="4">
           <Heading size="3">Your Gmail assistant</Heading>
           <Text size="2" color="gray">
@@ -27,6 +36,11 @@ export default function Welcome() {
           {ready ? (
             <Button asChild>
               <a
+                onClick={
+                  readOnlyOnboarding
+                    ? (event) => event.preventDefault()
+                    : undefined
+                }
                 href={buildPanelLink("panels/chat", {
                   stateArgs: gmailChatStateArgs(
                     `google-mail-${panel.slotId}`,
@@ -51,4 +65,8 @@ export default function Welcome() {
       </AboutPage>
     </AboutThemeRoot>
   );
+}
+
+export default function Welcome() {
+  return <WelcomeView />;
 }
