@@ -2034,11 +2034,11 @@ describe("GmailAgentWorker", () => {
         ],
       }),
       expect.objectContaining({
-        temperature: 0.2,
         maxTokens: 300,
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(complete.mock.calls[0]?.[2]).not.toHaveProperty("temperature");
   });
 
   it("runs Gmail triage through the native model task with its selected cheap model and options", async () => {
@@ -2076,11 +2076,11 @@ describe("GmailAgentWorker", () => {
         ],
       },
       expect.objectContaining({
-        temperature: 0,
         maxTokens: 800,
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(complete.mock.calls[0]?.[2]).not.toHaveProperty("temperature");
   });
 
   it("fetches sanitized thread contents for renderer expansion", async () => {
