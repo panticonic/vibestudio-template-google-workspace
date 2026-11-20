@@ -163,7 +163,6 @@ export async function prepareOpenGoogleSetup(
           const existing = await ownedProfile();
           await panel.stateArgs.patch({
             setup: {
-              ...existing,
               current: world.next,
               history: [...existing.history, existing.current],
             },
@@ -321,7 +320,7 @@ export async function prepareOpenGoogleSetup(
       attention: ["Change Desktop app details"],
       unavailable: ["Save Desktop app details", "Check connection"],
     }[expected.marker];
-    const warning = expectedProfile.current.warning !== null;
+    const warning = expectedProfile.current.warning !== "none";
     const checks = {
       boundOwnedSetupView:
         first !== undefined &&
