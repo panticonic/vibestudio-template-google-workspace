@@ -43,3 +43,10 @@ handoff. The handoff reads the cursor that survived storage verification
 alongside the terminal candidate, including when a competing writer's saved
 cursor takes precedence. The runner releases the handoff source after the
 Drive transport and write outcome have been checked.
+
+The inventory-to-sharing review calls the existing inventory skill before
+deciding whether the assigned file can be audited. A separate Natlang
+decision requires a complete listing and the exact selected ID. The
+permission reviewer runs only when the decision permits it. The managed
+transport checks the same prerequisite before releasing any permission
+page and retains the exact folder and permission requests for verification.

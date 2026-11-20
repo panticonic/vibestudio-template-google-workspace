@@ -1,7 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import { createDriveClient } from "@workspace/google-workspace";
 import { fs } from "@workspace/runtime";
-import { createGoogleWorkspaceRead } from "./drive-workflow-binding.js";
+import { bindTestDriveTransport } from "./test-drive-transport.js";
 import type {
   GoogleCheckpointReceipt,
   GoogleChange,
@@ -36,93 +35,50 @@ export async function prepareDriveCheckpoint(world: World) {
       throw new Error("Checkpoint readback differs from the replacement");
   }
   await persist(world.initial);
-  const credential = "owned-drive-checkpoint-fixture";
   const requests: { cursor: string; driveId: string; status: number }[] = [];
   let terminal: string | undefined;
   let observed: string | undefined;
   let commitStarted = false;
   let competitorApplied = false;
   let receipt: GoogleCheckpointReceipt | undefined;
-  const drive = createDriveClient(
-    {
-      async forAudience({ credentialId }) {
-        if (credentialId !== credential)
-          throw new Error(
-            "Drive credential outside the assigned test transport",
-          );
-        return {
-          credentialId,
-          async fetch(input, init) {
-            const url = new URL(input);
-            const coordinate = world.pages[requests.length];
-            if (
-              !coordinate ||
-              url.origin !== "https://www.googleapis.com" ||
-              url.pathname !== "/drive/v3/changes" ||
-              url.searchParams.get("pageToken") !== coordinate.cursor ||
-              url.searchParams.get("driveId") !== world.driveId ||
-              url.searchParams.get("includeRemoved") !== "true" ||
-              url.searchParams.get("includeItemsFromAllDrives") !== "true" ||
-              url.searchParams.get("supportsAllDrives") !== "true" ||
-              new Headers(init?.headers).get("accept") !== "application/json" ||
-              (init?.method && init.method !== "GET") ||
-              init?.body
-            )
-              throw new Error(
-                "Unexpected request to the assigned Drive change transport",
-              );
-            const response = coordinate.response;
-            requests.push({
-              cursor: coordinate.cursor,
-              driveId: world.driveId,
-              status: response ? 200 : 503,
-            });
-            if (!response)
-              return Response.json(
-                { error: { message: "Unavailable Drive tail" } },
-                { status: 503 },
-              );
-            if (!response.nextPageToken && response.newStartPageToken) {
-              if (world.competitor) {
-                await persist(world.competitor);
-                competitorApplied = true;
-              }
-              terminal = response.newStartPageToken;
-            }
-            return Response.json(response);
-          },
-        };
-      },
-    },
-    { credentialId: credential },
-  );
-  const googleWorkspaceRead = createGoogleWorkspaceRead(
+  const googleWorkspaceRead = bindTestDriveTransport(
     {
       changes: { initialCursor: world.initial, driveId: world.driveId },
       maxPageReads: world.pages.length,
     },
-    {
-      async inspect() {
-        return {
-          stage: "ready",
-          connected: true,
-          verified: true,
-          credentialId: credential,
-          googleWorkspace: {
-            stage: "verified",
-            connected: true,
-            configured: true,
-            readyToConnect: true,
-            credentials: [],
-            nextActions: [],
-            warnings: [],
-          },
-          credentials: [],
-          nextActions: [],
-          warnings: [],
-        };
-      },
-      drive: () => drive,
+    async (url) => {
+      const coordinate = world.pages[requests.length];
+      if (
+        !coordinate ||
+        url.pathname !== "/drive/v3/changes" ||
+        url.searchParams.get("pageToken") !== coordinate.cursor ||
+        url.searchParams.get("driveId") !== world.driveId ||
+        url.searchParams.get("includeRemoved") !== "true" ||
+        url.searchParams.get("includeItemsFromAllDrives") !== "true" ||
+        url.searchParams.get("supportsAllDrives") !== "true"
+      )
+        throw new Error(
+          "Unexpected request to the assigned Drive change transport",
+        );
+      const response = coordinate.response;
+      requests.push({
+        cursor: coordinate.cursor,
+        driveId: world.driveId,
+        status: response ? 200 : 503,
+      });
+      if (!response)
+        return Response.json(
+          { error: { message: "Unavailable Drive tail" } },
+          { status: 503 },
+        );
+      if (!response.nextPageToken && response.newStartPageToken) {
+        if (world.competitor) {
+          await persist(world.competitor);
+          competitorApplied = true;
+        }
+        terminal = response.newStartPageToken;
+      }
+      return Response.json(response);
     },
   );
   const driveCheckpoint = {
