@@ -37,3 +37,9 @@ terminal checkpoint is observed. The bound service checks the terminal cursor
 and the last-read cursor before replacing the file and reading it back.
 The managed cases use the installed Drive HTTP client with an assigned test
 transport and an actual workspace file. Google account setup remains separate.
+
+The shared workflow can follow a checkpoint review with the Base scratch
+handoff. The handoff reads the cursor that survived storage verification
+alongside the terminal candidate, including when a competing writer's saved
+cursor takes precedence. The runner releases the handoff source after the
+Drive transport and write outcome have been checked.

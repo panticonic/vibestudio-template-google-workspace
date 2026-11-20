@@ -233,16 +233,18 @@ export async function prepareDriveCheckpoint(world: World) {
       const checkpointWrite = completed
         ? await driveCheckpoint.commit(initial, completed)
         : { state: "held" as const, cursor: initial };
+      const report: GoogleWorkflowReport = {
+        status: checkpointWrite.state === "saved" ? "complete" : "partial",
+        action: "none",
+        ids: [...latest.keys()],
+        findings: [],
+        checkpoint: checkpointWrite.cursor,
+        checkpointWrite,
+      };
       return {
         earlyRejected,
-        verification: await verify({
-          status: checkpointWrite.state === "saved" ? "complete" : "partial",
-          action: "none",
-          ids: [...latest.keys()],
-          findings: [],
-          checkpoint: checkpointWrite.cursor,
-          checkpointWrite,
-        }),
+        report,
+        verification: await verify(report),
       };
     },
     async close() {
