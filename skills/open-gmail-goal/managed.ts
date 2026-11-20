@@ -31,10 +31,10 @@ type Lineage = Awaited<ReturnType<ReturnType<typeof bindGmailComposeHistory>["se
 const statuses = new Set(["review", "saving", "saved", "sent", "delivery-unknown"]);
 const text = (row: Record<string, unknown>, key: string) => typeof row[key] === "string" && row[key] ? row[key] as string : null;
 
-async function readCoordinates(source: Source, lineage: Lineage): Promise<RetainedCompose> {
+async function readCoordinates(source: Source, lineage: Lineage, signal: AbortSignal): Promise<RetainedCompose> {
   const state: Record<string, unknown> = {};
   for (const event of lineage.events) {
-    const row = await rpc.call(source.targetId, channelClientRpcMethods.getEnvelope, [event.id]);
+    const row = await rpc.call(source.targetId, channelClientRpcMethods.getEnvelope, [event.id], { signal });
     if (!row || row.messageId !== event.id || row.id !== event.seq || row.senderId !== source.ownerId)
       throw new Error("The compose history changed before its provider coordinates were read");
     const payload = (row.payload as { payload: { messageId: string; initialState?: object; update?: object } }).payload;
@@ -66,10 +66,17 @@ export async function prepareOpenGmailGoal(
   const initial = mail.readback();
   const catalog: ComposeSelection[] = seed.sources.map(({ messageId: id, title, room }) => ({ id, title, room }));
   const selectedSources = new Map(seed.sources.map((source) => [source.messageId, source]));
-  const lineage = new Map(seed.sources.map((source) => {
-    const binding = bindGmailComposeHistory({ ...source, goal: world.goal });
-    return [source.messageId, () => binding.services.gmailComposeHistory.read(binding.request.operationId)];
-  }));
+  async function readRetained(source: Source): Promise<RetainedCompose> {
+    const signal = AbortSignal.timeout(20_000);
+    const binding = bindGmailComposeHistory({ ...source, goal: world.goal }, { signal });
+    try {
+      const history = await binding.services.gmailComposeHistory.read(binding.request.operationId);
+      return await readCoordinates(source, history, signal);
+    } catch (error) {
+      if (signal.aborted) throw new Error("The retained Gmail compose read timed out", { cause: error });
+      throw error;
+    }
+  }
   let selected: RetainedCompose | null = null;
   let discovered = false;
   let busy = false;
@@ -101,7 +108,7 @@ export async function prepareOpenGmailGoal(
       read: (id: string) => exclusive(async () => {
         const source = selectedSources.get(id);
         if (!discovered || !source || selected) throw new Error("Select one observed compose in the authorized catalog");
-        selected = await readCoordinates(source, await lineage.get(id)!());
+        selected = await readRetained(source);
         return structuredClone(selected);
       }),
     },
@@ -156,8 +163,7 @@ export async function prepareOpenGmailGoal(
     const envelope = value as { status?: string; skill?: string; outcome?: GmailGoalReport } | null;
     const report = envelope?.outcome;
     const expectedSource = seed.sources.find(({ key }) => key === world.expected.compose);
-    const native = expectedSource
-      ? await readCoordinates(expectedSource, await lineage.get(expectedSource.messageId)!()) : null;
+    const native = expectedSource ? await readRetained(expectedSource) : null;
     const persisted = mail.readback();
     const observed = last?.status === "found" ? last.record : null;
     const expectedProvider = [...persisted.drafts, ...persisted.sent].find(({ id }) => id === world.expected.providerId) ?? null;

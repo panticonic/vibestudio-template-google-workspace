@@ -47,7 +47,7 @@ function project(state: Record<string, unknown>): ComposeHistoryState {
   };
 }
 
-export function bindGmailComposeHistory(input: Assignment) {
+export function bindGmailComposeHistory(input: Assignment, options?: { signal: AbortSignal }) {
   const { channelId, targetId, messageId, ownerId, envelopeIds, goal } = structuredClone(input);
   if (!contextId || ![channelId, messageId, ownerId, goal].every(present) ||
     targetId !== doTargetId({ source: "workers/pubsub-channel", className: "PubSubChannel", objectKey: channelId }) ||
@@ -58,12 +58,12 @@ export function bindGmailComposeHistory(input: Assignment) {
   let pending: Promise<ComposeHistoryReceipt> | undefined;
 
   async function read(): Promise<ComposeHistoryReceipt> {
-    if (await rpc.call(targetId, channelClientRpcMethods.getContextId, []) !== contextId)
+    if (await rpc.call(targetId, channelClientRpcMethods.getContextId, [], options) !== contextId)
       throw new Error("The selected channel belongs to another context");
     const events: ComposeHistoryReceipt["events"] = [];
     let state: Record<string, unknown> = {};
     for (const [index, id] of envelopeIds.entries()) {
-      const envelope = await rpc.call(targetId, channelClientRpcMethods.getEnvelope, [id]);
+      const envelope = await rpc.call(targetId, channelClientRpcMethods.getEnvelope, [id], options);
       if (!envelope || envelope.messageId !== id || envelope.senderId !== ownerId ||
         envelope.type !== AGENTIC_EVENT_PAYLOAD_KIND ||
         !Number.isSafeInteger(envelope.id) || envelope.id <= (events.at(-1)?.seq ?? -1))
