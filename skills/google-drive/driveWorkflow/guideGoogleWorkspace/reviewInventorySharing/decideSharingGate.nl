@@ -1,8 +1,9 @@
 ---
 description: Decide whether the inventory can support a file-specific sharing review.
 args:
-  inventory: GoogleWorkflowReport
+  status: GoogleWorkflowStatus
+  selectedIds: string[]
   fileId: string
 returns: GoogleSharingGate
 ---
-Return inventory-partial if the listing did not complete. For a complete listing, return audited only if inventory.ids contains the exact fileId. Otherwise return target-unconfirmed.
+Return inventory-partial unless status is complete. For a complete listing, return audited only if selectedIds contains the exact fileId. Otherwise return target-unconfirmed.

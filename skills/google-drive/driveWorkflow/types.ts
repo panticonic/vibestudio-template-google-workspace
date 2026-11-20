@@ -128,8 +128,13 @@ export type GoogleWorkflowRequest =
   | GoogleSharingRequest
   | GoogleSyncRequest
   | GoogleCheckpointRequest;
+export type GoogleWorkflowStatus =
+  | "ready"
+  | "action-needed"
+  | "complete"
+  | "partial";
 export type GoogleWorkflowReport = {
-  status: "ready" | "action-needed" | "complete" | "partial";
+  status: GoogleWorkflowStatus;
   action:
     | "none"
     | "open-setup"
