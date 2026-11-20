@@ -318,7 +318,8 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
       preservedGoogleHandoffAuthority: trace.denied === 0 && sameIds(trace.credentialIds,
         world.expected.reviews.length ? ["handoff-mail-fixture", "handoff-drive-fixture"] : ["handoff-mail-fixture"]),
     };
-    return { ok: Object.values(checks).every(Boolean), checks, threads: observedThreads(),
+    return { passed: Object.values(checks).every(Boolean), contextId: input.contextId, caseId: input.caseId,
+      goal: world.goal, checks, threads: observedThreads(),
       reviews: observedReviews(), providerRequests: trace.requests, freshness: witness, handoff: artifact, handoffText };
   }
   async function qualify() {
