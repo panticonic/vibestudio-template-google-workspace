@@ -112,7 +112,7 @@ export function bindGmailComposeHistory(input: Assignment) {
           const target = {
             id: receipt.events[0]!.id, channelId, accountRef: "channel-only:" + channelId,
           };
-          const beforeDraft = receipt.events.slice(0, -1).findLast(({ state }) => state.draftId !== null)
+          const beforeDraft = receipt.events.slice(0, -1).reverse().find(({ state }) => state.draftId !== null)
             ?.state.draftId ?? null;
           if (kind !== "draft" && kind !== "reconcile")
             throw new Error("Select draft or delivery reconciliation evidence");

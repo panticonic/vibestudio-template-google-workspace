@@ -26,7 +26,11 @@ type World = {
 export async function prepareDriveCheckpoint(world: World) {
   const directory = await fs.mkdtemp("drive-checkpoint");
   const checkpointPath = directory + "/cursor";
-  const readFile = () => fs.readFile(checkpointPath, "utf8");
+  async function readFile() {
+    const cursor = await fs.readFile(checkpointPath, "utf8");
+    if (typeof cursor !== "string") throw new Error("Drive checkpoint must contain text");
+    return cursor;
+  }
   async function persist(cursor: string) {
     const staged = directory + "/.pending";
     await fs.writeFile(staged, cursor);
