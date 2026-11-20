@@ -416,10 +416,17 @@ class TestGmailAgentWorker extends GmailAgentWorker {
         if (method === "readLog") return [];
         if (method === "getLogEvent") return null;
         if (method === "appendLogEvent") {
+          const input = args?.[0] as {
+            logId: string;
+            head: string;
+            events: Array<{ envelopeId?: string }>;
+          };
           return {
+            logId: input.logId,
+            head: input.head,
             envelopes: [],
-            headSeq: 0,
-            headHash: "0".repeat(64),
+            headSeq: input.events.length,
+            headEnvelopeId: input.events.at(-1)?.envelopeId ?? "gmail-observed",
             published: [],
           };
         }
