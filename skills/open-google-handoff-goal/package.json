@@ -1,0 +1,13 @@
+{
+  "name": "@workspace-skills/open-google-handoff-goal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./managed": "./managed.ts" },
+  "dependencies": {
+    "@vibestudio/content-addressing": "workspace:*",
+    "@workspace/gmail": "workspace:*",
+    "@workspace/google-workspace": "workspace:*",
+    "@workspace/runtime": "workspace:*"
+  }
+}
