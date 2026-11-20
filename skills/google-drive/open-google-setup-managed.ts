@@ -275,7 +275,7 @@ export async function prepareOpenGoogleSetup(
         if (!isDeepStrictEqual(await frame(), basis) || profile.handoff)
           return record("stage", [revision, decision], null);
         const handoff: SetupHandoff = { decision, observation: revision };
-        await panel.stateArgs.patch({ setup: { ...profile, handoff } });
+        await panel.stateArgs.patch({ setup: { handoff } });
         const saved = (await ownedProfile()).handoff;
         return record(
           "stage",
