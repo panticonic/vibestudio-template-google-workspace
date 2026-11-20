@@ -1,0 +1,13 @@
+{
+  "schema": "natlang.package/v2",
+  "name": "vibestudio-open-calendar-goal",
+  "version": "0.1.0",
+  "targets": { "main": { "entry": "workOnCalendarGoal.nl" } },
+  "serviceBinding": "explicit",
+  "serviceScopes": {
+    "calendarGoalCatalog": ["workOnCalendarGoal.nl"],
+    "calendarGoalWindows": ["workOnCalendarGoal/readCalendarWindows.nl"],
+    "calendarGoalReadback": ["workOnCalendarGoal/reconcileCalendarPlan.nl"],
+    "calendarGoalHandoff": ["workOnCalendarGoal/stageCalendarHandoff.nl"]
+  }
+}
