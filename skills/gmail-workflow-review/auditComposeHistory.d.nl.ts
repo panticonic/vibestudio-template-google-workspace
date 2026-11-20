@@ -218,5 +218,15 @@ type ComposeAuditReport = {
   history: ComposeHistoryReport;
   review: GmailReview;
 };
+type GmailLaunchEvidence = { evidenceId: string; enabled: boolean };
+type ComposeContinuationDecision = {
+  action: "preserve-draft" | "reconcile-before-retry" | "review-before-action";
+  launch: "available" | "held";
+  evidenceIds: string[];
+};
+type ComposeContinuationReport = {
+  audit: ComposeAuditReport;
+  continuation: ComposeContinuationDecision;
+};
 declare const fn: NatlangFunction<[request: ComposeHistoryRequest], ComposeAuditReport> & { readonly inspectComposeHistory: NatlangFunction<[request: ComposeHistoryRequest], ComposeHistoryReport> & { readonly assessComposeState: NatlangFunction<[events: ComposeHistoryReceipt["events"]], ComposeHistoryDecision> & { readonly checkDelivery: NatlangFunction<[state: ComposeHistoryState], ComposeHistoryDecision>; readonly checkDraft: NatlangFunction<[state: ComposeHistoryState, event: "start" | "update" | "failed-update", priorDraftId: string | null], ComposeHistoryDecision> }; readonly citeComposeHistory: NatlangFunction<[events: ComposeHistoryReceipt["events"], decision: ComposeHistoryDecision], string[]> }; readonly reviewGmailWorkflow: NatlangFunction<[request: GmailReviewRequest], GmailReview> & { readonly establishGmailScope: NatlangFunction<[scope: GmailScope], GmailReview | null>; readonly reviewAttention: NatlangFunction<[input: GmailAttention], GmailReview> & { readonly assessWakeDigest: NatlangFunction<[input: GmailAttention["readback"]], GmailReview>; readonly checkPreferenceReadback: NatlangFunction<[input: GmailAttention["readback"]], GmailReview>; readonly classifyCandidate: NatlangFunction<[input: GmailAttention["readback"]], GmailReview> }; readonly reviewCompose: NatlangFunction<[input: GmailCompose], GmailReview> & { readonly inspectDelivery: NatlangFunction<[input: GmailCompose], GmailReview>; readonly inspectDraftLineage: NatlangFunction<[input: GmailCompose], GmailReview>; readonly inspectSendAuthority: NatlangFunction<[input: GmailCompose], GmailReview>; readonly qualifyComposeCard: NatlangFunction<[input: GmailCompose["card"]], GmailReview | null> }; readonly reviewRead: NatlangFunction<[input: GmailRead], GmailReview> & { readonly reviewMessageOrContact: NatlangFunction<[input: GmailRead["readback"]], GmailReview>; readonly reviewSearch: NatlangFunction<[input: GmailRead["readback"]], GmailReview> }; readonly reviewSetup: NatlangFunction<[input: GmailSetup], GmailReview> & { readonly inspectChannelSetup: NatlangFunction<[input: GmailSetup["channel"]], GmailReview>; readonly qualifyWorkspace: NatlangFunction<[input: GmailSetup["workspace"]], GmailReview | null> }; readonly reviewSync: NatlangFunction<[input: GmailSync], GmailReview> & { readonly reviewHistory: NatlangFunction<[input: GmailSync["readback"]], GmailReview>; readonly reviewPushRouting: NatlangFunction<[input: GmailSync["readback"]], GmailReview> } } };
 export default fn;

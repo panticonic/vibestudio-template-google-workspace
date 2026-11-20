@@ -218,5 +218,15 @@ type ComposeAuditReport = {
   history: ComposeHistoryReport;
   review: GmailReview;
 };
+type GmailLaunchEvidence = { evidenceId: string; enabled: boolean };
+type ComposeContinuationDecision = {
+  action: "preserve-draft" | "reconcile-before-retry" | "review-before-action";
+  launch: "available" | "held";
+  evidenceIds: string[];
+};
+type ComposeContinuationReport = {
+  audit: ComposeAuditReport;
+  continuation: ComposeContinuationDecision;
+};
 declare const fn: NatlangFunction<[request: ComposeHistoryRequest], ComposeHistoryReport> & { readonly assessComposeState: NatlangFunction<[events: ComposeHistoryReceipt["events"]], ComposeHistoryDecision> & { readonly checkDelivery: NatlangFunction<[state: ComposeHistoryState], ComposeHistoryDecision>; readonly checkDraft: NatlangFunction<[state: ComposeHistoryState, event: "start" | "update" | "failed-update", priorDraftId: string | null], ComposeHistoryDecision> }; readonly citeComposeHistory: NatlangFunction<[events: ComposeHistoryReceipt["events"], decision: ComposeHistoryDecision], string[]> };
 export default fn;

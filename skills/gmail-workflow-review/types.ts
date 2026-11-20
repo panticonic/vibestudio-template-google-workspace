@@ -229,3 +229,14 @@ export type ComposeAuditReport = {
   history: ComposeHistoryReport;
   review: GmailReview;
 };
+
+export type GmailLaunchEvidence = { evidenceId: string; enabled: boolean };
+export type ComposeContinuationDecision = {
+  action: "preserve-draft" | "reconcile-before-retry" | "review-before-action";
+  launch: "available" | "held";
+  evidenceIds: string[];
+};
+export type ComposeContinuationReport = {
+  audit: ComposeAuditReport;
+  continuation: ComposeContinuationDecision;
+};

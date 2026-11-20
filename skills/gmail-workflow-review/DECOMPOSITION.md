@@ -33,3 +33,11 @@ readback and calls the Gmail workflow review with that evidence. The channel
 adapter builds the typed readback from the same persisted cursor and carries the
 assigned channel coordinate into the scope. The audit reports both decisions and
 their original evidence IDs. Delivery attempts require a separate provider check.
+
+## Retained compose continuation
+
+`planComposeContinuation` reads the launch control from the caller's completed
+setup inspection and delegates the retained card to `auditComposeHistory`.
+`decideContinuation` combines the observed gate and the audit and cites both
+before returning a next action. The caller owns the browser readback and channel
+scope. This workflow makes no provider calls.

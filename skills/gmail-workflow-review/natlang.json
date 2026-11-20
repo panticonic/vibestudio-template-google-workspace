@@ -5,7 +5,8 @@
   "serviceBinding": "explicit",
   "serviceScopes": {
     "gmailComposeHistory": ["inspectComposeHistory.nl"],
-    "gmailComposeAudit": ["auditComposeHistory.nl"]
+    "gmailComposeAudit": ["auditComposeHistory.nl"],
+    "gmailContinuationRead": ["planComposeContinuation.nl"]
   },
   "targets": { "main": { "entry": "reviewGmailWorkflow.nl" } }
 }
