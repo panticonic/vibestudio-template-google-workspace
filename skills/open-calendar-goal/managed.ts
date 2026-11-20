@@ -89,7 +89,8 @@ function sameProviderReads(actual: CalendarRequest[], expected: CalendarRequest[
 }
 
 export async function prepareOpenCalendarGoal(input: { contextId: string; caseId: string }, world: OpenCalendarWorld) {
-  if (actualContextId !== input.contextId || world.id !== input.caseId)
+  const { contextId, caseId } = input;
+  if (actualContextId !== contextId || world.id !== caseId)
     throw new Error("Calendar reconciliation must run in its owned workspace context");
   const startBound = instant(world.window.start);
   const endBound = instant(world.window.end);
@@ -232,7 +233,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
           artifact.sha256 === sha256HexSyncText(handoffText)) : artifact === null && report?.handoff === null,
       preservedCalendarAuthority: trace.denied === 0 && trace.credentialReads === 1,
     };
-    return { ok: Object.values(checks).every(Boolean), checks, catalog, attempts, providerRequests: trace.requests,
+    return { passed: Object.values(checks).every(Boolean), caseId, contextId, goal: world.goal, checks, catalog, attempts, providerRequests: trace.requests,
       windows: [...windows.values()].map(({ current }) => current), readback: observed, handoff: artifact, handoffText };
   }
 
