@@ -22,6 +22,7 @@ type World = {
   permissionPages: readonly Page[];
   expected: {
     gate: GoogleSharingGate;
+    eligibleIds: readonly string[];
     inventoryIds: readonly string[];
     ids: readonly string[];
   };
@@ -86,11 +87,11 @@ export function prepareDriveSharing(world: World) {
           );
     },
   );
-  const inventoryIds = () =>
+  const eligibleIds = () =>
     eligibleRows(request.inventory, rows).map(({ id }) => id);
   const gate = (): GoogleSharingGate => {
     if (!complete || incomplete) return "inventory-partial";
-    return inventoryIds().includes(request.sharing.fileId)
+    return eligibleIds().includes(request.sharing.fileId)
       ? "audited"
       : "target-unconfirmed";
   };
@@ -128,7 +129,7 @@ export function prepareDriveSharing(world: World) {
       exactTransport: isDeepStrictEqual(requests, expectedRequests),
       inventoryGate:
         gate() === world.expected.gate &&
-        isDeepStrictEqual(inventoryIds(), world.expected.inventoryIds),
+        isDeepStrictEqual(eligibleIds(), world.expected.eligibleIds),
       exactReport:
         report?.action === "none" &&
         report.checkpoint === null &&
@@ -145,7 +146,7 @@ export function prepareDriveSharing(world: World) {
       request,
       caseId: world.id,
       requests,
-      inventoryIds: inventoryIds(),
+      eligibleIds: eligibleIds(),
       permissions,
       checks,
     };
@@ -218,7 +219,12 @@ export function prepareDriveSharing(world: World) {
           ids,
           checkpoint: null,
           findings: [],
-          inventoryAudit: { gate: outcome, inventoryIds: inventoryIds() },
+          inventoryAudit: {
+            gate: outcome,
+            inventoryIds: eligibleIds().filter(
+              (id) => id === world.sharing.fileId,
+            ),
+          },
         }),
       };
     },
