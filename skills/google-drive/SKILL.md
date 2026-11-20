@@ -89,6 +89,10 @@ await fs.writeFile("downloads/drive-file", downloaded.bytes);
 
 [Google Workspace and Drive workflow](driveWorkflow/DECOMPOSITION.md) connects
 readiness, folder inventory, direct sharing review, and checkpoint continuation.
+Use the `inventory-sharing` request when an audit depends on first finding
+the exact current file in the assigned folder. A shortcut or an unfinished
+listing leaves the audit on hold. For an unfinished listing, keep the
+observed IDs and complete a fresh listing before requesting the audit.
 A Vibestudio caller uses [the Drive workflow binding](drive-workflow-binding.ts)
 to grant a selected folder, file, or change checkpoint. The workflow returns
 observations and any pagination limits, while the setup panel handles consent.
