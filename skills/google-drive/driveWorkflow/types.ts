@@ -57,6 +57,11 @@ export type GoogleSharingRequest = {
   allowWriters: boolean;
 };
 export type GoogleSyncRequest = { kind: "sync"; cursor: string; goal: string };
+export type GoogleCheckpointRequest = { kind: "sync-checkpoint"; goal: string };
+export type GoogleCheckpointReceipt = {
+  state: "saved" | "held" | "stale";
+  cursor: string;
+};
 export type GoogleSetupCheck =
   | { kind: "owners" }
   | { kind: "launch-gate"; afterReload: boolean }
@@ -110,7 +115,8 @@ export type GoogleWorkflowRequest =
   | { kind: "setup"; goal: string }
   | GoogleInventoryRequest
   | GoogleSharingRequest
-  | GoogleSyncRequest;
+  | GoogleSyncRequest
+  | GoogleCheckpointRequest;
 export type GoogleWorkflowReport = {
   status: "ready" | "action-needed" | "complete" | "partial";
   action:
@@ -124,4 +130,5 @@ export type GoogleWorkflowReport = {
   findings: string[];
   checkpoint: string | null;
   panelFindings?: GoogleSetupFinding[];
+  checkpointWrite?: GoogleCheckpointReceipt;
 };

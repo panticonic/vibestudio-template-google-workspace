@@ -734,7 +734,7 @@ function ensureMultipartUpload(
 }
 
 export function createDriveClient(
-  credentials: CredentialClient,
+  credentials: Pick<CredentialClient, "forAudience">,
   opts: { credentialId?: string } = {}
 ): DriveClient {
   let handlePromise: Promise<UrlCredentialHandle> | null = null;

@@ -10,6 +10,10 @@
   },
   "serviceBinding": "explicit",
   "serviceScopes": {
+    "driveCheckpoint": [
+      "guideGoogleWorkspace/syncCheckpoint/readCheckpoint.nl",
+      "guideGoogleWorkspace/syncCheckpoint/commitCheckpoint.nl"
+    ],
     "googleWorkspaceRead": [
       "guideGoogleWorkspace.nl",
       "guideGoogleWorkspace/inspectFolder.nl",

@@ -29,3 +29,11 @@ Natlang program checks the consent boundary, then delegates comparison
 of the two choices and the resulting guidance to a nested lambda. The
 browser bridge clicks only the controls that set a local preference.
 The user owns any subsequent action that opens Google or requests consent.
+
+A caller may assign one managed checkpoint file. The checkpoint workflow
+reads its current cursor, delegates pagination and per-file reconciliation to
+the existing change feed subtree, and calls a commit lambda only after a
+terminal checkpoint is observed. The bound service checks the terminal cursor
+and the last-read cursor before replacing the file and reading it back.
+The managed cases use the installed Drive HTTP client with an assigned test
+transport and an actual workspace file. Google account setup remains separate.

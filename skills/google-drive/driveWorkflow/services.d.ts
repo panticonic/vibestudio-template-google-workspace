@@ -1,4 +1,11 @@
 declare module "natlang:services" {
+  export const driveCheckpoint: {
+    read(): Promise<string>;
+    commit(
+      expected: string,
+      terminal: string,
+    ): Promise<import("./types.js").GoogleCheckpointReceipt>;
+  };
   export const googleSetupPanel: {
     observe(): Promise<import("./types.js").GoogleSetupReceipt[]>;
   };
