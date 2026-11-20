@@ -20,6 +20,7 @@
       "guideGoogleWorkspace/reviewSharing.nl",
       "guideGoogleWorkspace/continueSync.nl"
     ],
+    "googleGoalDiscovery": ["workOnDriveGoal.nl"],
     "googleSetupPanel": [
       "guideGoogleWorkspace/reviewSetupJourney/reviewSetupPanel/observeSetupPanel.nl"
     ]

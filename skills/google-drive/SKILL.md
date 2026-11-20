@@ -96,3 +96,11 @@ observed IDs and complete a fresh listing before requesting the audit.
 A Vibestudio caller uses [the Drive workflow binding](drive-workflow-binding.ts)
 to grant a selected folder, file, or change checkpoint. The workflow returns
 observations and any pagination limits, while the setup panel handles consent.
+
+For an open goal, the installed Drive program exposes `workOnDriveGoal(goal)`.
+The caller binds the authorized folder catalog and change sources. The
+function discovers which resource applies, follows returned page tokens, and
+holds a sharing review when the current file is ambiguous or the listing is
+incomplete. Give the allowed domains and writer policy in the request when
+asking for a direct-access audit. A change summary reports a cursor and leaves
+the saved checkpoint untouched.

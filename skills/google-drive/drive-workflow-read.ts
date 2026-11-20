@@ -29,7 +29,9 @@ export type GoogleWorkspaceSource = {
 
 export type GoogleWorkspaceAssignment = {
   folder?: { id: string; driveId?: string };
+  folders?: readonly { id: string; driveId?: string }[];
   sharingFileId?: string;
+  sharingFileIds?: readonly string[];
   changes?: { initialCursor: string; driveId?: string };
   maxPageReads?: number;
 };
@@ -46,16 +48,28 @@ export function bindGoogleWorkspaceRead(
 ): GoogleWorkspaceRead {
   const {
     folder,
+    folders = [],
     sharingFileId,
+    sharingFileIds = [],
     changes,
     maxPageReads = 24,
   } = structuredClone(assignment);
   if (!Number.isSafeInteger(maxPageReads) || maxPageReads < 1)
     throw new Error("Invalid Drive page-read limit");
+  const declaredFolders = [
+    ...(folder ? [folder] : []),
+    ...folders,
+  ];
+  const ownedFolders = new Map(declaredFolders.map((entry) => [entry.id, entry]));
+  if (ownedFolders.size !== declaredFolders.length)
+    throw new Error("Each assigned Drive folder must have a unique ID");
+  const ownedFiles = new Set([
+    ...(sharingFileId === undefined ? [] : [sharingFileId]),
+    ...sharingFileIds,
+  ]);
   for (const id of [
-    folder?.id,
-    folder?.driveId,
-    sharingFileId,
+    ...[...ownedFolders.values()].flatMap((entry) => [entry.id, entry.driveId]),
+    ...ownedFiles,
     changes?.driveId,
   ]) {
     if (id !== undefined) requireId(id);
@@ -94,8 +108,12 @@ export function bindGoogleWorkspaceRead(
       },
     };
   }
-  const folderPages = pager<string | null>([null]);
-  const permissionPages = pager<string | null>([null]);
+  const folderPages = new Map([...ownedFolders.keys()].map(
+    (id) => [id, pager<string | null>([null])],
+  ));
+  const permissionPages = new Map([...ownedFiles].map(
+    (id) => [id, pager<string | null>([null])],
+  ));
   const changePages = pager<string | null>(
     changes ? [changes.initialCursor] : [],
   );
@@ -120,23 +138,25 @@ export function bindGoogleWorkspaceRead(
       return { state };
     },
     async listFolder(folderId, pageToken) {
-      if (!folder || folder.id !== folderId)
+      const target = ownedFolders.get(folderId);
+      const pages = folderPages.get(folderId);
+      if (!target || !pages)
         throw new Error("Folder is outside the assigned Drive read");
       const page = await pageRead(
-        () => folderPages.begin(pageToken),
+        () => pages.begin(pageToken),
         (drive) =>
           drive.listFiles({
             q: `'${folderId}' in parents and trashed = false`,
             fields:
               "nextPageToken,incompleteSearch,files(id,name,mimeType,modifiedTime,shortcutDetails)",
             pageToken: pageToken ?? undefined,
-            corpora: folder.driveId ? "drive" : "user",
-            driveId: folder.driveId,
-            includeItemsFromAllDrives: Boolean(folder.driveId),
+            corpora: target.driveId ? "drive" : "user",
+            driveId: target.driveId,
+            includeItemsFromAllDrives: Boolean(target.driveId),
           }),
       );
       const next = page.nextPageToken ?? null;
-      folderPages.permit(next);
+      pages.permit(next);
       return {
         next,
         incomplete: page.incompleteSearch === true,
@@ -154,10 +174,11 @@ export function bindGoogleWorkspaceRead(
       };
     },
     async readPermissions(fileId, pageToken) {
-      if (!sharingFileId || sharingFileId !== fileId)
+      const pages = permissionPages.get(fileId);
+      if (!pages)
         throw new Error("File is outside the assigned Drive read");
       const page = await pageRead(
-        () => permissionPages.begin(pageToken),
+        () => pages.begin(pageToken),
         (drive) =>
           drive.listPermissions(fileId, {
             fields:
@@ -166,7 +187,7 @@ export function bindGoogleWorkspaceRead(
           }),
       );
       const next = page.nextPageToken ?? null;
-      permissionPages.permit(next);
+      pages.permit(next);
       return {
         next,
         rows: (page.permissions ?? [])

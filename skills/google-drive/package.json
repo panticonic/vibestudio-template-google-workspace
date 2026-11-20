@@ -8,7 +8,8 @@
     "./drive-workflow-worlds": "./drive-workflow-worlds.ts",
     "./live-setup-journey": "./live-setup-journey.ts",
     "./live-drive-checkpoint": "./live-drive-checkpoint.ts",
-    "./live-drive-sharing": "./live-drive-sharing.ts"
+    "./live-drive-sharing": "./live-drive-sharing.ts",
+    "./open-goal-drive": "./open-goal-drive.ts"
   },
   "dependencies": {
     "@workspace/google-workspace": "workspace:*",

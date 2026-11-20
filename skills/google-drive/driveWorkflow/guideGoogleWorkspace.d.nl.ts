@@ -145,6 +145,7 @@ type GoogleWorkflowReport = {
   ids: string[];
   findings: string[];
   checkpoint: string | null;
+  driveDelta?: GoogleChange[];
   panelFindings?: GoogleSetupFinding[];
   checkpointWrite?: GoogleCheckpointReceipt;
   inventoryAudit?: { gate: GoogleSharingGate; inventoryIds: string[] };

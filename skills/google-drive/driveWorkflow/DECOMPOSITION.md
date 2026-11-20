@@ -50,3 +50,22 @@ decision requires a complete listing and the exact selected ID. The
 permission reviewer runs only when the decision permits it. The managed
 transport checks the same prerequisite before releasing any permission
 page and retains the exact folder and permission requests for verification.
+
+For an open goal, `workOnDriveGoal` receives only the user's words. It discovers
+the named Drive folders and saved change sources available to the caller.
+`chooseGoalRoute` selects the relevant resource, whether the user wants a
+folder inventory, a direct-access review, or a change summary, and which
+filters and sharing policy the user stated. It holds an ambiguous request.
+`reviewFolderGoal` calls the existing inventory subtree. For a requested
+access review, it delegates to the existing sharing subtree only when the
+inventory is complete and selected exactly one current document. Change
+summaries use the existing continuation subtree without writing a checkpoint.
+
+The managed binding uses the installed Drive client with a caller-owned HTTP
+test transport. Its TypeScript binds authorized resource identities, cursor
+paginations and the read-only provider contract. It protects permission reads
+until a complete non-shortcut source listing has been observed. The outcome
+verifier runs after the Natlang call and checks actual requests and readback
+against expectations held outside the model context. The reference drives
+those same effects. Negative checks cover wrong choices and invented
+completion. Alias checks vary provider resource identities.

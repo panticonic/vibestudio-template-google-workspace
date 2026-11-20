@@ -1,4 +1,7 @@
 declare module "natlang:services" {
+  export const googleGoalDiscovery: {
+    discover(): Promise<import("./workOnDriveGoal/types.js").DriveGoalScope>;
+  };
   export const driveCheckpoint: {
     read(): Promise<string>;
     commit(
