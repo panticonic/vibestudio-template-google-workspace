@@ -1,0 +1,16 @@
+{
+  "schema": "natlang.package/v2",
+  "name": "vibestudio-open-gmail-goal",
+  "version": "0.1.0",
+  "targets": { "main": { "entry": "recoverGmailGoal.nl" } },
+  "serviceBinding": "explicit",
+  "serviceScopes": {
+    "gmailGoalCatalog": ["recoverGmailGoal.nl"],
+    "gmailGoalCompose": ["recoverGmailGoal/readRetainedCompose.nl"],
+    "gmailGoalProvider": [
+      "recoverGmailGoal/inspectDraftContinuity.nl",
+      "recoverGmailGoal/inspectDraftContinuity/findOwnedDraft.nl",
+      "recoverGmailGoal/verifyRetainedDelivery.nl"
+    ]
+  }
+}
