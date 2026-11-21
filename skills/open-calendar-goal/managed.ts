@@ -248,7 +248,8 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     if (world.expected.verify) await services.calendarGoalReadback.verify(resolveExpected(world, world.expected.verify));
     const decision = expectedDecision();
     const handoff = world.expected.stage ? await services.calendarGoalHandoff.stage(decision) : null;
-    return verify({ decision, handoff });
+    const report = { decision, handoff };
+    return { ...await verify(report), report };
   }
   return { goal: world.goal, services, verify, qualify };
 }
