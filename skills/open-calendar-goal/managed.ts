@@ -79,7 +79,10 @@ function expectedProviderTrace(world: OpenCalendarWorld, start: string, end: str
 
 function sameProviderReads(actual: CalendarRequest[], expected: CalendarRequest[]) {
   if (actual.length !== expected.length) return false;
-  const phase = (row: CalendarRequest) => row.method === "event" ? 3 : row.generation;
+  // A calendar's cursor and generation advance independently of the other
+  // calendars. Only catalog discovery and final event verification order the
+  // entire set of reads.
+  const phase = (row: CalendarRequest) => row.method === "catalog" ? 0 : row.method === "window" ? 1 : 2;
   if (actual.some((row, i) => i > 0 && phase(row) < phase(actual[i - 1]!))) return false;
   const calendarIds = new Set(expected.map(({ calendarId }) => calendarId));
   return [...calendarIds].every((id) => isDeepStrictEqual(
