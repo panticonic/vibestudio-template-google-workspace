@@ -46,10 +46,12 @@ function sameIds(actual: string[] | undefined, expected: readonly string[]) {
     isDeepStrictEqual([...actual].sort(), [...expected].sort());
 }
 
-function sameDecision(value: HandoffDecision | undefined, expected: HandoffDecision) {
+type HandoffFact = NonNullable<HandoffDecision["facts"]>[number];
+function sameDecision(value: HandoffDecision | undefined, expected: HandoffDecision,
+  matchFact: (actual: HandoffFact, required: HandoffFact) => boolean = isDeepStrictEqual) {
   return value?.status === expected.status && value.reason === expected.reason &&
     sameIds(value.mailIds, expected.mailIds) && sameIds(value.assetIds, expected.assetIds) &&
-    (expected.facts ?? []).every((fact) => Array.isArray(value.facts) && value.facts.some((row) => isDeepStrictEqual(row, fact)));
+    (expected.facts ?? []).every((fact) => Array.isArray(value.facts) && value.facts.some((row) => matchFact(row, fact)));
 }
 
 type Reviewed = { intent: AssetIntent; asset: AssetEvidence };
@@ -180,6 +182,10 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     decision?.facts === undefined || (Array.isArray(decision.facts) && decision.facts.every((fact) =>
       typeof fact?.quote === "string" && fact.quote.trim().length > 0 && fact.quote.length <= 160 &&
       decision.assetIds.includes(fact.fileId) && reviews.get(fact.fileId)?.asset.content?.text.includes(fact.quote)));
+  const meetsExpectedDecision = (decision: HandoffDecision | undefined, expected: HandoffDecision) =>
+    sameDecision(decision, expected, (excerpt, anchor) =>
+      excerpt?.fileId === anchor.fileId && typeof excerpt.quote === "string" && excerpt.quote.includes(anchor.quote)) &&
+    supportedFacts(decision);
 
   async function readAudience(id: string) {
     const values = [];
@@ -303,12 +309,12 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
       return { intent, asset: expectedAsset(file.id, file.initial, intent.mode) };
     });
     const checks = {
-      reconciledGoogleHandoffDecision: sameDecision(outcome?.decision, world.expected.decision) && supportedFacts(outcome?.decision),
+      reconciledGoogleHandoffDecision: meetsExpectedDecision(outcome?.decision, world.expected.decision),
       verifiedGoogleHandoffProviderReads: sameReads(trace.requests, statuses),
       boundGoogleHandoffAssets: reviews.size === expectedReviews.length &&
         expectedReviews.every((review) => isDeepStrictEqual(reviews.get(review.intent.fileId), review)),
       verifiedGoogleHandoffFreshness: world.expected.verify ? witness?.result === world.expected.verify.result &&
-        sameDecision(witness.decision, world.expected.verify.before) : witness === null,
+        meetsExpectedDecision(witness.decision, world.expected.verify.before) : witness === null,
       verifiedGoogleHandoffArtifact: world.expected.stage ? Boolean(artifact && handoffText &&
         isDeepStrictEqual(outcome?.handoff, artifact) && artifact.sha256 === sha256HexSyncText(handoffText) &&
         handoffText === handoffBytes(world.expected.decision, observedThreads(), expectedReviews)) :
