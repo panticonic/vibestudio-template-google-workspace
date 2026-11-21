@@ -107,8 +107,9 @@ export async function prepareOpenGmailGoal(
     gmailGoalCompose: {
       read: (id: string) => exclusive(async () => {
         const source = selectedSources.get(id);
-        if (!discovered || !source || selected) throw new Error("Select one observed compose in the authorized catalog");
-        selected = await readRetained(source);
+        if (!discovered || !source || (selected && selected.id !== id))
+          throw new Error("Select one observed compose in the authorized catalog");
+        selected ??= await readRetained(source);
         return structuredClone(selected);
       }),
     },
