@@ -52,3 +52,36 @@ it.each([true, false])("verifies the per-calendar observation sequence with room
   expect(proof.checks.exactCalendarWindows).toBe(refreshRoom);
   expect(proof.passed).toBe(refreshRoom);
 });
+
+it("joins concurrent and repeated reads without advancing the provider snapshots twice", async () => {
+  const revised = { ...proposal, summary: "Updated review" };
+  const prepared = await prepareOpenCalendarGoal(owner, {
+    ...world,
+    timelines: [{ ...world.timelines[0]!, refresh: [[revised]] }, world.timelines[1]!],
+  });
+  const { calendarGoalCatalog, calendarGoalWindows: windows, calendarGoalReadback } = prepared.services;
+  await calendarGoalCatalog.discover();
+  const [unauthorized, review, room, repeated] = await Promise.allSettled([
+    windows.open("outside", start, end),
+    windows.open("review", start, end),
+    windows.open("room", start, end),
+    windows.open("review", start, end),
+  ]);
+  expect(unauthorized.status).toBe("rejected");
+  if (review.status !== "fulfilled" || room.status !== "fulfilled" || repeated.status !== "fulfilled")
+    throw new Error("Authorized calendar reads must complete");
+  expect(repeated.value).toEqual(review.value);
+  const [fresh, , retried] = await Promise.all([
+    windows.refresh(review.value.id),
+    windows.refresh(room.value.id),
+    windows.refresh(review.value.id),
+  ]);
+  expect(fresh.records[0]?.title).toBe("Updated review");
+  expect(retried).toEqual(fresh);
+  await expect(windows.open("review", start, end)).resolves.toEqual(review.value);
+  const selection = fresh.records[0]!;
+  await Promise.all([calendarGoalReadback.verify(selection), calendarGoalReadback.verify(selection)]);
+  const proof = await prepared.verify({ decision: { status: "selected", selection, evidence: [] }, handoff: null });
+  expect(proof.passed).toBe(true);
+  expect(proof.attempts).toHaveLength(4);
+});

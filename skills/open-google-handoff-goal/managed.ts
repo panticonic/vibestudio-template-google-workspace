@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
 import { canonicalJson, sha256HexSyncText } from "@vibestudio/content-addressing";
 import type { DrivePermission } from "@workspace/google-workspace/drive";
 import { contextId as actualContextId, fs } from "@workspace/runtime";
@@ -148,13 +149,10 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
   const reviews = new Map<string, Reviewed>();
   let verified: { decision: HandoffDecision; result: Freshness } | null = null;
   let artifact: HandoffReceipt | null = null;
-  let busy = false;
+  const pending = new Map<string, Promise<unknown>>();
 
-  async function exclusive<T>(run: () => Promise<T>): Promise<T> {
-    if (busy) throw new Error("Wait for the current provider operation");
-    busy = true;
-    try { return await run(); }
-    finally { busy = false; }
+  function runInOrder<T>(run: () => Promise<T>): Promise<T> {
+    return serializeByKey(pending, "provider", run);
   }
   async function listMail() {
     const ids = new Set<string>();
@@ -231,11 +229,11 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
   }
   const services = {
     googleHandoffMail: {
-      discover: () => exclusive(async () => {
+      discover: () => runInOrder(async () => {
         listing ??= await listMail();
         return structuredClone(listing);
       }),
-      read: (id: string) => exclusive(async () => {
+      read: (id: string) => runInOrder(async () => {
         if (!listing?.complete || !listing.ids.includes(id) || verified)
           throw new Error("Read only a thread discovered in this mail scope");
         if (!threads.has(id)) threads.set(id, await readMail(id));
@@ -243,7 +241,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
       }),
     },
     googleHandoffDrive: {
-      inspect: (intent: AssetIntent) => exclusive(async () => {
+      inspect: (intent: AssetIntent) => runInOrder(async () => {
         const message = observedThreads().flatMap(({ messages }) => messages).find(({ id }) => id === intent.messageId);
         if (!completeMail() || !message?.fileIds.includes(intent.fileId) || reviews.has(intent.fileId) || verified ||
             !["metadata", "content", "audience", "content-and-audience"].includes(intent.mode))
@@ -254,7 +252,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
       }),
     },
     googleHandoffFreshness: {
-      verify: (decision: HandoffDecision) => exclusive(async () => {
+      verify: (decision: HandoffDecision) => runInOrder(async () => {
         const mail = observedThreads().flatMap(({ messages }) => messages);
         if (!completeMail() || verified || !supportedFacts(decision) || !decision.mailIds.every((id) => mail.some((message) => message.id === id)) ||
             !decision.assetIds.every((id) => reviews.has(id)) || (decision.status !== "ready" && decision.status !== "held"))
@@ -278,7 +276,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
       }),
     },
     googleHandoffScratch: {
-      stage: (decision: HandoffDecision) => exclusive(async () => {
+      stage: (decision: HandoffDecision) => runInOrder(async () => {
         const permitted = world.canStage === "decision" || (world.canStage === "ready" && decision.status === "ready");
         if (!permitted || artifact || verified?.result !== "current" || !sameDecision(decision, verified.decision) || !supportedFacts(decision) ||
             !decision.mailIds.length || (decision.status === "ready" && (!decision.assetIds.length ||

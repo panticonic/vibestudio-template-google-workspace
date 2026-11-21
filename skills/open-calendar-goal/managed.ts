@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
 import { sha256HexSyncText, sortForCanonicalJson } from "@vibestudio/content-addressing";
 import { contextId as actualContextId, fs } from "@workspace/runtime";
 import type { CalendarDecision, CalendarHandoff, CalendarReadback, CalendarRecord, CalendarReport, CalendarSource, CalendarWindow } from "./program/types.js";
@@ -22,7 +23,7 @@ export type OpenCalendarWorld = {
     stage: boolean;
   };
 };
-type WindowState = { source: CalendarSource; start: string; end: string; current: CalendarWindow; refreshed: boolean };
+type WindowState = { source: CalendarSource; start: string; end: string; opened: CalendarWindow; current: CalendarWindow; refreshed: boolean };
 type Attempt = { kind: "open" | "refresh"; calendarId: string; start: string; end: string };
 
 function instant(value: string) {
@@ -103,13 +104,10 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
   const attempts: Attempt[] = [];
   let lastReadback: { requested: CalendarRecord; observed: CalendarReadback } | null = null;
   let artifact: CalendarHandoff | null = null;
-  let busy = false;
+  const pending = new Map<string, Promise<unknown>>();
 
-  async function exclusive<T>(run: () => Promise<T>): Promise<T> {
-    if (busy) throw new Error("Wait for the current Calendar operation to finish");
-    busy = true;
-    try { return await run(); }
-    finally { busy = false; }
+  function runInOrder<T>(run: () => Promise<T>): Promise<T> {
+    return serializeByKey(pending, "provider", run);
   }
 
   async function readWindow(state: WindowState, kind: Attempt["kind"]) {
@@ -123,7 +121,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
       if (!providerStatus(error)) throw error;
       state.current = { id: state.current.id, calendarId: source.id, status: "unavailable", records: [] };
     }
-    return structuredClone(state.current);
+    return state.current;
   }
 
   function isObserved(record: CalendarRecord) {
@@ -132,42 +130,52 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
 
   const services = {
     calendarGoalCatalog: {
-      discover: () => exclusive(async () => {
+      discover: () => runInOrder(async () => {
         catalog ??= (await provider.client.listCalendars()).map(({ id, summary, description, timeZone }) =>
           ({ id, name: summary ?? "", description: description ?? "", timeZone: timeZone ?? "UTC" }));
         return structuredClone(catalog);
       }),
     },
     calendarGoalWindows: {
-      open: (id: string, start: string, end: string) => exclusive(async () => {
+      open: (id: string, start: string, end: string) => runInOrder(async () => {
         const source = catalog?.find((item) => item.id === id);
-        if (!source || windows.has(id) || lastReadback || artifact)
-          throw new Error("Open each relevant discovered calendar once before verification");
+        if (!source) throw new Error("Open a calendar from the authorized discovery result");
         const normalizedStart = instant(start);
         const normalizedEnd = instant(end);
         if (normalizedStart < startBound || normalizedEnd > endBound || normalizedStart >= normalizedEnd)
           throw new Error("The Calendar interval exceeds the authorized observation window");
+        const previous = windows.get(id);
+        if (previous?.start === normalizedStart && previous.end === normalizedEnd)
+          return structuredClone(previous.opened);
+        if (previous || lastReadback || artifact)
+          throw new Error("Open the bounded Calendar interval before verification");
+        const empty: CalendarWindow = {
+          id: "window-" + (windows.size + 1), calendarId: id, status: "unavailable", records: [],
+        };
         const state: WindowState = {
           source, start: normalizedStart, end: normalizedEnd, refreshed: false,
-          current: { id: "window-" + (windows.size + 1), calendarId: id, status: "unavailable", records: [] },
+          opened: empty, current: empty,
         };
-        const result = await readWindow(state, "open");
+        state.opened = await readWindow(state, "open");
         windows.set(id, state);
-        return result;
+        return structuredClone(state.opened);
       }),
-      refresh: (windowId: string) => exclusive(async () => {
+      refresh: (windowId: string) => runInOrder(async () => {
         const state = [...windows.values()].find(({ current }) => current.id === windowId);
-        if (!state || state.refreshed || lastReadback || artifact)
-          throw new Error("Refresh an opened Calendar window once before verification");
+        if (state?.refreshed) return structuredClone(state.current);
+        if (!state || lastReadback || artifact)
+          throw new Error("Refresh an opened Calendar window before verification");
         const result = await readWindow(state, "refresh");
         state.refreshed = true;
-        return result;
+        return structuredClone(result);
       }),
     },
     calendarGoalReadback: {
-      verify: (record: CalendarRecord) => exclusive(async () => {
+      verify: (record: CalendarRecord) => runInOrder(async () => {
+        if (lastReadback && isDeepStrictEqual(lastReadback.requested, record))
+          return structuredClone(lastReadback.observed);
         if (lastReadback || artifact || !isObserved(record))
-          throw new Error("Verify a current observed Calendar event once before staging");
+          throw new Error("Verify a current observed Calendar event before staging");
         let observed: CalendarReadback;
         try {
           const timeline = windows.get(record.calendarId)!;
@@ -183,7 +191,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
       }),
     },
     calendarGoalHandoff: {
-      stage: (decision: CalendarDecision) => exclusive(async () => {
+      stage: (decision: CalendarDecision) => runInOrder(async () => {
         const startable = decision.status === "selected" && decision.selection !== null &&
           lastReadback?.observed.status === "current" && isDeepStrictEqual(lastReadback.observed.record, decision.selection);
         const holdable = decision.status === "held" && decision.selection === null && decision.evidence.length > 0;

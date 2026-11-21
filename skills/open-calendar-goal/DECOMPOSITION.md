@@ -21,6 +21,9 @@ requests and scratch bytes after the Natlang call. Independent calendar reads
 can occur in any order across calendars. Within a calendar, its initial and
 refreshed pages and their cursor order must match the provider. Catalog
 discovery precedes event windows and the final event readback follows them.
+Concurrent service calls share the task's operation queue. Repeating the same
+open, refresh, or event verification returns its recorded observation without
+advancing the provider revision again.
 
 The owner supplies `{ contextId, caseId }` and a world to
 `prepareOpenCalendarGoal` from `@workspace-skills/open-calendar-goal/managed`.

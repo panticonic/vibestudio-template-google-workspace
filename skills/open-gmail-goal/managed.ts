@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
 import { isGmailApiError } from "@workspace/gmail";
 import { channelClientRpcMethods } from "@workspace/pubsub/rpc-contract";
 import { contextId as actualContextId, rpc } from "@workspace/runtime";
@@ -79,7 +80,7 @@ export async function prepareOpenGmailGoal(
   }
   let selected: RetainedCompose | null = null;
   let discovered = false;
-  let busy = false;
+  const pending = new Map<string, Promise<unknown>>();
   let last: ReadResult | null = null;
   let before: ReadResult | null = null;
   const operations: Operation[] = [];
@@ -91,11 +92,8 @@ export async function prepareOpenGmailGoal(
     if (!selected || selected.id !== composeId) throw new Error("Read the selected retained compose before using its provider details");
     return selected;
   }
-  async function exclusive<T>(run: () => Promise<T>): Promise<T> {
-    if (busy) throw new Error("Wait for the current Gmail read to finish");
-    busy = true;
-    try { return await run(); }
-    finally { busy = false; }
+  function runInOrder<T>(run: () => Promise<T>): Promise<T> {
+    return serializeByKey(pending, "provider", run);
   }
   const services = {
     gmailGoalCatalog: {
@@ -105,7 +103,7 @@ export async function prepareOpenGmailGoal(
       },
     },
     gmailGoalCompose: {
-      read: (id: string) => exclusive(async () => {
+      read: (id: string) => runInOrder(async () => {
         const source = selectedSources.get(id);
         if (!discovered || !source || (selected && selected.id !== id))
           throw new Error("Select one observed compose in the authorized catalog");
@@ -114,7 +112,7 @@ export async function prepareOpenGmailGoal(
       }),
     },
     gmailGoalProvider: {
-      getDraft: (composeId: string, draftId: string) => exclusive(async () => {
+      getDraft: (composeId: string, draftId: string) => runInOrder(async () => {
         const compose = checkSelection(composeId);
         if (draftId !== compose.draftId && (!searched.size || nextCursor !== null || !found.has(draftId)))
           throw new Error("Use the retained draft ID or a completed matching provider search");
@@ -123,7 +121,7 @@ export async function prepareOpenGmailGoal(
         operations.push({ kind: "get", id: draftId });
         return structuredClone(before);
       }),
-      findDrafts: (composeId: string, cursor: string | null) => exclusive(async (): Promise<SearchResult> => {
+      findDrafts: (composeId: string, cursor: string | null) => runInOrder(async (): Promise<SearchResult> => {
         const compose = checkSelection(composeId);
         if (cursor !== nextCursor || searched.has(cursor) || searched.size >= 5)
           throw new Error("Follow the latest exact identity search cursor once");
@@ -140,7 +138,7 @@ export async function prepareOpenGmailGoal(
           throw error;
         }
       }),
-      verifyDraft: (composeId: string, draftId: string, digest: string) => exclusive(async () => {
+      verifyDraft: (composeId: string, draftId: string, digest: string) => runInOrder(async () => {
         const compose = checkSelection(composeId);
         if (before?.status !== "found" || before.record.id !== draftId || before.record.digest !== digest ||
             before.record.mimeId !== compose.mimeId || before.record.threadId !== compose.threadId ||
@@ -150,7 +148,7 @@ export async function prepareOpenGmailGoal(
         operations.push({ kind: "verify", id: draftId });
         return structuredClone(last);
       }),
-      readSent: (composeId: string) => exclusive(async () => {
+      readSent: (composeId: string) => runInOrder(async () => {
         const compose = checkSelection(composeId);
         if (!compose.sentId || operations.length) throw new Error("Use only the retained provider delivery ID");
         last = await mail.readSent(compose.sentId);

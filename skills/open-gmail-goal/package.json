@@ -6,6 +6,7 @@
   "exports": { "./managed": "./managed.ts" },
   "dependencies": {
     "@vibestudio/content-addressing": "workspace:*",
+    "@vibestudio/shared": "workspace:*",
     "@vibestudio/service-schemas": "workspace:*",
     "@workspace/agentic-protocol": "workspace:*",
     "@workspace/gmail": "workspace:*",
