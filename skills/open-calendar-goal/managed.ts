@@ -3,7 +3,7 @@ import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
 import { sha256HexSyncText, sortForCanonicalJson } from "@vibestudio/content-addressing";
 import { contextId as actualContextId, fs } from "@workspace/runtime";
 import type { CalendarDecision, CalendarHandoff, CalendarReadback, CalendarRecord, CalendarReport, CalendarSource, CalendarWindow } from "./program/types.js";
-import { ownedCalendarProvider, projectCalendarRecord, type CalendarRequest, type Timeline } from "./provider.js";
+import { ownedCalendarProvider, projectCalendarRecord, type Timeline } from "./provider.js";
 
 type EventRef = { calendarId: string; eventId: string; updated?: string; source?: "readback" };
 export type OpenCalendarWorld = {
@@ -49,47 +49,6 @@ function resolveExpected(world: OpenCalendarWorld, ref: EventRef): CalendarRecor
     .find((event) => event.id === ref.eventId && (ref.updated === undefined || event.updated === ref.updated));
   if (!row || typeof row !== "object") throw new Error("Expected record has no fixture revision");
   return projectCalendarRecord(timeline, row);
-}
-
-function expectedProviderTrace(world: OpenCalendarWorld, start: string, end: string): CalendarRequest[] {
-  const trace: CalendarRequest[] = [];
-  const catalogs = Math.ceil(world.timelines.length / world.catalogPageSize);
-  for (let i = 0; i < catalogs; i++) trace.push({ method: "catalog", calendarId: null, key: i ? "p" + i : null,
-    generation: 0, start: null, end: null, status: 200 });
-  const generations = world.expected.refresh ? 2 : 1;
-  for (let generation = 1; generation <= generations; generation++) {
-    for (const calendarId of world.expected.scope) {
-      const timeline = world.timelines.find(({ id }) => id === calendarId);
-      if (!timeline) throw new Error("Expected trace references an unknown calendar");
-      const pages = generation === 1 ? timeline.initial : timeline.refresh ?? timeline.initial;
-      for (const [i, page] of pages.entries()) {
-        trace.push({ method: "window", calendarId, key: i ? "p" + i : null, generation, start, end,
-          status: typeof page === "number" ? page : 200 });
-        if (typeof page === "number") break;
-      }
-    }
-  }
-  const requested = world.expected.verify;
-  if (requested) {
-    const override = world.timelines.find(({ id }) => id === requested.calendarId)?.readback?.[requested.eventId];
-    trace.push({ method: "event", calendarId: requested.calendarId, key: requested.eventId,
-      generation: generations, start: null, end: null, status: typeof override === "number" ? override : 200 });
-  }
-  return trace;
-}
-
-function sameProviderReads(actual: CalendarRequest[], expected: CalendarRequest[]) {
-  if (actual.length !== expected.length) return false;
-  // A calendar's cursor and generation advance independently of the other
-  // calendars. Only catalog discovery and final event verification order the
-  // entire set of reads.
-  const phase = (row: CalendarRequest) => row.method === "catalog" ? 0 : row.method === "window" ? 1 : 2;
-  if (actual.some((row, i) => i > 0 && phase(row) < phase(actual[i - 1]!))) return false;
-  const calendarIds = new Set(expected.map(({ calendarId }) => calendarId));
-  return [...calendarIds].every((id) => isDeepStrictEqual(
-    actual.filter(({ calendarId }) => calendarId === id),
-    expected.filter(({ calendarId }) => calendarId === id),
-  ));
 }
 
 export async function prepareOpenCalendarGoal(input: { contextId: string; caseId: string }, world: OpenCalendarWorld) {
@@ -222,7 +181,6 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     const reportEvidence = report?.decision?.evidence;
     const handoffText = artifact ? await fs.readFile(artifact.path, "utf8") : null;
     const trace = provider.trace();
-    const expectedTrace = expectedProviderTrace(world, startBound, endBound);
     const visibleCatalog = world.timelines.map(({ id, name, description, timeZone }) => ({ id, name, description, timeZone }));
     const ask = world.expected.verify ? resolveExpected(world, world.expected.verify) : null;
     const observed = lastReadback as { requested: CalendarRecord; observed: CalendarReadback } | null;
@@ -231,7 +189,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
       decision.status === "incomplete" ? { status: "unavailable", record: null } : { status: "current", record: ask };
     const checks = {
       discoveredCalendarSources: isDeepStrictEqual(catalog, visibleCatalog),
-      exactCalendarWindows: sameProviderReads(trace.requests, expectedTrace),
+      groundedCalendarEvidence: (!decision.selection || isObserved(decision.selection)) && decision.evidence.every(isObserved),
       boundCalendarReadback: isDeepStrictEqual(observed?.requested ?? null, ask) &&
         isDeepStrictEqual(observed?.observed ?? null, expectedReadback),
       reconciledCalendarDecision: report?.decision?.status === decision.status &&

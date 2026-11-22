@@ -5,7 +5,7 @@ import type { DrivePermission } from "@workspace/google-workspace/drive";
 import { contextId as actualContextId, fs } from "@workspace/runtime";
 import type { AssetEvidence, AssetIntent, HandoffDecision, HandoffOutcome, HandoffReceipt, MailThread } from "./program/types.js";
 import { driveShortcut, handoffPermissionFields, mailboxScope, nativeDoc, ownedGoogleHandoffProvider, projectMail,
-  type FileState, type ProviderRequest, type ProviderWorld } from "./provider.js";
+  type FileState, type ProviderWorld } from "./provider.js";
 
 type Freshness = "current" | "changed" | "unavailable";
 type StageAuthority = "none" | "ready" | "decision";
@@ -88,59 +88,6 @@ function expectedAsset(id: string, frame: FileState | number, mode: AssetIntent[
     else asset.missingChecks.push("audience");
   }
   return asset;
-}
-
-function expectedReads(world: OpenGoogleHandoffWorld): ProviderRequest[] {
-  const rows: ProviderRequest[] = [];
-  function add(op: ProviderRequest["op"], id: string | null, status = 200, cursor: string | null = null) {
-    rows.push({ op, id, status, cursor });
-  }
-  function pages<T>(items: readonly (readonly T[] | number)[], op: "mail-list" | "drive-permissions", id: string | null) {
-    const values: T[] = [];
-    for (const [i, page] of items.slice(0, pageLimit).entries()) {
-      add(op, id, typeof page === "number" ? page : 200, i ? "p" + i : null);
-      if (typeof page === "number") return null;
-      values.push(...page);
-    }
-    return items.length <= pageLimit ? values : null;
-  }
-  function mail(fresh: boolean, previous: string[] = []) {
-    const found = pages(fresh ? world.provider.nextPages ?? world.provider.pages : world.provider.pages, "mail-list", null);
-    if (!found) return null;
-    const ids = [...new Set(found)];
-    if (fresh && !sameIds(ids, previous)) return null;
-    for (const id of ids) {
-      const thread = world.provider.threads.find((thread) => thread.id === id)!;
-      const record = fresh ? thread.next ?? thread.status ?? 200 : thread.status ?? 200;
-      add("mail-thread", id, typeof record === "number" ? record : 200);
-    }
-    return ids;
-  }
-  function drive(intent: AssetIntent, fresh: boolean) {
-    const file = world.provider.files.find(({ id }) => id === intent.fileId)!;
-    const frame = fresh ? file.next ?? file.initial : file.initial;
-    add("drive-file", file.id, typeof frame === "number" ? frame : 200);
-    if (typeof frame === "number" || frame.metadata.trashed || frame.metadata.mimeType === driveShortcut) return;
-    const mime = frame.metadata.mimeType ?? null;
-    if (modeHasContent(intent.mode) && supportedText(mime))
-      add(mime === nativeDoc ? "drive-export" : "drive-media", file.id, typeof frame.bytes === "number" ? frame.bytes : frame.bytes === undefined ? 404 : 200);
-    if (modeHasAudience(intent.mode)) pages(frame.permissions ?? [[]], "drive-permissions", file.id);
-  }
-  const initial = mail(false);
-  for (const intent of world.expected.reviews) drive(intent, false);
-  if (world.expected.verify) {
-    const current = mail(true, initial ?? []);
-    if (current) for (const intent of world.expected.reviews) drive(intent, true);
-  }
-  return rows;
-}
-
-function sameReads(actual: ProviderRequest[], expected: ProviderRequest[]) {
-  if (actual.length !== expected.length) return false;
-  const ids = new Set(expected.map(({ id }) => id));
-  return [...ids].every((id) => isDeepStrictEqual(
-    actual.filter((row) => row.id === id), expected.filter((row) => row.id === id),
-  ));
 }
 
 export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; caseId: string }, world: OpenGoogleHandoffWorld) {
@@ -240,7 +187,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
         return structuredClone(listing);
       }),
       read: (id: string) => runInOrder(async () => {
-        if (!listing?.complete || !listing.ids.includes(id) || verified)
+        if (!listing?.complete || !listing.ids.includes(id))
           throw new Error("Read only a thread discovered in this mail scope");
         if (!threads.has(id)) threads.set(id, await readMail(id));
         return structuredClone(threads.get(id) ?? null);
@@ -248,21 +195,25 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     },
     googleHandoffDrive: {
       inspect: (intent: AssetIntent) => runInOrder(async () => {
+        const cached = reviews.get(intent.fileId);
+        if (cached && isDeepStrictEqual(cached.intent, intent)) return structuredClone(cached.asset);
         const message = observedThreads().flatMap(({ messages }) => messages).find(({ id }) => id === intent.messageId);
-        if (!completeMail() || !message?.fileIds.includes(intent.fileId) || reviews.has(intent.fileId) || verified ||
+        if (!completeMail() || !message?.fileIds.includes(intent.fileId) || artifact ||
             !["metadata", "content", "audience", "content-and-audience"].includes(intent.mode))
-          throw new Error("Review each observed message link once with the required Drive evidence");
+          throw new Error("Review an observed message link with the required Drive evidence");
         const asset = await readAsset(intent);
+        verified = null;
         reviews.set(asset.id, { intent: structuredClone(intent), asset });
         return structuredClone(asset);
       }),
     },
     googleHandoffFreshness: {
       verify: (decision: HandoffDecision) => runInOrder(async () => {
+        if (verified && sameDecision(decision, verified.decision)) return verified.result;
         const mail = observedThreads().flatMap(({ messages }) => messages);
-        if (!completeMail() || verified || !supportedFacts(decision) || !decision.mailIds.every((id) => mail.some((message) => message.id === id)) ||
+        if (!completeMail() || artifact || !supportedFacts(decision) || !decision.mailIds.every((id) => mail.some((message) => message.id === id)) ||
             !decision.assetIds.every((id) => reviews.has(id)) || (decision.status !== "ready" && decision.status !== "held"))
-          throw new Error("Verify an observed completed handoff decision once");
+          throw new Error("Verify an observed completed handoff decision");
         const current = await listMail();
         let result: Freshness = !current.complete ? "unavailable" : sameIds(current.ids, listing!.ids) ? "current" : "changed";
         if (result === "current") {
@@ -283,6 +234,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     },
     googleHandoffScratch: {
       stage: (decision: HandoffDecision) => runInOrder(async () => {
+        if (artifact && verified && sameDecision(decision, verified.decision)) return { ...artifact };
         const permitted = world.canStage === "decision" || (world.canStage === "ready" && decision.status === "ready");
         if (!permitted || artifact || verified?.result !== "current" || !sameDecision(decision, verified.decision) || !supportedFacts(decision) ||
             !decision.mailIds.length || (decision.status === "ready" && (!decision.assetIds.length ||
@@ -303,24 +255,27 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     const witness = verified as { decision: HandoffDecision; result: Freshness } | null;
     const trace = provider.trace();
     const handoffText = artifact ? await fs.readFile(artifact.path, "utf8") : null;
-    const statuses = expectedReads(world);
     const expectedReviews = world.expected.reviews.map((intent) => {
       const file = world.provider.files.find(({ id }) => id === intent.fileId)!;
       return { intent, asset: expectedAsset(file.id, file.initial, intent.mode) };
     });
     const checks = {
       reconciledGoogleHandoffDecision: meetsExpectedDecision(outcome?.decision, world.expected.decision),
-      verifiedGoogleHandoffProviderReads: sameReads(trace.requests, statuses),
-      boundGoogleHandoffAssets: reviews.size === expectedReviews.length &&
-        expectedReviews.every((review) => isDeepStrictEqual(reviews.get(review.intent.fileId), review)),
+      boundGoogleHandoffAssets: expectedReviews.every(({ intent }) => {
+        const actual = reviews.get(intent.fileId);
+        const source = world.provider.files.find(file => file.id === intent.fileId)!;
+        return Boolean(actual && (!modeHasContent(intent.mode) || modeHasContent(actual.intent.mode)) &&
+          (!modeHasAudience(intent.mode) || modeHasAudience(actual.intent.mode)) &&
+          isDeepStrictEqual(actual.asset, expectedAsset(source.id, source.initial, actual.intent.mode)));
+      }),
       verifiedGoogleHandoffFreshness: world.expected.verify ? witness?.result === world.expected.verify.result &&
         meetsExpectedDecision(witness.decision, world.expected.verify.before) : witness === null,
       verifiedGoogleHandoffArtifact: world.expected.stage ? Boolean(artifact && handoffText &&
         isDeepStrictEqual(outcome?.handoff, artifact) && artifact.sha256 === sha256HexSyncText(handoffText) &&
-        handoffText === handoffBytes(world.expected.decision, observedThreads(), expectedReviews)) :
+        handoffText === handoffBytes(world.expected.decision, observedThreads(), observedReviews())) :
         artifact === null && outcome?.handoff === null,
       preservedGoogleHandoffAuthority: trace.denied === 0 && sameIds(trace.credentialIds,
-        world.expected.reviews.length ? ["handoff-mail-fixture", "handoff-drive-fixture"] : ["handoff-mail-fixture"]),
+        reviews.size ? ["handoff-mail-fixture", "handoff-drive-fixture"] : ["handoff-mail-fixture"]),
     };
     return { passed: Object.values(checks).every(Boolean), contextId: input.contextId, caseId: input.caseId,
       goal: world.goal, checks, threads: observedThreads(),

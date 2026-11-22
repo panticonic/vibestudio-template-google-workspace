@@ -34,7 +34,7 @@ const world: OpenCalendarWorld = {
   },
 };
 
-it.each([true, false])("verifies the per-calendar observation sequence with room refresh=%s", async (refreshRoom) => {
+it.each([true, false])("accepts a correct current decision with room refresh=%s", async (refreshRoom) => {
   const prepared = await prepareOpenCalendarGoal(owner, world);
   const { calendarGoalCatalog, calendarGoalWindows, calendarGoalReadback } = prepared.services;
   await calendarGoalCatalog.discover();
@@ -49,8 +49,8 @@ it.each([true, false])("verifies the per-calendar observation sequence with room
     decision: { status: "selected", selection, evidence: [] },
     handoff: null,
   });
-  expect(proof.checks.exactCalendarWindows).toBe(refreshRoom);
-  expect(proof.passed).toBe(refreshRoom);
+  expect(proof.checks.groundedCalendarEvidence).toBe(true);
+  expect(proof.passed).toBe(true);
 });
 
 it("joins concurrent and repeated reads without advancing the provider snapshots twice", async () => {

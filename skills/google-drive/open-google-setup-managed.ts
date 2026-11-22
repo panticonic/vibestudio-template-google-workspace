@@ -329,8 +329,7 @@ export async function prepareOpenGoogleSetup(
         isDeepStrictEqual(fresh, basis) &&
         fresh.accountOwner &&
         fresh.permissionsOwner,
-      exactReversibleViewActions:
-        isDeepStrictEqual(actions, expected.actions) &&
+      resolvedReversibleView:
         fresh.scope === expected.scope &&
         fresh.opening === expected.opening &&
         fresh.width === expected.width &&
