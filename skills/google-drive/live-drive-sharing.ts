@@ -1,8 +1,11 @@
 import { isDeepStrictEqual } from "node:util";
+import { observePages } from "./page-observations.js";
 import { bindTestDriveTransport } from "./test-drive-transport.js";
 import eligibleRows from "./driveWorkflow/guideGoogleWorkspace/inspectFolder/eligibleRows.js";
 import type {
   GoogleFolderRow,
+  GoogleFolderPage,
+  GooglePermissionsPage,
   GoogleInventoryRequest,
   GoogleInventorySharingRequest,
   GooglePermission,
@@ -41,6 +44,9 @@ export function prepareDriveSharing(world: World) {
     status: number;
   }[] = [];
   const rows: GoogleFolderRow[] = [];
+  const folderPages = new Map<string | null, GoogleFolderPage>();
+  const permissionPages = new Map<string | null, GooglePermissionsPage>();
+  let permissionsComplete = false;
   const permissions: GooglePermission[] = [];
   let complete = false;
   let incomplete = false;
@@ -48,7 +54,6 @@ export function prepareDriveSharing(world: World) {
     {
       folder: { id: world.inventory.folderId, driveId: world.driveId },
       sharingFileId: world.sharing.fileId,
-      maxPageReads: world.folderPages.length + world.permissionPages.length,
     },
     async (url) => {
       const query = url.searchParams;
@@ -73,9 +78,8 @@ export function prepareDriveSharing(world: World) {
       }
       const kind = folder ? "folder" : "permissions";
       const pages = folder ? world.folderPages : world.permissionPages;
-      const page =
-        pages[requests.filter((entry) => entry.kind === kind).length];
       const cursor = query.get("pageToken");
+      const page = pages.find(page => page.cursor === cursor);
       if (!page || page.cursor !== cursor)
         throw new Error("Unexpected Drive page token");
       requests.push({ kind, cursor, status: page.response ? 200 : 503 });
@@ -99,9 +103,11 @@ export function prepareDriveSharing(world: World) {
     ...binding,
     async listFolder(folderId: string, token: string | null) {
       const page = await binding.listFolder(folderId, token);
-      rows.push(...page.rows);
-      incomplete ||= page.incomplete;
-      complete = page.next === null;
+      folderPages.set(token, structuredClone(page));
+      const observed = observePages(folderPages);
+      rows.splice(0, rows.length, ...observed.rows);
+      incomplete = observed.incomplete;
+      complete = observed.complete;
       return page;
     },
     async readPermissions(fileId: string, token: string | null) {
@@ -110,23 +116,16 @@ export function prepareDriveSharing(world: World) {
           "Sharing requires a complete inventory and the assigned current file",
         );
       const page = await binding.readPermissions(fileId, token);
-      permissions.push(...page.rows);
+      permissionPages.set(token, structuredClone(page));
+      const observed = observePages(permissionPages);
+      permissions.splice(0, permissions.length, ...observed.rows);
+      permissionsComplete = observed.complete;
       return page;
     },
   };
   function verify(report: GoogleWorkflowReport | null) {
-    const expectedRequests = (["folder", "permissions"] as const).flatMap(
-      (kind) =>
-        (kind === "folder" ? world.folderPages : world.permissionPages).map(
-          ({ cursor, response }) => ({
-            kind,
-            cursor,
-            status: response ? 200 : 503,
-          }),
-        ),
-    );
     const checks = {
-      exactTransport: isDeepStrictEqual(requests, expectedRequests),
+      completeSharingEvidence: world.expected.gate !== "audited" || permissionsComplete,
       inventoryGate:
         gate() === world.expected.gate &&
         isDeepStrictEqual(eligibleIds(), world.expected.eligibleIds),

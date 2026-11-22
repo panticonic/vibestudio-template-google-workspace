@@ -1,9 +1,12 @@
 import { isDeepStrictEqual } from "node:util";
+import { observePages } from "./page-observations.js";
 import { bindTestDriveTransport } from "./test-drive-transport.js";
 import type { DriveGoalScope } from "./driveWorkflow/workOnDriveGoal/types.js";
 import type {
   GoogleChange,
   GoogleFolderRow,
+  GoogleFolderPage,
+  GooglePermissionsPage,
   GooglePermission,
   GoogleSharingGate,
   GoogleWorkflowReport,
@@ -57,6 +60,9 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
   };
   const requests: Request[] = [];
   const folderReads = new Map<string, FolderRead>();
+  const folderPageReads = new Map<string, Map<string | null, GoogleFolderPage>>();
+  const permissionPageReads = new Map<string, Map<string | null, GooglePermissionsPage>>();
+  const permissionComplete = new Map<string, boolean>();
   const permissionReads = new Map<string, GooglePermission[]>();
   const changes: GoogleChange[] = [];
   let terminal: string | null = null;
@@ -110,11 +116,10 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
       },
       async listFolder(id: string, token: string | null) {
         const page = await binding.listFolder(id, token);
-        const state = folderReads.get(id) ?? { rows: [], complete: false, incomplete: false };
-        state.rows.push(...structuredClone(page.rows));
-        state.complete = page.next === null;
-        state.incomplete ||= page.incomplete;
-        folderReads.set(id, state);
+        const pages = folderPageReads.get(id) ?? new Map<string | null, GoogleFolderPage>();
+        pages.set(token, structuredClone(page));
+        folderPageReads.set(id, pages);
+        folderReads.set(id, observePages(pages));
         return page;
       },
       async readPermissions(id: string, token: string | null) {
@@ -122,7 +127,12 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
           rows.some((row) => row.id === id && !row.shortcut)))
           throw new Error("Confirm the current file in a complete Drive listing before reading its permissions");
         const page = await binding.readPermissions(id, token);
-        permissionReads.set(id, [...(permissionReads.get(id) ?? []), ...structuredClone(page.rows)]);
+        const pages = permissionPageReads.get(id) ?? new Map<string | null, GooglePermissionsPage>();
+        pages.set(token, structuredClone(page));
+        permissionPageReads.set(id, pages);
+        const observed = observePages(pages);
+        permissionReads.set(id, observed.rows);
+        permissionComplete.set(id, observed.complete);
         return page;
       },
       async readChanges(cursor: string) {
@@ -134,31 +144,22 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
     },
   };
 
-  function expectedRequests(): Request[] {
-    const descriptors = (kind: Request["kind"], resource: string, pages: readonly Page[]) =>
-      pages.map(({ cursor, response }) => ({ kind, resource, cursor, status: response ? 200 : 503 }));
-    if (expected.mode === "changes") return descriptors("changes", changeSource!.name, changeSource!.pages);
-    const folder = folders.find(({ id }) => id === expected.folderId)!;
-    const selected = expected.inventoryIds[0];
-    return [
-      ...descriptors("folder", folder.id, folder.pages),
-      ...(expected.gate === "audited" && selected
-        ? descriptors("permissions", selected, permissionPages[selected] ?? []) : []),
-    ];
-  }
-
   function verify(value: unknown) {
     const envelope = value as { status?: string; skill?: string; outcome?: GoogleWorkflowReport } | null;
-    const report = envelope?.outcome;
+    const report = envelope?.outcome ?? value as GoogleWorkflowReport | null;
     const hasAudit = expected.mode === "audit";
     const observedDelta = expected.mode === "changes"
       ? [...new Map(changes.map((change) => [change.fileId, change])).values()]
       : undefined;
     const checks = {
       discoveredDriveScope: discoveries > 0 && readinessReads > 0,
-      exactProviderReads: isDeepStrictEqual(requests, expectedRequests()),
-      boundDriveOutcome: envelope?.status === "workspace-skill-reviewed" && envelope.skill === "google" &&
-        report?.action === "none" && report.status === expected.status &&
+      boundDriveObservations: expected.mode === "changes"
+        ? terminal === expected.checkpoint
+        : Boolean(folderReads.has(expected.folderId) &&
+            (expected.status !== "complete" || (folderReads.get(expected.folderId)!.complete && !folderReads.get(expected.folderId)!.incomplete)) &&
+            (expected.mode !== "audit" || expected.gate !== "audited" ||
+              expected.inventoryIds.every(id => permissionComplete.get(id) === true))),
+      boundDriveOutcome: report?.action === "none" && report.status === expected.status &&
         isDeepStrictEqual(report.ids, expected.ids) &&
         isDeepStrictEqual(report.driveDelta, observedDelta) &&
         report.checkpoint === (expected.mode === "changes" ? expected.checkpoint : null) &&

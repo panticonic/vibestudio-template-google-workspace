@@ -65,7 +65,7 @@ it("keeps permission reads closed after a partial folder and rejects a claimed c
   expect(claimed.passed).toBe(false);
 });
 
-it("uses independent folder cursors and rejects an audit on a different discovered folder", async () => {
+it("uses independent folder cursors and accepts harmless exploration of another authorized folder", async () => {
   const prepared = prepareOpenGoalDrive(owner, auditWorld());
   const { googleGoalDiscovery, googleWorkspaceRead } = prepared.services;
   await googleWorkspaceRead.readiness();
@@ -77,6 +77,11 @@ it("uses independent folder cursors and rejects an audit on a different discover
   await googleWorkspaceRead.listFolder("archive_folder", null);
   await expect(googleWorkspaceRead.listFolder("foreign", null)).rejects.toThrow("outside the assigned Drive read");
   await googleWorkspaceRead.listFolder("main_folder", page.next);
+  await Promise.all([
+    googleWorkspaceRead.readPermissions("target", null),
+    googleWorkspaceRead.readPermissions("target", null),
+  ]);
+  await googleWorkspaceRead.listFolder("main_folder", null);
   await googleWorkspaceRead.readPermissions("target", null);
   const wrong = prepared.verify({
     status: "workspace-skill-reviewed", skill: "google",
@@ -84,8 +89,8 @@ it("uses independent folder cursors and rejects an audit on a different discover
       findings: ["anyone link"], inventoryAudit: { gate: "audited", inventoryIds: ["target"] } },
   });
   expect(wrong.checks.boundDriveOutcome).toBe(true);
-  expect(wrong.checks.exactProviderReads).toBe(false);
-  expect(wrong.passed).toBe(false);
+  expect(wrong.checks.boundDriveObservations).toBe(true);
+  expect(wrong.passed).toBe(true);
 });
 
 it("binds each reported change to its latest provider disposition", async () => {

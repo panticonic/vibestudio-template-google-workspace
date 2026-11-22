@@ -69,7 +69,7 @@ describe("Google Workspace workflow worlds", () => {
     },
   );
 
-  it("admits one concurrent read for a returned cursor and keeps other resources outside the assignment", async () => {
+  it("joins concurrent reads for a returned cursor and keeps other resources outside the assignment", async () => {
     const example = googleWorkflowWorlds.find(
       (world) => world.id === "sharing-board-packet",
     )!;
@@ -90,9 +90,11 @@ describe("Google Workspace workflow worlds", () => {
     ]);
     expect(attempts.map((attempt) => attempt.status)).toEqual([
       "fulfilled",
-      "rejected",
+      "fulfilled",
     ]);
     expect(calls()).toBe(2);
+    await expect(binding.readPermissions("board-packet", "packet-tail")).resolves.toMatchObject({ next: null });
+    expect(calls()).toBe(3);
   });
 });
 

@@ -37,8 +37,17 @@ export function createGoogleWorkflowFixture(world: GoogleWorkflowWorld) {
     warnings: [],
   };
   let calls = 0;
-  async function page() {
-    const body = world.pages[calls++];
+  const byCursor = new Map<string | null, (typeof world.pages)[number]>();
+  let cursor: string | null = world.request.kind === "sync" ? world.request.cursor : null;
+  for (const page of world.pages) {
+    byCursor.set(cursor, page);
+    if (!page?.nextPageToken) break;
+    cursor = page.nextPageToken;
+  }
+  async function page(...args: unknown[]) {
+    calls++;
+    const input = (typeof args[0] === "string" ? args[1] : args[0]) as { pageToken?: string };
+    const body = byCursor.get(input.pageToken ?? null);
     if (!body) throw new Error("Fixture page unavailable");
     return structuredClone(body);
   }

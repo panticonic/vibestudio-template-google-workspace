@@ -94,14 +94,21 @@ export function bindGoogleWorkspaceRead(
 
   function pager<T extends string | null>(initial: readonly T[]) {
     const permitted = new Set(initial);
-    const completed = new Set<T>();
+    const pending = new Map<T, Promise<unknown>>();
     return {
       begin(token: T) {
-        if (!permitted.has(token) || completed.has(token))
+        if (!permitted.has(token))
           throw new Error(
-            "Drive cursor is outside this assigned read or has already been consumed",
+            "Drive cursor is outside this assigned read",
           );
-        completed.add(token);
+      },
+      async read<R>(token: T, operation: () => Promise<R>): Promise<R> {
+        const current = pending.get(token);
+        if (current) return current as Promise<R>;
+        const result = operation();
+        pending.set(token, result);
+        try { return await result; }
+        finally { if (pending.get(token) === result) pending.delete(token); }
       },
       permit(next: T) {
         if (next !== null) permitted.add(next);
@@ -142,7 +149,7 @@ export function bindGoogleWorkspaceRead(
       const pages = folderPages.get(folderId);
       if (!target || !pages)
         throw new Error("Folder is outside the assigned Drive read");
-      const page = await pageRead(
+      const page = await pages.read(pageToken, () => pageRead(
         () => pages.begin(pageToken),
         (drive) =>
           drive.listFiles({
@@ -154,7 +161,7 @@ export function bindGoogleWorkspaceRead(
             driveId: target.driveId,
             includeItemsFromAllDrives: Boolean(target.driveId),
           }),
-      );
+      ));
       const next = page.nextPageToken ?? null;
       pages.permit(next);
       return {
@@ -177,7 +184,7 @@ export function bindGoogleWorkspaceRead(
       const pages = permissionPages.get(fileId);
       if (!pages)
         throw new Error("File is outside the assigned Drive read");
-      const page = await pageRead(
+      const page = await pages.read(pageToken, () => pageRead(
         () => pages.begin(pageToken),
         (drive) =>
           drive.listPermissions(fileId, {
@@ -185,7 +192,7 @@ export function bindGoogleWorkspaceRead(
               "nextPageToken,permissions(id,type,role,emailAddress,domain,deleted,allowFileDiscovery)",
             pageToken: pageToken ?? undefined,
           }),
-      );
+      ));
       const next = page.nextPageToken ?? null;
       pages.permit(next);
       return {
@@ -205,7 +212,7 @@ export function bindGoogleWorkspaceRead(
     async readChanges(cursor) {
       if (!changes)
         throw new Error("Change feed is outside the assigned Drive read");
-      const page = await pageRead(
+      const page = await changePages.read(cursor, () => pageRead(
         () => changePages.begin(cursor),
         (drive) =>
           drive.listChanges({
@@ -216,7 +223,7 @@ export function bindGoogleWorkspaceRead(
             includeItemsFromAllDrives: Boolean(changes.driveId),
             includeRemoved: true,
           }),
-      );
+      ));
       const next = page.nextPageToken ?? null;
       changePages.permit(next);
       return {
