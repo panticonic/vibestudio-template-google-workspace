@@ -145,8 +145,7 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
   };
 
   function verify(value: unknown) {
-    const envelope = value as GoogleWorkflowReport | null;
-    const report = envelope?.outcome ?? value as GoogleWorkflowReport | null;
+    const report = value as GoogleWorkflowReport | null;
     const hasAudit = expected.mode === "audit";
     const observedDelta = expected.mode === "changes"
       ? [...new Map(changes.map((change) => [change.fileId, change])).values()]
