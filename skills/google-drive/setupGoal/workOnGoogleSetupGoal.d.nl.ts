@@ -64,5 +64,5 @@ type OpenGoogleSetupReport = {
   decision: SetupDecision;
   handoff: SetupHandoff | null;
 };
-declare const fn: NatlangFunction<[goal: string], OpenGoogleSetupReport> & { readonly chooseSetupRoute: NatlangFunction<[goal: string, latest: SetupObservation], SetupDecision>; readonly stageSetupHandoff: NatlangFunction<[latest: SetupObservation, decision: SetupDecision], SetupHandoff | null>; readonly workThroughSetupView: NatlangFunction<[goal: string, initial: SetupObservation], SetupObservation> };
+declare const fn: NatlangFunction<[goal: string], OpenGoogleSetupReport> & { readonly chooseSetupRoute: NatlangFunction<[goal: string, latest: SetupObservation], SetupDecision>; readonly stageSetupHandoff: ((latest: SetupObservation, decision: SetupDecision) => Promise<SetupHandoff | null>) & {  }; readonly workThroughSetupView: NatlangFunction<[goal: string, initial: SetupObservation], SetupObservation> };
 export default fn;
