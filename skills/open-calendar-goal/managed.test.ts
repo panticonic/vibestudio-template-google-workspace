@@ -51,6 +51,13 @@ it.each([true, false])("accepts a correct current decision with room refresh=%s"
   });
   expect(proof.checks.groundedCalendarEvidence).toBe(true);
   expect(proof.passed).toBe(true);
+  const optionalEcho = await prepared.verify({
+    decision: { status: "selected", selection, evidence: [] },
+    handoff: { path: "/invented", bytes: 1, sha256: "invented" },
+  });
+  expect(optionalEcho.passed).toBe(true);
+  expect(optionalEcho.outcomeDimensions.effects.passed).toBe(true);
+  expect(optionalEcho.outcomeDimensions.incidentalValues?.checks.returnedCalendarHandoff).toBe(false);
   const native = await prepared.verifyObserved();
   expect(native.passed).toBe(true);
   expect(native.checks).not.toHaveProperty("reconciledCalendarDecision");
