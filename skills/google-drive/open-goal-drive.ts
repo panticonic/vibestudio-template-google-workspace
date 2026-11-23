@@ -1,3 +1,4 @@
+import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { observePages } from "./page-observations.js";
 import { bindTestDriveTransport } from "./test-drive-transport.js";
@@ -169,12 +170,13 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
         expected.requiredTerms.every((item) => report.findings.join(" ").toLowerCase().includes(item.toLowerCase())),
       preservedReadOnlyScope: report?.checkpointWrite === undefined && report?.panelFindings === undefined,
     };
-    return {
+    const contract:SemanticOutcomeContract={effects:{checks:["discoveredDriveScope", "boundDriveObservations"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["boundDriveOutcome", "groundedDriveFindings", "preservedReadOnlyScope"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:[],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
+    return assessSemanticOutcome({
       contextId, caseId, goal, mode: expected.mode, gate: expected.mode === "audit" ? expected.gate : null,
       passed: Object.values(checks).every(Boolean), checks, requests: structuredClone(requests),
       discovery: structuredClone(scope), readinessReads, discoveries,
       observed: { folders: [...folderReads], permissions: [...permissionReads], changes, terminal },
-    };
+    },contract);
   }
 
   async function qualify() {

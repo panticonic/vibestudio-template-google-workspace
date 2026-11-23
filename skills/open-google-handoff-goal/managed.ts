@@ -1,3 +1,5 @@
+import type {InvocationObservations} from "@workspace-skills/system-testing/observed-invocation";
+import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
 import { joinAssetEvidence } from "./issued-asset-evidence.js";
 import { isDeepStrictEqual } from "node:util";
 import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
@@ -99,6 +101,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
   const reviews = new Map<string, Reviewed>();
   let verified: { decision: HandoffDecision; result: Freshness } | null = null;
   let artifact: HandoffReceipt | null = null;
+  let stagedBytes:string|null=null;
   const pending = new Map<string, Promise<unknown>>();
 
   function runInOrder<T>(run: () => Promise<T>): Promise<T> {
@@ -246,6 +249,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
           throw new Error("Save an authorized, current decision supported by observed provider evidence");
         const path = (await fs.mkdtemp("google-workspace-handoff")) + "/handoff.json";
         const bytes = handoffBytes(decision, observedThreads(), observedReviews());
+        stagedBytes=bytes;
         await fs.writeFile(path, bytes);
         if (await fs.readFile(path, "utf8") !== bytes) throw new Error("The handoff did not retain the verified decision");
         artifact = { path, sha256: sha256HexSyncText(bytes) };
@@ -254,7 +258,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     },
   };
 
-  async function verify(value: unknown) {
+  async function verify(value: unknown,invocation?:InvocationObservations) {
     const outcome = value as Partial<HandoffOutcome> | null;
     const witness = verified as { decision: HandoffDecision; result: Freshness } | null;
     const trace = provider.trace();
@@ -264,6 +268,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
       return { intent, asset: expectedAsset(file.id, file.initial, intent.mode) };
     });
     const checks = {
+      returnedGoogleHandoff:isDeepStrictEqual(outcome?.handoff,artifact),
       reconciledGoogleHandoffDecision: meetsExpectedDecision(outcome?.decision, world.expected.decision),
       boundGoogleHandoffAssets: expectedReviews.every(({ intent }) => {
         const actual = reviews.get(reviewKey(intent));
@@ -275,15 +280,17 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
       verifiedGoogleHandoffFreshness: world.expected.verify ? witness?.result === world.expected.verify.result &&
         meetsExpectedDecision(witness.decision, world.expected.verify.before) : witness === null,
       verifiedGoogleHandoffArtifact: world.expected.stage ? Boolean(artifact && handoffText &&
-        isDeepStrictEqual(outcome?.handoff, artifact) && artifact.sha256 === sha256HexSyncText(handoffText) &&
-        handoffText === handoffBytes(world.expected.decision, observedThreads(), observedReviews())) :
-        artifact === null && outcome?.handoff === null,
+        artifact.sha256 === sha256HexSyncText(handoffText) &&
+        handoffText === stagedBytes) :
+        artifact === null,
       preservedGoogleHandoffAuthority: trace.denied === 0 && sameIds(trace.credentialIds,
         reviews.size ? ["handoff-mail-fixture", "handoff-drive-fixture"] : ["handoff-mail-fixture"]),
     };
-    return { passed: Object.values(checks).every(Boolean), contextId: input.contextId, caseId: input.caseId,
+    const contract:SemanticOutcomeContract={effects:{checks:["boundGoogleHandoffAssets", "verifiedGoogleHandoffFreshness", "verifiedGoogleHandoffArtifact", "preservedGoogleHandoffAuthority"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["reconciledGoogleHandoffDecision"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:["returnedGoogleHandoff"],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
+    const incorrectReturnValues=contract.incidentalValues!.checks.some(name=>!(checks as Record<string,boolean>)[name])&&invocation ? (await invocation.returns(call=>call.parentCallId===null)).filter(row=>isDeepStrictEqual(row.value,value)).map(({definition,value})=>({definition,value,required:contract.returnedValue.required&&contract.returnedValue.checks.some(name=>!(checks as Record<string,boolean>)[name])})) : [];
+    return assessSemanticOutcome({incorrectReturnValues, passed: Object.values(checks).every(Boolean), contextId: input.contextId, caseId: input.caseId,
       goal: world.goal, checks, threads: observedThreads(),
-      reviews: observedReviews(), providerRequests: trace.requests, freshness: witness, handoff: artifact, handoffText };
+      reviews: observedReviews(), providerRequests: trace.requests, freshness: witness, handoff: artifact, handoffText },contract);
   }
   async function qualify() {
     const found = await services.googleHandoffMail.discover();

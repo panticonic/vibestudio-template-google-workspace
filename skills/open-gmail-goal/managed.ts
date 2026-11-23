@@ -1,3 +1,4 @@
+import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
 import { isGmailApiError } from "@workspace/gmail";
@@ -199,10 +200,11 @@ export async function prepareOpenGmailGoal(
       reportedGmailContinuity: report?.status === world.expected.status && report.composeId === (native?.id ?? null) &&
         isDeepStrictEqual(report.retainedEvents, native?.evidence ?? []) && isDeepStrictEqual(report.provider, observed),
     };
-    return { contextId, caseId, goal: world.goal, passed: Object.values(checks).every(Boolean), checks,
+    const contract:SemanticOutcomeContract={effects:{checks:["discoveredOwnedComposes", "verifiedComposeLineage", "preservedGmailState"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["reportedGmailContinuity", "boundProviderReadback"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:[],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
+    return assessSemanticOutcome({ contextId, caseId, goal: world.goal, passed: Object.values(checks).every(Boolean), checks,
       catalog, selected, native, operations, requests: structuredClone(mail.requests), persisted,
       before: structuredClone(reads[0] ?? null), readback: structuredClone(providerRead),
-      providerObservations: Object.fromEntries([...providerEvidence].map(([id, evidence]) => [id, structuredClone(evidence.reads)])) };
+      providerObservations: Object.fromEntries([...providerEvidence].map(([id, evidence]) => [id, structuredClone(evidence.reads)])) },contract);
   }
 
   async function qualify() {

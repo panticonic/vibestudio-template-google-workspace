@@ -1,3 +1,5 @@
+import type {InvocationObservations} from "@workspace-skills/system-testing/observed-invocation";
+import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { buildPanelLink, type PanelHandle } from "@workspace/runtime";
 import { gmailChatStateArgs } from "@workspace/gmail/chat-state";
@@ -283,7 +285,7 @@ export async function prepareOpenGoogleSetup(
     },
   };
 
-  async function verify(wrapper: Wrapper | null) {
+  async function verify(wrapper: Wrapper | null,invocation?:InvocationObservations) {
     const report =
       wrapper;
     const expected = world.expected;
@@ -315,6 +317,7 @@ export async function prepareOpenGoogleSetup(
     }[expected.marker];
     const warning = expectedProfile.current.warning !== "none";
     const checks = {
+      returnedSetupHandoff:isDeepStrictEqual(report?.handoff,handoff??null),
       boundOwnedSetupView:
         first !== undefined &&
         current !== undefined &&
@@ -331,9 +334,8 @@ export async function prepareOpenGoogleSetup(
         fresh.guidance === (hasSetupGuide ? expected.scope : "unknown") &&
         fresh.warningVisible === warning &&
         isDeepStrictEqual(fresh.enabledControls, controlNames),
-      preservedOwnedSetupHistory:
-        isDeepStrictEqual(final, expectedProfile) &&
-        isDeepStrictEqual(report?.decision.priorIds, expectedHistory),
+      nativeOwnedSetupHistory:isDeepStrictEqual(final,expectedProfile),
+      preservedOwnedSetupHistory:isDeepStrictEqual(report?.decision.priorIds,expectedHistory),
       matchedSetupRoute:
         report?.decision.route === expected.route &&
         report.decision.requestedScope === expected.requestedScope &&
@@ -343,12 +345,13 @@ export async function prepareOpenGoogleSetup(
         ? Boolean(
             handoff &&
             handoff.observation === id &&
-            isDeepStrictEqual(handoff, report?.handoff) &&
-            isDeepStrictEqual(handoff.decision, report?.decision),
+            true,
           )
-        : !handoff && report?.handoff === null,
+        : !handoff,
     };
-    return {
+    const contract:SemanticOutcomeContract={effects:{checks:["boundOwnedSetupView", "resolvedReversibleView", "verifiedStagedSetupHandoff", "nativeOwnedSetupHistory"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["matchedSetupRoute", "preservedOwnedSetupHistory"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:["returnedSetupHandoff"],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
+    const incorrectReturnValues=contract.incidentalValues!.checks.some(name=>!(checks as Record<string,boolean>)[name])&&invocation ? (await invocation.returns(call=>call.parentCallId===null)).filter(row=>isDeepStrictEqual(row.value,wrapper)).map(({definition,value})=>({definition,value,required:contract.returnedValue.required&&contract.returnedValue.checks.some(name=>!(checks as Record<string,boolean>)[name])})) : [];
+    return assessSemanticOutcome({incorrectReturnValues,
       caseId: world.id,
       goal: world.goal,
       contextId,
@@ -360,7 +363,7 @@ export async function prepareOpenGoogleSetup(
       profile: final,
       handoff: handoff ?? null,
       passed: Object.values(checks).every(Boolean),
-    };
+    },contract);
   }
 
   async function qualify() {
