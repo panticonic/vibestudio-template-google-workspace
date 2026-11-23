@@ -176,10 +176,17 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     };
   }
 
-  async function verify(value: unknown) {
-    const report = value as Partial<CalendarReport> | null;
+  function matchesDecision(value: unknown) {
+    const actual = value as Partial<CalendarDecision> | null;
+    const wanted = expectedDecision();
+    return actual?.status === wanted.status && isDeepStrictEqual(actual.selection, wanted.selection) &&
+      Array.isArray(actual.evidence) && actual.evidence.length === wanted.evidence.length &&
+      wanted.evidence.every(item => actual.evidence!.some(seen => isDeepStrictEqual(item, seen)));
+  }
+
+  /** Native provider/workspace evidence, without claiming a model returned a decision. */
+  async function verifyObserved() {
     const decision = expectedDecision();
-    const reportEvidence = report?.decision?.evidence;
     const handoffText = artifact ? await fs.readFile(artifact.path, "utf8") : null;
     const trace = provider.trace();
     const visibleCatalog = world.timelines.map(({ id, name, description, timeZone }) => ({ id, name, description, timeZone }));
@@ -193,18 +200,23 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
       groundedCalendarEvidence: (!decision.selection || isObserved(decision.selection)) && decision.evidence.every(isObserved),
       boundCalendarReadback: isDeepStrictEqual(observed?.requested ?? null, ask) &&
         isDeepStrictEqual(observed?.observed ?? null, expectedReadback),
-      reconciledCalendarDecision: report?.decision?.status === decision.status &&
-        isDeepStrictEqual(report.decision.selection, decision.selection) && Array.isArray(reportEvidence) &&
-        reportEvidence.length === decision.evidence.length &&
-        decision.evidence.every((item) => reportEvidence.some((seen) => isDeepStrictEqual(item, seen))),
       verifiedCalendarHandoff: world.expected.stage ?
-        Boolean(artifact && handoffText && Array.isArray(reportEvidence) && isDeepStrictEqual(report?.handoff, artifact) &&
-          handoffText === handoffBytes({ ...decision, evidence: reportEvidence }) &&
-          artifact.sha256 === sha256HexSyncText(handoffText)) : artifact === null && report?.handoff === null,
+        Boolean(artifact && handoffText && matchesDecision(JSON.parse(handoffText)) &&
+          artifact.sha256 === sha256HexSyncText(handoffText)) : artifact === null,
       preservedCalendarAuthority: trace.denied === 0 && trace.credentialReads === 1,
     };
     return { passed: Object.values(checks).every(Boolean), caseId, contextId, goal: world.goal, checks, catalog, attempts, providerRequests: trace.requests,
       windows: [...windows.values()].map(({ current }) => current), readback: observed, handoff: artifact, handoffText };
+  }
+
+  async function verify(value: unknown) {
+    const report = value as Partial<CalendarReport> | null;
+    const observed = await verifyObserved();
+    const checks = { ...observed.checks,
+      reconciledCalendarDecision: matchesDecision(report?.decision),
+      returnedCalendarHandoff: isDeepStrictEqual(report?.handoff, observed.handoff),
+    };
+    return { ...observed, checks, passed: Object.values(checks).every(Boolean) };
   }
 
   async function qualify() {
@@ -221,5 +233,5 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     const report = { decision, handoff };
     return { ...await verify(report), report };
   }
-  return { goal: world.goal, services, verify, qualify };
+  return { goal: world.goal, services, verify, verifyObserved, qualify };
 }
