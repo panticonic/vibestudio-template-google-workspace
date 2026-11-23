@@ -1,0 +1,144 @@
+{
+  "schema": "natlang.native-passthrough-inventory/1",
+  "root": "/home/werg/data/vibestudio-open-goal-live/full-luna-campaign-yci2LB1N/rejection-audit/native-passthrough-google-workspace",
+  "rows": [
+    {
+      "path": "skills/google-drive/driveWorkflow/guideGoogleWorkspace/reviewSetupJourney/reviewSetupPanel/observeSetupPanel.nl",
+      "line": 1,
+      "body_line": 6,
+      "source_sha256": "ab6d17c2ae049ad98e759d436376cdf6c918cd21ff38b79f42b00c9b9cb599bb",
+      "service": "googleSetupPanel",
+      "method": "observe",
+      "arguments": "",
+      "status": "converted",
+      "reason": "Exact native service call, typed signature, no semantic judgment or child subtree",
+      "package": "skills/google-drive/driveWorkflow",
+      "metadata": {
+        "description": "Observe the assigned Google Workspace setup panel and return its receipts.",
+        "args": {},
+        "returns": "GoogleSetupReceipt[]"
+      },
+      "output": "skills/google-drive/driveWorkflow/guideGoogleWorkspace/reviewSetupJourney/reviewSetupPanel/observeSetupPanel.ts",
+      "generated": "import {googleSetupPanel} from \"natlang:services\";\nimport type {GoogleSetupReceipt} from \"../../../types.js\";\n/** Observe the assigned Google Workspace setup panel and return its receipts. */\nexport default async function observeSetupPanel():Promise<GoogleSetupReceipt[]>{\n return googleSetupPanel.observe();\n}\n",
+      "source_body": "Call googleSetupPanel.observe and return the exact receipts without changing them."
+    },
+    {
+      "path": "skills/google-drive/driveWorkflow/guideGoogleWorkspace/syncCheckpoint/commitCheckpoint.nl",
+      "line": 1,
+      "body_line": 8,
+      "source_sha256": "cc1aeaa64b6dda6ff4aa450853d8703b7dccb0a9f7472daeebae2bb8fc3be5e4",
+      "service": "driveCheckpoint",
+      "method": "commit",
+      "arguments": "expected, terminal",
+      "status": "converted",
+      "reason": "Exact native service call, typed signature, no semantic judgment or child subtree",
+      "package": "skills/google-drive/driveWorkflow",
+      "metadata": {
+        "description": "Apply one checkpoint transition guarded by the previously saved cursor.",
+        "args": {
+          "expected": "string",
+          "terminal": "string"
+        },
+        "returns": "GoogleCheckpointReceipt"
+      },
+      "output": "skills/google-drive/driveWorkflow/guideGoogleWorkspace/syncCheckpoint/commitCheckpoint.ts",
+      "generated": "import {driveCheckpoint} from \"natlang:services\";\nimport type {GoogleCheckpointReceipt} from \"../../types.js\";\n/** Apply one checkpoint transition guarded by the previously saved cursor. */\nexport default async function commitCheckpoint(expected: string, terminal: string):Promise<GoogleCheckpointReceipt>{\n return driveCheckpoint.commit(expected, terminal);\n}\n",
+      "source_body": "Call driveCheckpoint.commit with expected and terminal exactly once. Return the receipt unchanged."
+    },
+    {
+      "path": "skills/google-drive/driveWorkflow/guideGoogleWorkspace/syncCheckpoint/readCheckpoint.nl",
+      "line": 1,
+      "body_line": 6,
+      "source_sha256": "92ca2ffb2bcb59ff8d5880059f5239deb9b88b964c05b3da67369fbdb9b045e7",
+      "service": "driveCheckpoint",
+      "method": "read",
+      "arguments": "",
+      "status": "converted",
+      "reason": "Exact native service call, typed signature, no semantic judgment or child subtree",
+      "package": "skills/google-drive/driveWorkflow",
+      "metadata": {
+        "description": "Read the current cursor from the assigned checkpoint file.",
+        "args": {},
+        "returns": "string"
+      },
+      "output": "skills/google-drive/driveWorkflow/guideGoogleWorkspace/syncCheckpoint/readCheckpoint.ts",
+      "generated": "import {driveCheckpoint} from \"natlang:services\";\n/** Read the current cursor from the assigned checkpoint file. */\nexport default async function readCheckpoint():Promise<string>{\n return driveCheckpoint.read();\n}\n",
+      "source_body": "Call driveCheckpoint.read and return the cursor unchanged."
+    },
+    {
+      "path": "skills/google-drive/setupGoal/workOnGoogleSetupGoal/stageSetupHandoff.nl",
+      "line": 1,
+      "body_line": 8,
+      "source_sha256": "0231d47cdea94cf205631026bf4762b49e5db4cbad1be187fb5a3e4c60f7666a",
+      "service": "openGoogleSetup",
+      "method": "stage",
+      "arguments": "latest.id, decision",
+      "status": "converted",
+      "reason": "Exact native service call, typed signature, no semantic judgment or child subtree",
+      "package": "skills/google-drive/setupGoal",
+      "metadata": {
+        "description": "Save a requested next-step handoff in the currently observed owned setup.",
+        "args": {
+          "latest": "SetupObservation",
+          "decision": "SetupDecision"
+        },
+        "returns": "SetupHandoff | null"
+      },
+      "output": "skills/google-drive/setupGoal/workOnGoogleSetupGoal/stageSetupHandoff.ts",
+      "generated": "import {openGoogleSetup} from \"natlang:services\";\nimport type {SetupDecision, SetupHandoff, SetupObservation} from \"../types.js\";\n/** Save a requested next-step handoff in the currently observed owned setup. */\nexport default async function stageSetupHandoff(latest: SetupObservation, decision: SetupDecision):Promise<SetupHandoff | null>{\n return openGoogleSetup.stage(latest.id, decision);\n}\n",
+      "source_body": "Call openGoogleSetup.stage with latest.id and the actual decision. Return its actual receipt without recreating it yourself."
+    },
+    {
+      "path": "skills/open-gmail-goal/program/recoverGmailGoal/readRetainedCompose.nl",
+      "line": 1,
+      "body_line": 7,
+      "source_sha256": "14addc8c203d3ac4a0eabded5af4105bba5a0b92b94b6c45cdff7b08cbcbb8c4",
+      "service": "gmailGoalCompose",
+      "method": "read",
+      "arguments": "id",
+      "status": "converted",
+      "reason": "Exact native service call, typed signature, no semantic judgment or child subtree",
+      "package": "skills/open-gmail-goal/program",
+      "metadata": {
+        "description": "Read the selected Gmail compose through its owned retained event sequence.",
+        "args": {
+          "id": "string"
+        },
+        "returns": "RetainedCompose"
+      },
+      "output": "skills/open-gmail-goal/program/recoverGmailGoal/readRetainedCompose.ts",
+      "generated": "import {gmailGoalCompose} from \"natlang:services\";\nimport type {RetainedCompose} from \"../types.js\";\n/** Read the selected Gmail compose through its owned retained event sequence. */\nexport default async function readRetainedCompose(id: string):Promise<RetainedCompose>{\n return gmailGoalCompose.read(id);\n}\n",
+      "source_body": "Call gmailGoalCompose.read with the observed ID. Return the actual coordinates and evidence unchanged."
+    },
+    {
+      "path": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff/reviewLinkedAssets/checkLinkedAsset.nl",
+      "line": 1,
+      "body_line": 7,
+      "source_sha256": "0f964919425a6e5a09ca7cc235783f47ab6bdd9459fccfdb3f4c2216537673e5",
+      "service": "googleHandoffDrive",
+      "method": "inspect",
+      "arguments": "asset",
+      "status": "converted",
+      "reason": "Exact native service call, typed signature, no semantic judgment or child subtree",
+      "package": "skills/open-google-handoff-goal/program",
+      "metadata": {
+        "description": "Inspect an asset by its exact link identity and obtain the requested Drive evidence.",
+        "args": {
+          "asset": "AssetIntent"
+        },
+        "returns": "AssetEvidence"
+      },
+      "output": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff/reviewLinkedAssets/checkLinkedAsset.ts",
+      "generated": "import {googleHandoffDrive} from \"natlang:services\";\nimport type {AssetEvidence, AssetIntent} from \"../../types.js\";\n/** Inspect an asset by its exact link identity and obtain the requested Drive evidence. */\nexport default async function checkLinkedAsset(asset: AssetIntent):Promise<AssetEvidence>{\n return googleHandoffDrive.inspect(asset);\n}\n",
+      "source_body": "Call googleHandoffDrive.inspect with this asset and return the actual result. Keep provider status, version, content checks, and the exact direct sharing entries."
+    }
+  ],
+  "verification": {
+    "compiler": "actual VibeStudio compileProgram and workspaceModules, all affected packages plus every public entry root",
+    "packages": 81,
+    "aggregate_linked_files": 3708,
+    "ledger_unit": "native-passthrough-compile-20261123c",
+    "teacher_calls": 0,
+    "runtime_capture_dependency": "Deploy with Core native-service frame recording fix; raw service frame binding is insufficient."
+  }
+}

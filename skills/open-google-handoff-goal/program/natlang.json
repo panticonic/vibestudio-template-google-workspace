@@ -2,12 +2,22 @@
   "schema": "natlang.package/v2",
   "name": "vibestudio-open-google-handoff-goal",
   "version": "0.1.0",
-  "targets": { "main": { "entry": "reconcileGoogleHandoff.nl" } },
+  "targets": {
+    "main": {
+      "entry": "reconcileGoogleHandoff.nl"
+    }
+  },
   "serviceBinding": "explicit",
   "serviceScopes": {
-    "googleHandoffMail": ["reconcileGoogleHandoff/resolveMailDecision/readMailThreads.nl"],
-    "googleHandoffDrive": ["reconcileGoogleHandoff/reviewLinkedAssets/checkLinkedAsset.nl"],
-    "googleHandoffFreshness": ["reconcileGoogleHandoff/finishHandoff.nl"],
-    "googleHandoffScratch": ["reconcileGoogleHandoff/finishHandoff.nl"]
+    "googleHandoffMail": [
+      "reconcileGoogleHandoff/resolveMailDecision/readMailThreads.nl"
+    ],
+    "googleHandoffDrive": [],
+    "googleHandoffFreshness": [
+      "reconcileGoogleHandoff/finishHandoff.nl"
+    ],
+    "googleHandoffScratch": [
+      "reconcileGoogleHandoff/finishHandoff.nl"
+    ]
   }
 }

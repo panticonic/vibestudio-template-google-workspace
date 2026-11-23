@@ -10,19 +10,16 @@
   },
   "serviceBinding": "explicit",
   "serviceScopes": {
-    "driveCheckpoint": [
-      "guideGoogleWorkspace/syncCheckpoint/readCheckpoint.nl",
-      "guideGoogleWorkspace/syncCheckpoint/commitCheckpoint.nl"
-    ],
+    "driveCheckpoint": [],
     "googleWorkspaceRead": [
       "guideGoogleWorkspace.nl",
       "guideGoogleWorkspace/inspectFolder.nl",
       "guideGoogleWorkspace/reviewSharing.nl",
       "guideGoogleWorkspace/continueSync.nl"
     ],
-    "googleGoalDiscovery": ["workOnDriveGoal.nl"],
-    "googleSetupPanel": [
-      "guideGoogleWorkspace/reviewSetupJourney/reviewSetupPanel/observeSetupPanel.nl"
-    ]
+    "googleGoalDiscovery": [
+      "workOnDriveGoal.nl"
+    ],
+    "googleSetupPanel": []
   }
 }

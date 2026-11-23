@@ -1,19 +1,13 @@
-import type {
-  SetupAction,
-  SetupDecision,
-  SetupHandoff,
-  SetupObservation,
-} from "./types.js";
 declare module "natlang:services" {
   export const openGoogleSetup: {
-    observe(): Promise<SetupObservation>;
+    observe(): Promise<import("./types.js").SetupObservation>;
     apply(
       revision: string,
-      action: SetupAction,
-    ): Promise<SetupObservation | null>;
+      action: import("./types.js").SetupAction,
+    ): Promise<import("./types.js").SetupObservation | null>;
     stage(
       revision: string,
-      decision: SetupDecision,
-    ): Promise<SetupHandoff | null>;
+      decision: import("./types.js").SetupDecision,
+    ): Promise<import("./types.js").SetupHandoff | null>;
   };
 }
