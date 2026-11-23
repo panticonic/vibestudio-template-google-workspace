@@ -416,10 +416,17 @@ class TestGmailAgentWorker extends GmailAgentWorker {
         if (method === "readLog") return [];
         if (method === "getLogEvent") return null;
         if (method === "appendLogEvent") {
+          const input = args?.[0] as {
+            logId: string;
+            head: string;
+            events: Array<{ envelopeId?: string }>;
+          };
           return {
+            logId: input.logId,
+            head: input.head,
             envelopes: [],
-            headSeq: 0,
-            headHash: "0".repeat(64),
+            headSeq: input.events.length,
+            headEnvelopeId: input.events.at(-1)?.envelopeId ?? "gmail-observed",
             published: [],
           };
         }
@@ -2027,11 +2034,11 @@ describe("GmailAgentWorker", () => {
         ],
       }),
       expect.objectContaining({
-        temperature: 0.2,
         maxTokens: 300,
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(complete.mock.calls[0]?.[2]).not.toHaveProperty("temperature");
   });
 
   it("runs Gmail triage through the native model task with its selected cheap model and options", async () => {
@@ -2069,11 +2076,11 @@ describe("GmailAgentWorker", () => {
         ],
       },
       expect.objectContaining({
-        temperature: 0,
         maxTokens: 800,
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(complete.mock.calls[0]?.[2]).not.toHaveProperty("temperature");
   });
 
   it("fetches sanitized thread contents for renderer expansion", async () => {
