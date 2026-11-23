@@ -1,0 +1,71 @@
+{
+  "publicEntries": 5,
+  "entries": [
+    {
+      "entry": "skills/google-drive/driveWorkflow/workOnDriveGoal.ts",
+      "kind": "typed composition",
+      "rationale": "Typed native I/O, exact result composition and deterministic state transitions; scoped NL descendants interpret goals, choose actions, reconcile evidence and form requested answers.",
+      "sourceSha256": "27cc446e6d2104ae7ab517d012bd93e8270a6f833438be36788df7c730565d18"
+    },
+    {
+      "entry": "skills/google-drive/setupGoal/workOnGoogleSetupGoal.nl",
+      "kind": "semantic NL coordinator retained",
+      "rationale": "The root interprets whether the user requests an onboarding handoff after observing UI changes.",
+      "sourceSha256": "4a14bfa1370d3fb35b21d381dd0fc517964427511d99971917aca7eafa29e323"
+    },
+    {
+      "entry": "skills/open-calendar-goal/program/workOnCalendarGoal.ts",
+      "kind": "typed composition",
+      "rationale": "Typed native I/O, exact result composition and deterministic state transitions; scoped NL descendants interpret goals, choose actions, reconcile evidence and form requested answers.",
+      "sourceSha256": "8d06a4e0f87f612f50ef8830373447067481ccc87db388a3488e2714c5474841"
+    },
+    {
+      "entry": "skills/open-gmail-goal/program/recoverGmailGoal.nl",
+      "kind": "semantic NL coordinator retained",
+      "rationale": "The root interprets requested delivery verification versus draft recovery; provider receipt requirements depend on that semantic user intent.",
+      "sourceSha256": "e11e5ef922c87966436a52e82a931d1295ead4d37a47234033a0a6a156aed2ab"
+    },
+    {
+      "entry": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.ts",
+      "kind": "typed composition",
+      "rationale": "Typed native I/O, exact result composition and deterministic state transitions; scoped NL descendants interpret goals, choose actions, reconcile evidence and form requested answers.",
+      "sourceSha256": "71526841a08bbadc1dc9799fc56c747549f8bae7c47fbdca885b12827df32069"
+    }
+  ],
+  "sourceConversions": [
+    {
+      "template": "google-workspace",
+      "old": "skills/google-drive/driveWorkflow/workOnDriveGoal.nl",
+      "new": "skills/google-drive/driveWorkflow/workOnDriveGoal.ts",
+      "originalSource": "---\ndescription: Discover available Drive resources and fulfill a user's inventory, direct access review, or change summary request.\nbudget: { maxTurns: 22 }\nuses: [guideGoogleWorkspace]\nargs:\n  goal: string\nreturns: GoogleWorkflowReport\n---\n1. Call googleGoalDiscovery.discover. Pass its current resource names and the user's goal to chooseGoalRoute. If it returns null, return a partial, read-only report explaining what needs clarification, with no IDs or checkpoint.\n2. For a folder plan return reviewFolderGoal(plan). For a change plan return guideGoogleWorkspace(plan.request). The existing workflow verifies Drive readiness and delegates the change read. Preserve the child's coverage limits and observed identifiers.\n",
+      "classification": "typed composition: actual native I/O and deterministic control flow; semantic choices remain in scoped NL descendants"
+    },
+    {
+      "template": "google-workspace",
+      "old": "skills/open-calendar-goal/program/workOnCalendarGoal.nl",
+      "new": "skills/open-calendar-goal/program/workOnCalendarGoal.ts",
+      "originalSource": "---\ndescription: Reconcile scheduled proposals against the user's calendars and leave a verified workspace handoff when requested.\nbudget: { maxTurns: 18 }\nargs:\n  goal: string\nreturns: CalendarReport\n---\n1. Get the Calendar catalog with `calendarGoalCatalog.discover()` and pass it with the original `goal` to `chooseCalendarPlan(goal, catalog)`. The planning call returns the source IDs and time bounds.\n2. If the plan is null, return an incomplete decision and no handoff. Otherwise call `reconcileCalendarPlan(goal, plan)` to read the provider windows, consider changes, and verify a selected event. Keep its observed selection and evidence.\n3. When the plan requests a handoff, use `stageCalendarHandoff` with the verified decision. Return the decision and the actual receipt, or no handoff if the decision could not be staged.\n",
+      "classification": "typed composition: actual native I/O and deterministic control flow; semantic choices remain in scoped NL descendants"
+    },
+    {
+      "template": "google-workspace",
+      "old": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.nl",
+      "new": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.ts",
+      "originalSource": "---\ndescription: Reconcile an original user goal across Gmail decisions, current Drive assets, and an authorized workspace handoff.\nbudget: { maxTurns: 20 }\nargs:\n  goal: string\nreturns: HandoffOutcome\n---\n1. Call chooseHandoffPlan with the user's request.\n2. Call resolveMailDecision with the goal. If its decision calls for inspecting linked assets, use reviewLinkedAssets to observe them.\n3. Call chooseHandoffDecision with the user goal and those observations. Call finishHandoff with the chosen outcome and the handoff plan. Return the actual result.\n",
+      "classification": "typed composition: actual native I/O and deterministic control flow; semantic choices remain in scoped NL descendants"
+    },
+    {
+      "template": "google-workspace",
+      "old": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff/reviewLinkedAssets.nl",
+      "new": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff/reviewLinkedAssets.ts",
+      "originalSource": "---\ndescription: Observe the requested Drive assets against the user's requested kinds of evidence.\nargs:\n  requested: AssetIntent[]\nreturns: AssetEvidence[]\n---\nCall checkLinkedAsset for each requested asset, preserving its observed identity. Return every observation, including unavailable results.\n",
+      "classification": "typed composition: actual native I/O and deterministic control flow; semantic choices remain in scoped NL descendants"
+    }
+  ],
+  "validation": {
+    "unit": "vibe-v14-local-nonbase-types-20261123c",
+    "scope": "Actual static native compilation and declaration regeneration of all38 discovered programs across six templates; no model execution or training data.",
+    "memoryPeakMiB": 287.7
+  },
+  "taskGoalsChanged": false
+}

@@ -1,7 +1,7 @@
 [
   {
     "template": "google-workspace",
-    "entry": "skills/google-drive/driveWorkflow/workOnDriveGoal.nl",
+    "entry": "skills/google-drive/driveWorkflow/workOnDriveGoal.ts",
     "resultType": "GoogleWorkflowReport",
     "decision": "retain requested domain value",
     "fields": {
@@ -16,7 +16,7 @@
       "inventoryAudit": "requested sharing decision and inventoried resource IDs; no repeated native inventory"
     },
     "evidence": [
-      "skills/google-drive/driveWorkflow/workOnDriveGoal.nl",
+      "skills/google-drive/driveWorkflow/workOnDriveGoal.ts",
       "skills/google-drive/driveWorkflow/types.ts"
     ],
     "consumers": [
@@ -43,7 +43,8 @@
       "/home/werg/vibe-app-values-google-workspace/skills/google-drive/drive-workflow-worlds.ts:9:  GoogleWorkflowReport,",
       "/home/werg/vibe-app-values-google-workspace/skills/google-drive/drive-workflow-worlds.ts:13:type Expectation = Omit<GoogleWorkflowReport, \"findings\">;",
       "/home/werg/vibe-app-values-google-workspace/skills/google-drive/drive-workflow-worlds.ts:393:  observed: GoogleWorkflowReport,"
-    ]
+    ],
+    "functionalStructure": "typed composition"
   },
   {
     "template": "google-workspace",
@@ -69,11 +70,12 @@
       "/home/werg/vibe-app-values-google-workspace/skills/google-drive/setupGoal/types.ts:62:export type OpenGoogleSetupReport = {",
       "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-google-setup-managed.ts:11:  OpenGoogleSetupReport,",
       "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-google-setup-managed.ts:133:  type Wrapper = OpenGoogleSetupReport;"
-    ]
+    ],
+    "functionalStructure": "semantic NL coordinator retained"
   },
   {
     "template": "google-workspace",
-    "entry": "skills/open-calendar-goal/program/workOnCalendarGoal.nl",
+    "entry": "skills/open-calendar-goal/program/workOnCalendarGoal.ts",
     "resultType": "CalendarReport",
     "decision": "retain requested domain value",
     "fields": {
@@ -81,7 +83,7 @@
       "handoff": "actual retained handoff"
     },
     "evidence": [
-      "skills/open-calendar-goal/program/workOnCalendarGoal.nl",
+      "skills/open-calendar-goal/program/workOnCalendarGoal.ts",
       "skills/open-calendar-goal/program/types.ts"
     ],
     "consumers": [
@@ -98,7 +100,8 @@
       "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/types.ts:39:export type CalendarReport = { decision: CalendarDecision; handoff: CalendarHandoff | null };",
       "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/managed.ts:5:import type { CalendarDecision, CalendarHandoff, CalendarReadback, CalendarRecord, CalendarReport, CalendarSource, CalendarWindow } from \"./program/types.js\";",
       "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/managed.ts:213:    const report = value as Partial<CalendarReport> | null;"
-    ]
+    ],
+    "functionalStructure": "typed composition"
   },
   {
     "template": "google-workspace",
@@ -129,11 +132,12 @@
       "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/managed.ts:7:import type { ComposeSelection, GmailContinuity, GmailGoalReport, ReadResult, RetainedCompose, SearchResult } from \"./program/types.js\";",
       "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/managed.ts:173:    const envelope = value as GmailGoalReport | null;",
       "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/managed.ts:174:    const report = envelope?.outcome ?? value as GmailGoalReport | null;"
-    ]
+    ],
+    "functionalStructure": "semantic NL coordinator retained"
   },
   {
     "template": "google-workspace",
-    "entry": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.nl",
+    "entry": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.ts",
     "resultType": "HandoffOutcome",
     "decision": "retain requested domain value",
     "fields": {
@@ -141,7 +145,7 @@
       "handoff": "actual retained handoff receipt"
     },
     "evidence": [
-      "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.nl",
+      "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.ts",
       "skills/open-google-handoff-goal/program/types.ts"
     ],
     "consumers": [
@@ -156,6 +160,7 @@
       "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/managed.ts:7:import type { AssetEvidence, AssetIntent, HandoffDecision, HandoffOutcome, HandoffReceipt, MailThread } from \"./program/types.js\";",
       "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/managed.ts:258:    const outcome = value as Partial<HandoffOutcome> | null;",
       "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/program/types.ts:36:export type HandoffOutcome = { decision: HandoffDecision; handoff: HandoffReceipt | null };"
-    ]
+    ],
+    "functionalStructure": "typed composition"
   }
 ]
