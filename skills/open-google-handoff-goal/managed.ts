@@ -124,12 +124,14 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     catch (error) { if (!unavailable(error)) throw error; return null; }
   }
   const observedThreads = () => [...threads.values()].filter((thread): thread is MailThread => thread !== null);
+  const reviewKey = (intent: AssetIntent) => JSON.stringify([intent.messageId, intent.fileId]);
   const observedReviews = () => [...reviews.values()];
+  const reviewsForFile = (id: string) => observedReviews().filter(({ asset }) => asset.id === id);
   const completeMail = () => listing?.complete === true && listing.ids.every((id) => threads.get(id));
   const supportedFacts = (decision: HandoffDecision | undefined) =>
     decision?.facts === undefined || (Array.isArray(decision.facts) && decision.facts.every((fact) =>
       typeof fact?.quote === "string" && fact.quote.trim().length > 0 && fact.quote.length <= 160 &&
-      decision.assetIds.includes(fact.fileId) && reviews.get(fact.fileId)?.asset.content?.text.includes(fact.quote)));
+      decision.assetIds.includes(fact.fileId) && reviewsForFile(fact.fileId).some(({ asset }) => asset.content?.text.includes(fact.quote))));
   const meetsExpectedDecision = (decision: HandoffDecision | undefined, expected: HandoffDecision) =>
     sameDecision(decision, expected, (excerpt, anchor) =>
       excerpt?.fileId === anchor.fileId && typeof excerpt.quote === "string" && excerpt.quote.includes(anchor.quote)) &&
@@ -196,8 +198,8 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     },
     googleHandoffDrive: {
       inspect: (intent: AssetIntent) => runInOrder(async () => {
-        const cached = reviews.get(intent.fileId);
-        if (cached && isDeepStrictEqual(cached.intent, intent)) return structuredClone(cached.asset);
+        const cached = reviews.get(reviewKey(intent));
+        if (cached && cached.asset.status !== "unavailable" && !cached.asset.missingChecks.length && isDeepStrictEqual(cached.intent, intent)) return structuredClone(cached.asset);
         const message = observedThreads().flatMap(({ messages }) => messages).find(({ id }) => id === intent.messageId);
         if (!completeMail() || !message?.fileIds.includes(intent.fileId) || artifact ||
             !["metadata", "content", "audience", "content-and-audience"].includes(intent.mode))
@@ -205,7 +207,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
         const asset = await readAsset(intent);
         const joined = joinAssetEvidence(cached, { intent: structuredClone(intent), asset });
         if (!isDeepStrictEqual(cached, joined)) verified = null;
-        reviews.set(asset.id, joined);
+        reviews.set(reviewKey(intent), joined);
         return structuredClone(asset);
       }),
     },
@@ -214,7 +216,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
         if (verified && sameDecision(decision, verified.decision)) return verified.result;
         const mail = observedThreads().flatMap(({ messages }) => messages);
         if (!completeMail() || artifact || !supportedFacts(decision) || !decision.mailIds.every((id) => mail.some((message) => message.id === id)) ||
-            !decision.assetIds.every((id) => reviews.has(id)) || (decision.status !== "ready" && decision.status !== "held"))
+            !decision.assetIds.every((id) => reviewsForFile(id).length > 0) || (decision.status !== "ready" && decision.status !== "held"))
           throw new Error("Verify an observed completed handoff decision");
         const current = await listMail();
         let result: Freshness = !current.complete ? "unavailable" : sameIds(current.ids, listing!.ids) ? "current" : "changed";
@@ -240,7 +242,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
         const permitted = world.canStage === "decision" || (world.canStage === "ready" && decision.status === "ready");
         if (!permitted || artifact || verified?.result !== "current" || !sameDecision(decision, verified.decision) || !supportedFacts(decision) ||
             !decision.mailIds.length || (decision.status === "ready" && (!decision.assetIds.length ||
-              decision.assetIds.some((id) => reviews.get(id)?.asset.status !== "current" || reviews.get(id)?.asset.missingChecks.length))))
+              decision.assetIds.some((id) => reviewsForFile(id).some(({ asset }) => asset.status !== "current" || asset.missingChecks.length)))))
           throw new Error("Save an authorized, current decision supported by observed provider evidence");
         const path = (await fs.mkdtemp("google-workspace-handoff")) + "/handoff.json";
         const bytes = handoffBytes(decision, observedThreads(), observedReviews());
@@ -264,7 +266,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     const checks = {
       reconciledGoogleHandoffDecision: meetsExpectedDecision(outcome?.decision, world.expected.decision),
       boundGoogleHandoffAssets: expectedReviews.every(({ intent }) => {
-        const actual = reviews.get(intent.fileId);
+        const actual = reviews.get(reviewKey(intent));
         const source = world.provider.files.find(file => file.id === intent.fileId)!;
         return Boolean(actual && (!modeHasContent(intent.mode) || modeHasContent(actual.intent.mode)) &&
           (!modeHasAudience(intent.mode) || modeHasAudience(actual.intent.mode)) &&
