@@ -1,5 +1,6 @@
+import {assessObservedApplicationOutcome} from "@workspace-skills/system-testing/observed-application-outcome";
 import type {InvocationObservations} from "@workspace-skills/system-testing/observed-invocation";
-import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
+import type {SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
 import { joinAssetEvidence } from "./issued-asset-evidence.js";
 import { isDeepStrictEqual } from "node:util";
 import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
@@ -287,10 +288,12 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
         reviews.size ? ["handoff-mail-fixture", "handoff-drive-fixture"] : ["handoff-mail-fixture"]),
     };
     const contract:SemanticOutcomeContract={effects:{checks:["boundGoogleHandoffAssets", "verifiedGoogleHandoffFreshness", "verifiedGoogleHandoffArtifact", "preservedGoogleHandoffAuthority"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["reconciledGoogleHandoffDecision"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:["returnedGoogleHandoff"],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
-    const incorrectReturnValues=contract.incidentalValues!.checks.some(name=>!(checks as Record<string,boolean>)[name])&&invocation ? (await invocation.returns(call=>call.parentCallId===null)).filter(row=>isDeepStrictEqual(row.value,value)).map(({definition,value})=>({definition,value,required:contract.returnedValue.required&&contract.returnedValue.checks.some(name=>!(checks as Record<string,boolean>)[name])})) : [];
-    return assessSemanticOutcome({incorrectReturnValues, passed: Object.values(checks).every(Boolean), contextId: input.contextId, caseId: input.caseId,
+
+    const assessed=await assessObservedApplicationOutcome({ passed: Object.values(checks).every(Boolean), contextId: input.contextId, caseId: input.caseId,
       goal: world.goal, checks, threads: observedThreads(),
-      reviews: observedReviews(), providerRequests: trace.requests, freshness: witness, handoff: artifact, handoffText },contract);
+      reviews: observedReviews(), providerRequests: trace.requests, freshness: witness, handoff: artifact, handoffText },contract,value,invocation,[{checks:["returnedGoogleHandoff","reconciledGoogleHandoffDecision"],rootPath:["handoff"],producerSourceSuffix:"reconcileGoogleHandoff/finishHandoff.nl",producerPath:["handoff"]}]);
+    const {observedChecks,...dimensions}=assessed;
+    return {...dimensions,checks:observedChecks};
   }
   async function qualify() {
     const found = await services.googleHandoffMail.discover();

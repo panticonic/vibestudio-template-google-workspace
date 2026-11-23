@@ -1,5 +1,6 @@
+import {assessObservedApplicationOutcome} from "@workspace-skills/system-testing/observed-application-outcome";
 import type {InvocationObservations} from "@workspace-skills/system-testing/observed-invocation";
-import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
+import type {SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { buildPanelLink, type PanelHandle } from "@workspace/runtime";
 import { gmailChatStateArgs } from "@workspace/gmail/chat-state";
@@ -350,8 +351,8 @@ export async function prepareOpenGoogleSetup(
         : !handoff,
     };
     const contract:SemanticOutcomeContract={effects:{checks:["boundOwnedSetupView", "resolvedReversibleView", "verifiedStagedSetupHandoff", "nativeOwnedSetupHistory"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["matchedSetupRoute", "preservedOwnedSetupHistory"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:["returnedSetupHandoff"],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
-    const incorrectReturnValues=contract.incidentalValues!.checks.some(name=>!(checks as Record<string,boolean>)[name])&&invocation ? (await invocation.returns(call=>call.parentCallId===null)).filter(row=>isDeepStrictEqual(row.value,wrapper)).map(({definition,value})=>({definition,value,required:contract.returnedValue.required&&contract.returnedValue.checks.some(name=>!(checks as Record<string,boolean>)[name])})) : [];
-    return assessSemanticOutcome({incorrectReturnValues,
+
+    const assessed=await assessObservedApplicationOutcome({
       caseId: world.id,
       goal: world.goal,
       contextId,
@@ -363,7 +364,9 @@ export async function prepareOpenGoogleSetup(
       profile: final,
       handoff: handoff ?? null,
       passed: Object.values(checks).every(Boolean),
-    },contract);
+    },contract,wrapper,invocation,[]);
+    const {observedChecks,...dimensions}=assessed;
+    return {...dimensions,checks:observedChecks};
   }
 
   async function qualify() {
@@ -405,8 +408,9 @@ export async function prepareOpenGoogleSetup(
             route: route === "gmail-ready" ? "account-owner" : "gmail-ready",
           },
         })
-    ).passed;
+    ).outcomeDimensions.returnedValue.passed;
     return {
+      outcomeContract:{...result.outcomeContract,effects:{...result.outcomeContract.effects,checks:[...result.outcomeContract.effects.checks,"rejectsRevision","rejectsAlias","rejectsRoute"]}},
       ...result,
       checks: { ...result.checks, rejectsRevision, rejectsAlias, rejectsRoute },
       passed: result.passed && rejectsRevision && rejectsAlias && rejectsRoute,
