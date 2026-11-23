@@ -60,8 +60,6 @@ export type SetupHandoff = {
   observation: string;
 };
 export type OpenGoogleSetupReport = {
-  initial: SetupObservation;
-  latest: SetupObservation;
   decision: SetupDecision;
   handoff: SetupHandoff | null;
 };

@@ -61,8 +61,6 @@ type SetupHandoff = {
   observation: string;
 };
 type OpenGoogleSetupReport = {
-  initial: SetupObservation;
-  latest: SetupObservation;
   decision: SetupDecision;
   handoff: SetupHandoff | null;
 };

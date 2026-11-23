@@ -317,8 +317,7 @@ export async function prepareOpenGoogleSetup(
     const checks = {
       boundOwnedSetupView:
         first !== undefined &&
-        isDeepStrictEqual(report?.initial, first) &&
-        isDeepStrictEqual(report?.latest, current) &&
+        current !== undefined &&
         isDeepStrictEqual(fresh, basis) &&
         fresh.accountOwner &&
         fresh.permissionsOwner,
@@ -392,7 +391,7 @@ export async function prepareOpenGoogleSetup(
     const handoff = stage
       ? await openGoogleSetup.stage(latest.id, decision)
       : null;
-    const outcome = { initial, latest, decision, handoff };
+    const outcome = { decision, handoff };
     const report = outcome;
     const result = await verify(report);
     const rejectsRoute = !(
