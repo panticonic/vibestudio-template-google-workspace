@@ -35,7 +35,7 @@ import {
 } from "@vibestudio/service-schemas/mainRpc";
 import type { JsonValue, Context } from "@panticonic/pi-chord";
 import type { ToolExecutionApi } from "@panticonic/pi-durable";
-import type { NativeInvocationExecution } from "../../packages/agentic-do/src/native-invocation-boundary.js";
+import type { NativeInvocationExecution } from "@workspace/agentic-do/native-invocation-boundary";
 import type {
   LifecyclePrepareInput,
   LifecyclePrepareResult,
