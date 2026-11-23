@@ -130,11 +130,7 @@ export async function prepareOpenGoogleSetup(
     } satisfies Omit<SetupObservation, "id">;
   }
 
-  type Wrapper = {
-    status: string;
-    skill: string;
-    outcome?: OpenGoogleSetupReport;
-  };
+  type Wrapper = OpenGoogleSetupReport;
   const journal: Journal[] = [];
   const record = <T>(method: Journal["method"], args: unknown[], result: T) => {
     journal.push(structuredClone({ method, args, result }));
@@ -289,10 +285,7 @@ export async function prepareOpenGoogleSetup(
 
   async function verify(wrapper: Wrapper | null) {
     const report =
-      wrapper?.status === "workspace-skill-reviewed" &&
-      wrapper.skill === world.kind
-        ? wrapper.outcome
-        : null;
+      wrapper;
     const expected = world.expected;
     const fresh = await frame();
     const owned = await ownedProfile();
@@ -400,23 +393,16 @@ export async function prepareOpenGoogleSetup(
       ? await openGoogleSetup.stage(latest.id, decision)
       : null;
     const outcome = { initial, latest, decision, handoff };
-    const report = {
-      status: "workspace-skill-reviewed",
-      skill: world.kind,
-      outcome,
-    };
+    const report = outcome;
     const result = await verify(report);
     const rejectsRoute = !(
       await verify({
-        ...report,
-        outcome: {
           ...outcome,
           decision: {
             ...decision,
             route: route === "gmail-ready" ? "account-owner" : "gmail-ready",
           },
-        },
-      })
+        })
     ).passed;
     return {
       ...result,

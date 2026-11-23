@@ -56,11 +56,8 @@ it("keeps permission reads closed after a partial folder and rejects a claimed c
   expect(proof.requests.at(-1)).toMatchObject({ cursor: "tail", status: 503 });
   await expect(prepared.services.googleWorkspaceRead.readPermissions("target", null))
     .rejects.toThrow("complete Drive listing");
-  const claimed = prepared.verify({
-    status: "workspace-skill-reviewed", skill: "google",
-    outcome: { status: "complete", action: "none", ids: ["public_link"], checkpoint: null,
-      findings: ["anyone link"], inventoryAudit: { gate: "audited", inventoryIds: ["target"] } },
-  });
+  const claimed = prepared.verify({ status: "complete", action: "none", ids: ["public_link"], checkpoint: null,
+      findings: ["anyone link"], inventoryAudit: { gate: "audited", inventoryIds: ["target"] } });
   expect(claimed.checks.boundDriveOutcome).toBe(false);
   expect(claimed.passed).toBe(false);
 });
@@ -83,11 +80,8 @@ it("uses independent folder cursors and accepts harmless exploration of another 
   ]);
   await googleWorkspaceRead.listFolder("main_folder", null);
   await googleWorkspaceRead.readPermissions("target", null);
-  const wrong = prepared.verify({
-    status: "workspace-skill-reviewed", skill: "google",
-    outcome: { status: "complete", action: "none", ids: ["public_link"], checkpoint: null,
-      findings: ["anyone link"], inventoryAudit: { gate: "audited", inventoryIds: ["target"] } },
-  });
+  const wrong = prepared.verify({ status: "complete", action: "none", ids: ["public_link"], checkpoint: null,
+      findings: ["anyone link"], inventoryAudit: { gate: "audited", inventoryIds: ["target"] } });
   expect(wrong.checks.boundDriveOutcome).toBe(true);
   expect(wrong.checks.boundDriveObservations).toBe(true);
   expect(wrong.passed).toBe(true);
@@ -107,14 +101,11 @@ it("binds each reported change to its latest provider disposition", async () => 
       checkpoint: "verified", requiredTerms: ["remov", "updat"] },
   });
   expect((await prepared.qualify()).passed).toBe(true);
-  const swapped = prepared.verify({
-    status: "workspace-skill-reviewed", skill: "google",
-    outcome: { status: "complete", action: "none", ids: ["draft", "map"], checkpoint: "verified",
+  const swapped = prepared.verify({ status: "complete", action: "none", ids: ["draft", "map"], checkpoint: "verified",
       findings: ["Draft updated", "Map removed"], driveDelta: [
         { fileId: "draft", name: null, time: null, removed: false },
         { fileId: "map", name: "Map", time: null, removed: true },
-      ] },
-  });
+      ] });
   expect(swapped.checks.groundedDriveFindings).toBe(true);
   expect(swapped.checks.boundDriveOutcome).toBe(false);
   expect(swapped.passed).toBe(false);

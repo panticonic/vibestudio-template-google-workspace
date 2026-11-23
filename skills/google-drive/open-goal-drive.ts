@@ -145,7 +145,7 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
   };
 
   function verify(value: unknown) {
-    const envelope = value as { status?: string; skill?: string; outcome?: GoogleWorkflowReport } | null;
+    const envelope = value as GoogleWorkflowReport | null;
     const report = envelope?.outcome ?? value as GoogleWorkflowReport | null;
     const hasAudit = expected.mode === "audit";
     const observedDelta = expected.mode === "changes"
@@ -237,7 +237,7 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
         }
       }
     }
-    return verify({ status: "workspace-skill-reviewed", skill: "google", outcome: report });
+    return verify(report);
   }
 
   return { goal, services, verify, qualify };

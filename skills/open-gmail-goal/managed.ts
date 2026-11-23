@@ -170,7 +170,7 @@ export async function prepareOpenGmailGoal(
   };
 
   async function verify(value: unknown) {
-    const envelope = value as { status?: string; skill?: string; outcome?: GmailGoalReport } | null;
+    const envelope = value as GmailGoalReport | null;
     const report = envelope?.outcome ?? value as GmailGoalReport | null;
     const expectedSource = seed.sources.find(({ key }) => key === world.expected.compose);
     const native = expectedSource ? await readRetained(expectedSource) : null;
@@ -222,7 +222,7 @@ export async function prepareOpenGmailGoal(
     }
     const report = { status: world.expected.status, composeId: compose?.id ?? null,
       retainedEvents: compose?.evidence ?? [], provider: last?.status === "found" ? last.record : null };
-    return verify({ status: "workspace-skill-reviewed", skill: "gmail", outcome: report });
+    return verify(report);
   }
 
   return { goal: world.goal, services, verify, qualify };
