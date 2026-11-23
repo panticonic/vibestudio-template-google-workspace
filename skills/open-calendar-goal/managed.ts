@@ -4,6 +4,9 @@ import { sha256HexSyncText, sortForCanonicalJson } from "@vibestudio/content-add
 import { contextId as actualContextId, fs } from "@workspace/runtime";
 import type { CalendarDecision, CalendarHandoff, CalendarReadback, CalendarRecord, CalendarReport, CalendarSource, CalendarWindow } from "./program/types.js";
 import { ownedCalendarProvider, projectCalendarRecord, type Timeline } from "./provider.js";
+import { assessSemanticOutcome } from "@workspace-skills/system-testing/semantic-outcome-contract";
+import { assessObservedApplicationOutcome } from "@workspace-skills/system-testing/observed-application-outcome";
+import type { InvocationObservations } from "@workspace-skills/system-testing/observed-invocation";
 
 type EventRef = { calendarId: string; eventId: string; updated?: string; source?: "readback" };
 export type OpenCalendarWorld = {
@@ -210,18 +213,26 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
           artifact.sha256 === sha256HexSyncText(handoffText)) : artifact === null,
       preservedCalendarAuthority: trace.denied === 0 && trace.credentialReads === 1,
     };
-    return { passed: Object.values(checks).every(Boolean), caseId, contextId, goal: world.goal, checks, catalog, attempts, providerRequests: trace.requests,
-      windows: [...windows.values()].map(({ current }) => current), readback: observed, handoff: artifact, handoffText };
+    return assessSemanticOutcome({ passed: Object.values(checks).every(Boolean), caseId, contextId, goal: world.goal, checks, catalog, attempts, providerRequests: trace.requests,
+      windows: [...windows.values()].map(({ current }) => current), readback: observed, handoff: artifact, handoffText }, {
+        effects: { checks: Object.keys(checks), rationale: "Actual authorized Calendar reads, current readback and retained private artifact bytes." },
+        returnedValue: { checks: [], required: false, rationale: "This native evidence query makes no assertion about a model's returned decision." },
+      });
   }
 
-  async function verify(value: unknown) {
+  async function verify(value: unknown, invocation?: InvocationObservations) {
     const report = value as Partial<CalendarReport> | null;
     const observed = await verifyObserved();
     const checks = { ...observed.checks,
       reconciledCalendarDecision: matchesDecision(report?.decision),
       returnedCalendarHandoff: isDeepStrictEqual(report?.handoff, observed.handoff),
     };
-    return { ...observed, checks, passed: Object.values(checks).every(Boolean) };
+    return assessObservedApplicationOutcome({ ...observed, checks, observedChecks: checks, passed: Object.values(checks).every(Boolean) }, {
+      effects: { checks: Object.keys(observed.checks), rationale: "The observed provider records, authority and actual handoff bytes establish native effects independently." },
+      returnedValue: { checks: ["reconciledCalendarDecision", ...(world.expected.stage ? ["returnedCalendarHandoff"] : [])], required: true,
+        rationale: "The requested scheduling answer must identify the correct current decision, and a requested staged artifact must be locatable." },
+      ...(!world.expected.stage ? { incidentalValues: { checks: ["returnedCalendarHandoff"], rationale: "A receipt echo is not requested for a read-only Calendar decision." } } : {}),
+    }, value, invocation);
   }
 
   async function qualify() {
