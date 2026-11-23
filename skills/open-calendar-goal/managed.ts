@@ -188,6 +188,11 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
   async function verifyObserved() {
     const decision = expectedDecision();
     const handoffText = artifact ? await fs.readFile(artifact.path, "utf8") : null;
+    let handoffDecision: unknown = null;
+    if (handoffText) {
+      try { handoffDecision = JSON.parse(handoffText); }
+      catch { /* Corrupt application content fails the native artifact check below. */ }
+    }
     const trace = provider.trace();
     const visibleCatalog = world.timelines.map(({ id, name, description, timeZone }) => ({ id, name, description, timeZone }));
     const ask = world.expected.verify ? resolveExpected(world, world.expected.verify) : null;
@@ -201,7 +206,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
       boundCalendarReadback: isDeepStrictEqual(observed?.requested ?? null, ask) &&
         isDeepStrictEqual(observed?.observed ?? null, expectedReadback),
       verifiedCalendarHandoff: world.expected.stage ?
-        Boolean(artifact && handoffText && matchesDecision(JSON.parse(handoffText)) &&
+        Boolean(artifact && handoffText && matchesDecision(handoffDecision) &&
           artifact.sha256 === sha256HexSyncText(handoffText)) : artifact === null,
       preservedCalendarAuthority: trace.denied === 0 && trace.credentialReads === 1,
     };
