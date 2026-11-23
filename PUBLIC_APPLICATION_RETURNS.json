@@ -1,0 +1,161 @@
+[
+  {
+    "template": "google-workspace",
+    "entry": "skills/google-drive/driveWorkflow/workOnDriveGoal.nl",
+    "resultType": "GoogleWorkflowReport",
+    "decision": "retain requested domain value",
+    "fields": {
+      "status": "requested application value",
+      "action": "requested application value",
+      "ids": "requested application value",
+      "findings": "requested application value",
+      "checkpoint": "actual retained checkpoint handle",
+      "driveDelta": "actual requested Drive change data",
+      "panelFindings": "actual setup findings",
+      "checkpointWrite": "actual native checkpoint receipt",
+      "inventoryAudit": "requested sharing decision and inventoried resource IDs; no repeated native inventory"
+    },
+    "evidence": [
+      "skills/google-drive/driveWorkflow/workOnDriveGoal.nl",
+      "skills/google-drive/driveWorkflow/types.ts"
+    ],
+    "consumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-goal-drive.ts:4:import type { DriveGoalScope } from \"./driveWorkflow/workOnDriveGoal/types.js\";",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/driveWorkflow/services.d.ts:3:    discover(): Promise<import(\"./workOnDriveGoal/types.js\").DriveGoalScope>;",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/driveWorkflow/DECOMPOSITION.md:54:For an open goal, `workOnDriveGoal` receives only the user's words. It discovers",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/driveWorkflow/natlang.json:21:      \"workOnDriveGoal.nl\"",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/SKILL.md:100:For an open goal, the installed Drive program exposes `workOnDriveGoal(goal)`."
+    ],
+    "nativeConsumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-goal-drive.ts:12:  GoogleWorkflowReport,",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-goal-drive.ts:148:    const envelope = value as GoogleWorkflowReport | null;",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-goal-drive.ts:149:    const report = envelope?.outcome ?? value as GoogleWorkflowReport | null;",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-goal-drive.ts:185:    const report: GoogleWorkflowReport = { action: \"none\", status: \"partial\", ids: [], findings: [], checkpoint: null };",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-setup-journey.ts:12:  GoogleWorkflowReport,",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-setup-journey.ts:232:  function reference(): GoogleWorkflowReport {",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-setup-journey.ts:247:  function verify(report: GoogleWorkflowReport | null) {",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-drive-sharing.ts:14:  GoogleWorkflowReport,",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-drive-sharing.ts:126:  function verify(report: GoogleWorkflowReport | null) {",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/driveWorkflow/types.ts:136:export type GoogleWorkflowReport = {",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-drive-checkpoint.ts:8:  GoogleWorkflowReport,",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-drive-checkpoint.ts:114:  async function verify(report: GoogleWorkflowReport | null) {",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/live-drive-checkpoint.ts:188:      const report: GoogleWorkflowReport = {",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/drive-workflow-worlds.ts:9:  GoogleWorkflowReport,",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/drive-workflow-worlds.ts:13:type Expectation = Omit<GoogleWorkflowReport, \"findings\">;",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/drive-workflow-worlds.ts:393:  observed: GoogleWorkflowReport,"
+    ]
+  },
+  {
+    "template": "google-workspace",
+    "entry": "skills/google-drive/setupGoal/workOnGoogleSetupGoal.nl",
+    "resultType": "OpenGoogleSetupReport",
+    "decision": "compact audit-only fields",
+    "fields": {
+      "initial": "internal input/observation; removed from public return",
+      "latest": "internal input/observation; removed from public return",
+      "decision": "requested route finding with exact current confirmation identities",
+      "handoff": "actual native handoff"
+    },
+    "evidence": [
+      "skills/google-drive/setupGoal/workOnGoogleSetupGoal.nl",
+      "skills/google-drive/setupGoal/types.ts"
+    ],
+    "consumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/setupGoal/natlang.json:7:      \"entry\": \"workOnGoogleSetupGoal.nl\"",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/setupGoal/natlang.json:13:      \"workOnGoogleSetupGoal.nl\",",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/setupGoal/natlang.json:14:      \"workOnGoogleSetupGoal/workThroughSetupView.nl\""
+    ],
+    "nativeConsumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/setupGoal/types.ts:62:export type OpenGoogleSetupReport = {",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-google-setup-managed.ts:11:  OpenGoogleSetupReport,",
+      "/home/werg/vibe-app-values-google-workspace/skills/google-drive/open-google-setup-managed.ts:133:  type Wrapper = OpenGoogleSetupReport;"
+    ]
+  },
+  {
+    "template": "google-workspace",
+    "entry": "skills/open-calendar-goal/program/workOnCalendarGoal.nl",
+    "resultType": "CalendarReport",
+    "decision": "retain requested domain value",
+    "fields": {
+      "decision": "requested event selection, schedule findings and event evidence query data",
+      "handoff": "actual retained handoff"
+    },
+    "evidence": [
+      "skills/open-calendar-goal/program/workOnCalendarGoal.nl",
+      "skills/open-calendar-goal/program/types.ts"
+    ],
+    "consumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/SKILL.md:6:Use `workOnCalendarGoal(goal)` when a user needs a scheduling decision from",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/DECOMPOSITION.md:31:`workOnCalendarGoal(goal)`. The original goal is the only program argument.",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/natlang.json:5:  \"targets\": { \"main\": { \"entry\": \"workOnCalendarGoal.nl\" } },",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/natlang.json:8:    \"calendarGoalCatalog\": [\"workOnCalendarGoal.nl\"],",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/natlang.json:9:    \"calendarGoalWindows\": [\"workOnCalendarGoal/readCalendarWindows.nl\"],",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/natlang.json:10:    \"calendarGoalReadback\": [\"workOnCalendarGoal/reconcileCalendarPlan.nl\"],",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/natlang.json:11:    \"calendarGoalHandoff\": [\"workOnCalendarGoal/stageCalendarHandoff.nl\"]",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/workOnCalendarGoal/reconcileCalendarPlan.nl:4:uses: [workOnCalendarGoal/readCalendarWindows]"
+    ],
+    "nativeConsumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/program/types.ts:39:export type CalendarReport = { decision: CalendarDecision; handoff: CalendarHandoff | null };",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/managed.ts:5:import type { CalendarDecision, CalendarHandoff, CalendarReadback, CalendarRecord, CalendarReport, CalendarSource, CalendarWindow } from \"./program/types.js\";",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-calendar-goal/managed.ts:213:    const report = value as Partial<CalendarReport> | null;"
+    ]
+  },
+  {
+    "template": "google-workspace",
+    "entry": "skills/open-gmail-goal/program/recoverGmailGoal.nl",
+    "resultType": "GmailGoalReport",
+    "decision": "retain requested domain value",
+    "fields": {
+      "status": "requested application value",
+      "composeId": "actual compose handle",
+      "retainedEvents": "retained delivery/continuity citation handles requested by recovery",
+      "provider": "actual provider message receipt/query data"
+    },
+    "evidence": [
+      "skills/open-gmail-goal/program/recoverGmailGoal.nl",
+      "skills/open-gmail-goal/program/types.ts"
+    ],
+    "consumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/SKILL.md:6:Use `recoverGmailGoal(goal)` for a user's request to recover an interrupted",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/managed.test.ts:3:import { matchesComposeIdentity } from \"./program/recoverGmailGoal/inspectDraftContinuity/draftIdentity.js\";",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/program/natlang.json:7:      \"entry\": \"recoverGmailGoal.nl\"",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/program/natlang.json:13:      \"recoverGmailGoal.nl\"",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/program/natlang.json:17:      \"recoverGmailGoal/inspectDraftContinuity.nl\",",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/program/natlang.json:18:      \"recoverGmailGoal/inspectDraftContinuity/findOwnedDraft.nl\",",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/program/natlang.json:19:      \"recoverGmailGoal/verifyRetainedDelivery.nl\""
+    ],
+    "nativeConsumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/program/types.ts:36:export type GmailGoalReport = {",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/managed.ts:7:import type { ComposeSelection, GmailContinuity, GmailGoalReport, ReadResult, RetainedCompose, SearchResult } from \"./program/types.js\";",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/managed.ts:173:    const envelope = value as GmailGoalReport | null;",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-gmail-goal/managed.ts:174:    const report = envelope?.outcome ?? value as GmailGoalReport | null;"
+    ]
+  },
+  {
+    "template": "google-workspace",
+    "entry": "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.nl",
+    "resultType": "HandoffOutcome",
+    "decision": "retain requested domain value",
+    "fields": {
+      "decision": "requested current mail/asset disposition, facts and IDs",
+      "handoff": "actual retained handoff receipt"
+    },
+    "evidence": [
+      "skills/open-google-handoff-goal/program/reconcileGoogleHandoff.nl",
+      "skills/open-google-handoff-goal/program/types.ts"
+    ],
+    "consumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/SKILL.md:6:Use `reconcileGoogleHandoff(goal)` when the user needs to act on assets linked",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/DECOMPOSITION.md:23:Mount `program` as `googleHandoff` and call `reconcileGoogleHandoff(goal)` with",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/program/natlang.json:7:      \"entry\": \"reconcileGoogleHandoff.nl\"",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/program/natlang.json:13:      \"reconcileGoogleHandoff/resolveMailDecision/readMailThreads.nl\"",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/program/natlang.json:17:      \"reconcileGoogleHandoff/finishHandoff.nl\"",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/program/natlang.json:20:      \"reconcileGoogleHandoff/finishHandoff.nl\""
+    ],
+    "nativeConsumers": [
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/managed.ts:7:import type { AssetEvidence, AssetIntent, HandoffDecision, HandoffOutcome, HandoffReceipt, MailThread } from \"./program/types.js\";",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/managed.ts:258:    const outcome = value as Partial<HandoffOutcome> | null;",
+      "/home/werg/vibe-app-values-google-workspace/skills/open-google-handoff-goal/program/types.ts:36:export type HandoffOutcome = { decision: HandoffDecision; handoff: HandoffReceipt | null };"
+    ]
+  }
+]
