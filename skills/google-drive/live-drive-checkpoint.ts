@@ -1,3 +1,4 @@
+import { issuedObservation } from "./issued-observation.js";
 import { isDeepStrictEqual } from "node:util";
 import { fs } from "@workspace/runtime";
 import { bindTestDriveTransport } from "./test-drive-transport.js";
@@ -51,7 +52,7 @@ export async function prepareDriveCheckpoint(world: World) {
       maxPageReads: world.pages.length,
     },
     async (url) => {
-      const coordinate = world.pages[requests.length];
+      const coordinate = world.pages.find(row => row.cursor === url.searchParams.get("pageToken"));
       if (
         !coordinate ||
         url.pathname !== "/drive/v3/changes" ||
@@ -76,7 +77,7 @@ export async function prepareDriveCheckpoint(world: World) {
           { status: 503 },
         );
       if (!response.nextPageToken && response.newStartPageToken) {
-        if (world.competitor) {
+        if (world.competitor && !competitorApplied) {
           await persist(world.competitor);
           competitorApplied = true;
         }
@@ -86,11 +87,7 @@ export async function prepareDriveCheckpoint(world: World) {
     },
   );
   const driveCheckpoint = {
-    async read() {
-      if (observed !== undefined)
-        throw new Error("Read the assigned checkpoint once");
-      return (observed = await readFile());
-    },
+    read: issuedObservation(async () => (observed = await readFile())),
     async commit(
       expected: string,
       next: string,
@@ -117,14 +114,9 @@ export async function prepareDriveCheckpoint(world: World) {
   async function verify(report: GoogleWorkflowReport | null) {
     const persisted = await readFile();
     const checks = {
-      exactTransport: isDeepStrictEqual(
-        requests,
-        world.pages.map(({ cursor, response }) => ({
-          cursor,
-          driveId: world.driveId,
-          status: response ? 200 : 503,
-        })),
-      ),
+      exactTransport: world.pages.every(({ cursor, response }) => requests.some(row => row.cursor === cursor &&
+        row.driveId === world.driveId && row.status === (response ? 200 : 503))) && requests.every(row =>
+          world.pages.some(({ cursor, response }) => row.cursor === cursor && row.driveId === world.driveId && row.status === (response ? 200 : 503))),
       exactRead: observed === world.initial,
       exactWrite:
         Number(commitStarted) === world.expected.attempts &&

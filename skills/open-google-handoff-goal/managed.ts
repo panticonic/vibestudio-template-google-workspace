@@ -1,3 +1,4 @@
+import { joinAssetEvidence } from "./issued-asset-evidence.js";
 import { isDeepStrictEqual } from "node:util";
 import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
 import { canonicalJson, sha256HexSyncText } from "@vibestudio/content-addressing";
@@ -202,8 +203,9 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
             !["metadata", "content", "audience", "content-and-audience"].includes(intent.mode))
           throw new Error("Review an observed message link with the required Drive evidence");
         const asset = await readAsset(intent);
-        verified = null;
-        reviews.set(asset.id, { intent: structuredClone(intent), asset });
+        const joined = joinAssetEvidence(cached, { intent: structuredClone(intent), asset });
+        if (!isDeepStrictEqual(cached, joined)) verified = null;
+        reviews.set(asset.id, joined);
         return structuredClone(asset);
       }),
     },

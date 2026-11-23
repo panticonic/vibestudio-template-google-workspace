@@ -33,6 +33,7 @@ export type GoogleWorkspaceAssignment = {
   sharingFileId?: string;
   sharingFileIds?: readonly string[];
   changes?: { initialCursor: string; driveId?: string };
+  /** Optional owner limit on distinct successful scoped pages, never on call/retry count. */
   maxPageReads?: number;
 };
 
@@ -52,9 +53,9 @@ export function bindGoogleWorkspaceRead(
     sharingFileId,
     sharingFileIds = [],
     changes,
-    maxPageReads = 24,
+    maxPageReads,
   } = structuredClone(assignment);
-  if (!Number.isSafeInteger(maxPageReads) || maxPageReads < 1)
+  if (maxPageReads !== undefined && (!Number.isSafeInteger(maxPageReads) || maxPageReads < 1))
     throw new Error("Invalid Drive page-read limit");
   const declaredFolders = [
     ...(folder ? [folder] : []),
@@ -75,9 +76,11 @@ export function bindGoogleWorkspaceRead(
     if (id !== undefined) requireId(id);
   }
   let client: ReturnType<GoogleWorkspaceSource["drive"]> | undefined;
-  let remaining = maxPageReads;
+  let remaining = maxPageReads ?? Infinity;
+  const observedPages = new Set<string>();
 
-  function pageRead<T>(
+  async function pageRead<T>(
+    key: string,
     begin: () => void,
     operation: (
       drive: ReturnType<GoogleWorkspaceSource["drive"]>,
@@ -85,11 +88,18 @@ export function bindGoogleWorkspaceRead(
   ) {
     if (!client)
       throw new Error("Verify the assigned Drive access before reading");
-    if (remaining === 0)
-      throw new Error("The assigned Drive page-read limit was reached");
     begin();
-    remaining--;
-    return operation(client);
+    const reserved = !observedPages.has(key);
+    if (reserved && remaining === 0) throw new Error("The assigned Drive distinct-page limit was reached");
+    if (reserved) remaining--;
+    try {
+      const result = await operation(client);
+      observedPages.add(key);
+      return result;
+    } catch (error) {
+      if (reserved) remaining++;
+      throw error;
+    }
   }
 
   function pager<T extends string | null>(initial: readonly T[]) {
@@ -150,6 +160,7 @@ export function bindGoogleWorkspaceRead(
       if (!target || !pages)
         throw new Error("Folder is outside the assigned Drive read");
       const page = await pages.read(pageToken, () => pageRead(
+        JSON.stringify(["folder", folderId, pageToken]),
         () => pages.begin(pageToken),
         (drive) =>
           drive.listFiles({
@@ -185,6 +196,7 @@ export function bindGoogleWorkspaceRead(
       if (!pages)
         throw new Error("File is outside the assigned Drive read");
       const page = await pages.read(pageToken, () => pageRead(
+        JSON.stringify(["permissions", fileId, pageToken]),
         () => pages.begin(pageToken),
         (drive) =>
           drive.listPermissions(fileId, {
@@ -213,6 +225,7 @@ export function bindGoogleWorkspaceRead(
       if (!changes)
         throw new Error("Change feed is outside the assigned Drive read");
       const page = await changePages.read(cursor, () => pageRead(
+        JSON.stringify(["changes", cursor]),
         () => changePages.begin(cursor),
         (drive) =>
           drive.listChanges({

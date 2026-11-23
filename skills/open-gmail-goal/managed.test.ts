@@ -41,8 +41,8 @@ it("verifies the RFC Message-ID separately from Gmail's message identifier", () 
   expect(matchesComposeIdentity(compose, { ...draft, threadId: "thread-foreign" })).toBe(false);
 });
 
-it("replays the same bound read without allowing a different compose", async () => {
-  fetchEnvelope.mockResolvedValue(event);
+it("replays issued reads while allowing exploration of other owned composes", async () => {
+  fetchEnvelope.mockImplementation(async (target: string) => target === "target-b" ? { ...event, payload: { payload: { ...event.payload.payload, messageId: "compose-b" } } } : structuredClone(event));
   const input = { contextId: "owned", caseId: "case-a" };
   const source = {
     key: "a", title: "Pickup", room: "Event logistics", channelId: "owned-a",
@@ -51,11 +51,13 @@ it("replays the same bound read without allowing a different compose", async () 
   const { services } = await prepareOpenGmailGoal(input, {
     id: input.caseId, goal: "Read the saved pickup draft", provider: { drafts: [] },
     expected: { compose: "a", status: "confirmed", requests: [], operations: [], providerId: null },
-  }, { ...input, sources: [source, { ...source, key: "b", messageId: "compose-b" }] });
-  await expect(services.gmailGoalCompose.read(compose.id)).rejects.toThrow("authorized catalog");
+  }, { ...input, sources: [source, { ...source, key: "b", messageId: "compose-b", targetId: "target-b" }] });
+  expect(await services.gmailGoalCompose.read(compose.id)).toEqual(compose);
   await services.gmailGoalCatalog.discover();
   expect(await services.gmailGoalCompose.read(compose.id)).toEqual(compose);
   expect(await services.gmailGoalCompose.read(compose.id)).toEqual(compose);
-  await expect(services.gmailGoalCompose.read("compose-b")).rejects.toThrow("authorized catalog");
-  expect(fetchEnvelope).toHaveBeenCalledTimes(1);
+  expect(await services.gmailGoalCompose.read("compose-b")).toMatchObject({ id: "compose-b" });
+  expect(await services.gmailGoalCompose.read(compose.id)).toEqual(compose);
+  await expect(services.gmailGoalCompose.read("outside")).rejects.toThrow("authorized catalog");
+  expect(fetchEnvelope).toHaveBeenCalledTimes(2);
 });

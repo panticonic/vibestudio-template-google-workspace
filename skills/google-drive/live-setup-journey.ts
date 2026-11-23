@@ -1,3 +1,4 @@
+import { issuedObservation } from "./issued-observation.js";
 import { buildPanelLink, type PanelHandle } from "@workspace/runtime";
 import { audit, evalInPanel, setViewport, waitFor } from "@workspace/testkit";
 import { createGoogleWorkspaceRead } from "./drive-workflow-binding.js";
@@ -104,15 +105,13 @@ export function prepareGoogleSetupJourney(
   const drive = createGoogleWorkspaceRead({});
   const receipts: GoogleSetupReceipt[] = [];
   let readiness: GoogleReadiness | undefined;
-  let opened = false;
 
   const readPanel = () => readGoogleWelcome(panel);
 
-  async function readReadiness() {
-    if (readiness) throw new Error("Read the assigned Google readiness once");
+  const readReadiness = issuedObservation(async () => {
     readiness = await drive.readiness();
     return readiness;
-  }
+  });
 
   async function observeChoice(
     check: Extract<
@@ -190,10 +189,8 @@ export function prepareGoogleSetupJourney(
     }
   }
 
-  async function observe() {
-    if (opened) throw new Error("Read the assigned Google panel once");
-    if (!readiness) throw new Error("Observe Google account readiness first");
-    opened = true;
+  const observe = issuedObservation(async () => {
+    receipts.length = 0;
     const account = buildPanelLink("about/credentials", {
       workspace: { role: "personal" },
     });
@@ -230,7 +227,7 @@ export function prepareGoogleSetupJourney(
       });
     }
     return structuredClone(receipts);
-  }
+  });
 
   function reference(): GoogleWorkflowReport {
     return {

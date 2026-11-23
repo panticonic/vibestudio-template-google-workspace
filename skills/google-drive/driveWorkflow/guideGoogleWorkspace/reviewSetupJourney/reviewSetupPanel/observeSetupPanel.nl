@@ -3,4 +3,4 @@ description: Observe the assigned Google Workspace setup panel and return its re
 args: {}
 returns: GoogleSetupReceipt[]
 ---
-Call googleSetupPanel.observe once and return the exact receipts without changing them.
+Call googleSetupPanel.observe and return the exact receipts without changing them.

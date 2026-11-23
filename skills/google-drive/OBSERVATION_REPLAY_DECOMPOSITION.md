@@ -1,0 +1,18 @@
+# Issued observations and readonly replay
+
+Inventory before edits: selected rows from the shared426-candidate source scan are recorded in observation-candidates.json. Candidate expressions are not automatically defects: domain result/effect cardinalities, API request payload limits, pre-teacher seed bounds, current revisions, protected source state and explicitly ordered user actions remain requirements. Read-only invocation multiplicity and incidental discovery/verification ordering are not domain outcomes.
+
+Confirmed mechanisms: System client admission requires exactly one appended observation despite returning fresh native readbacks. Examples four assigned snapshot services reject repeat calls. Google readiness/panel/checkpoint snapshot services do likewise (panel and backend readiness observations are independent and may be acquired in either order); Calendar remembers only the last event readback and prohibits later source-window observation; Gmail seals the first owned compose and shares all provider evidence state across its selection. These restrictions are replaced with issued snapshot replay or identity-keyed native evidence. Safe retries join in-flight snapshot acquisition and reset only a failed acquisition, never repeat an authorized mutation.
+
+Source/current-state checks and foreign/stale authority negatives remain. Finite internal UI action scripts and successful native mutation counts are not counted as teacher readonly calls. Frozen production v8 roots and original captured data stay unchanged.
+
+Concrete user goals distinguish required domain behavior from observations: 
+- open-goal-google-handoff-lighting-packet: Get the lighting crew the packet Rowan personally cleared for the dress rehearsal. The discussion had a suggested file before the decision. Confirm Rowan’s actual packet still exists and save a workspace handoff for the crew.
+- open-goal-google-handoff-color-replacement: The print crew needs Dana’s current color card for the field guide. A first approval and a replacement went out separately. Confirm that the current Google Doc specifies warm gray paper, then save the decision for production.
+- open-goal-google-handoff-cabinet-check: What lock code label did Casey clear for the exhibit cabinet? I need to know whether the approved text still says RED TAG, and only need an answer here.
+
+Additional shared mechanism found by inspecting the consumers: Drive page limits previously charged every replay and failed transport attempt. The unrelated default24-page quota is removed. Explicit owner limits now count distinct successful scoped pages; in-flight requests still join and unknown resources/cursors remain rejected. The live checkpoint fake transport now matches actual authorized cursor identity instead of request ordinal, while preserving terminal checkpoint coverage and native concurrent-owner CAS. Google handoff joins content/audience projections only for the same exact source/message and known native revision; a weaker metadata observation cannot erase that issued evidence, and changed/foreign/unknown revisions do not join.
+
+Validation:32 targeted tests across10files passed, covering repeated/concurrent reads, failure retry, unchanged issued state after other owned observations, same-revision projection order, foreign coordinates, forged observations and stale native state/CAS. Frozen v8 source roots remain untouched.
+
+Model-facing consumers were also searched for readonly "once" prescriptions: snapshot readers now request the actual value without an artificial invocation count. Pagination guidance distinguishes a real continuation cycle from an intentional read retry; requested claim/output ordering and single authorized checkpoint mutation stay intact.

@@ -1,0 +1,20 @@
+import { expect, it, vi } from "vitest";
+const storage = vi.hoisted(() => new Map<string, string>());
+vi.mock("@workspace/runtime", () => ({ fs: { mkdtemp: async () => "/owned-checkpoint", readFile: async (path: string) => storage.get(path), writeFile: async (path: string, body: string) => { storage.set(path, body); }, rename: async (from: string, to: string) => { storage.set(to, storage.get(from)!); storage.delete(from); } } }));
+import { prepareDriveCheckpoint } from "./live-drive-checkpoint.js";
+it("permits repeated checkpoint/page reads while retaining stale native CAS and cursor scope", async () => {
+  const prepared = await prepareDriveCheckpoint({ id: "owned", goal: "Preserve a competing checkpoint", driveId: "drive", initial: "a", pages: [{ cursor: "a", response: { nextPageToken: "b" } }, { cursor: "b", response: { newStartPageToken: "c" } }], competitor: "other", expected: { state: "stale", cursor: "other", ids: [], attempts: 1 } });
+  const { driveCheckpoint: checkpoint, googleWorkspaceRead: pages } = prepared.services;
+  expect(await checkpoint.read()).toBe("a");
+  expect(await checkpoint.read()).toBe("a");
+  await pages.readiness();
+  await expect(pages.readChanges("foreign")).rejects.toThrow("outside");
+  await pages.readChanges("a"); await pages.readChanges("a");
+  await pages.readChanges("b"); await pages.readChanges("b");
+  expect(await checkpoint.read()).toBe("a");
+  await expect(checkpoint.commit("foreign", "c")).rejects.toThrow("observed cursor");
+  expect(await checkpoint.commit("a", "c")).toEqual({ state: "stale", cursor: "other" });
+  const proof = await prepared.verify({ action: "none", status: "partial", ids: [], checkpoint: "other", checkpointWrite: { state: "stale", cursor: "other" } } as never);
+  expect(proof.passed).toBe(true);
+  expect(storage.get("/owned-checkpoint/cursor")).toBe("other");
+});

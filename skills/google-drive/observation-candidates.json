@@ -1,0 +1,83 @@
+{
+  "scope": "All supplied candidates in this template classified; explicit once/issued-state guards additionally inspected. This does not claim an arbitrary text scan proves absence of every semantic guard.",
+  "candidates": [
+    {
+      "file": "google-workspace/workers/gmail-agent/sync/sync-engine.ts",
+      "line": 269,
+      "text": "  ): Promise<GmailThreadCardState[]> {\n    if (threadIds.length === 0) return [];\n    const gmail = this.deps.gmailFor(channelId);\n    const items = await gmail.batchGetThreads(threadIds, {\n      format: \"metadata\",\n      metadataHeaders: METADATA_HEADERS,\n    });",
+      "classification": "native-business-payload-or-seed-cardinality; not-teacher-read-count"
+    },
+    {
+      "file": "google-workspace/workers/gmail-agent/agent/handlers.ts",
+      "line": 666,
+      "text": "    );\n    if (threadIds.length === 0 && messageIds.length === 0) {\n      throw new Error(\"modify requires threadIds or messageIds\");\n    }\n    if (threadIds.length + messageIds.length > 100) {\n      throw new Error(\"modify accepts at most 100 ids per call\");\n    }",
+      "classification": "native-business-payload-or-seed-cardinality; not-teacher-read-count"
+    },
+    {
+      "file": "google-workspace/workers/gmail-agent/agent/handlers.ts",
+      "line": 1075,
+      "text": "    : [];\n  if (list.length === 0 && fallbackSingle) return [fallbackSingle];\n  return Array.from(new Set(list.map((item) => item.trim())));\n}",
+      "classification": "native-business-payload-or-seed-cardinality; not-teacher-read-count"
+    },
+    {
+      "file": "google-workspace/skills/open-gmail-goal/managed.ts",
+      "line": 184,
+      "text": "      verifiedComposeLineage: isDeepStrictEqual(selected, native),\n      boundProviderReadback: isDeepStrictEqual(observed, expectedProvider) &&\n        (!providerChange || persisted.providerRevisionChanged),\n      preservedGmailState: persisted.blockedProviderCalls === 0 &&\n        expectedDrafts && isDeepStrictEqual(persisted.sent, initial.sent) &&\n        persisted.credentialReads === Number(mail.requests.length > 0),\n      reportedGmailContinuity: report?.status === world.expected.status && report.composeId === (native?.id ?? null) &&",
+      "classification": "credential-read-count-is-client-memoization; fix-owned-compose-scoped-evidence"
+    },
+    {
+      "file": "google-workspace/skills/open-gmail-goal/managed.ts",
+      "line": 190,
+      "text": "      reportedGmailContinuity: report?.status === world.expected.status && report.composeId === (native?.id ?? null) &&\n        isDeepStrictEqual(report.retainedEvents, native?.evidence ?? []) && isDeepStrictEqual(report.provider, observed),\n    };\n    return { contextId, caseId, goal: world.goal, passed: Object.values(checks).every(Boolean), checks,\n      catalog, selected, native, operations, requests: structuredClone(mail.requests), persisted,\n      before: structuredClone(before), readback: structuredClone(last) };\n  }",
+      "classification": "credential-read-count-is-client-memoization; fix-owned-compose-scoped-evidence"
+    },
+    {
+      "file": "google-workspace/skills/google-drive/live-setup-journey.ts",
+      "line": 255,
+      "text": "      browserAgrees:\n        receipts.length === checks.length &&\n        receipts.every((row, index) => {\n          if (row.stage !== readiness?.state || row.gmailEnabled) return false;\n          switch (row.check.kind) {\n            case \"owners\":\n              return row.accountOwner && row.permissionsOwner;",
+      "classification": "preserve-finite-internal-user-checks; fix-public-snapshot-replay"
+    },
+    {
+      "file": "google-workspace/skills/google-drive/open-goal-drive.ts",
+      "line": 164,
+      "text": "        isDeepStrictEqual(report.ids, expected.ids) &&\n        isDeepStrictEqual(report.driveDelta, observedDelta) &&\n        report.checkpoint === (expected.mode === \"changes\" ? expected.checkpoint : null) &&\n        (hasAudit ? isDeepStrictEqual(report.inventoryAudit, {\n          gate: expected.gate, inventoryIds: expected.inventoryIds,\n        }) : report.inventoryAudit === undefined),\n      groundedDriveFindings: Array.isArray(report?.findings) && report.findings.every((item) => typeof item === \"string\") &&",
+      "classification": "typed-domain-result-or-native-protected-state; not-teacher-read-count"
+    },
+    {
+      "file": "google-workspace/skills/open-google-handoff-goal/managed.ts",
+      "line": 223,
+      "text": "            if (!thread) result = \"unavailable\";\n            else if (result === \"current\" && !isDeepStrictEqual(thread, threads.get(id))) result = \"changed\";\n          }\n          for (const { intent, asset } of reviews.values()) {\n            const fresh = await readAsset(intent);\n            if (fresh.status === \"unavailable\" || fresh.missingChecks.length) result = \"unavailable\";\n            else if (result === \"current\" && !isDeepStrictEqual(fresh, asset)) result = \"changed\";",
+      "classification": "typed-domain-result-or-native-protected-state; not-teacher-read-count"
+    },
+    {
+      "file": "google-workspace/skills/open-calendar-goal/managed.ts",
+      "line": 134,
+      "text": "      verify: (record: CalendarRecord) => runInOrder(async () => {\n        if (lastReadback && isDeepStrictEqual(lastReadback.requested, record))\n          return structuredClone(lastReadback.observed);\n        if (lastReadback || artifact || !isObserved(record))\n          throw new Error(\"Verify a current observed Calendar event before staging\");\n        let observed: CalendarReadback;\n        try {",
+      "classification": "fix-multiple-issued-readbacks-and-independent-source-order"
+    },
+    {
+      "file": "google-workspace/skills/open-calendar-goal/managed.ts",
+      "line": 155,
+      "text": "        const startable = decision.status === \"selected\" && decision.selection !== null &&\n          lastReadback?.observed.status === \"current\" && isDeepStrictEqual(lastReadback.observed.record, decision.selection);\n        const holdable = decision.status === \"held\" && decision.selection === null && decision.evidence.length > 0;\n        if (artifact || !world.canStage || !(startable || holdable) || !decision.evidence.every(isObserved) ||\n            !windows.size || [...windows.values()].some(({ current, refreshed }) => !refreshed || current.status !== \"complete\"))\n          throw new Error(\"Stage an authorized decision only after complete current Calendar evidence\");\n        const path = (await fs.mkdtemp(\"calendar-handoff\")) + \"/scheduling-handoff.json\";",
+      "classification": "fix-multiple-issued-readbacks-and-independent-source-order"
+    },
+    {
+      "file": "google-workspace/skills/open-calendar-goal/managed.ts",
+      "line": 193,
+      "text": "      groundedCalendarEvidence: (!decision.selection || isObserved(decision.selection)) && decision.evidence.every(isObserved),\n      boundCalendarReadback: isDeepStrictEqual(observed?.requested ?? null, ask) &&\n        isDeepStrictEqual(observed?.observed ?? null, expectedReadback),\n      reconciledCalendarDecision: report?.decision?.status === decision.status &&\n        isDeepStrictEqual(report.decision.selection, decision.selection) && Array.isArray(reportEvidence) &&\n        reportEvidence.length === decision.evidence.length &&\n        decision.evidence.every((item) => reportEvidence.some((seen) => isDeepStrictEqual(item, seen))),",
+      "classification": "fix-multiple-issued-readbacks-and-independent-source-order"
+    },
+    {
+      "file": "google-workspace/skills/open-calendar-goal/managed.ts",
+      "line": 194,
+      "text": "      boundCalendarReadback: isDeepStrictEqual(observed?.requested ?? null, ask) &&\n        isDeepStrictEqual(observed?.observed ?? null, expectedReadback),\n      reconciledCalendarDecision: report?.decision?.status === decision.status &&\n        isDeepStrictEqual(report.decision.selection, decision.selection) && Array.isArray(reportEvidence) &&\n        reportEvidence.length === decision.evidence.length &&\n        decision.evidence.every((item) => reportEvidence.some((seen) => isDeepStrictEqual(item, seen))),\n      verifiedCalendarHandoff: world.expected.stage ?",
+      "classification": "fix-multiple-issued-readbacks-and-independent-source-order"
+    },
+    {
+      "file": "google-workspace/skills/gmail-workflow-review-fixtures/verify.ts",
+      "line": 20,
+      "text": "  const findings: unknown[] = candidate.findings;\n  if (findings.length !== world.expected.findings.length) return false;\n  return world.expected.findings.every((expected, index) => {\n    const actual = findings[index];\n    if (\n      !actual ||\n      typeof actual !== \"object\" ||",
+      "classification": "typed-domain-result-or-native-protected-state; not-teacher-read-count"
+    }
+  ]
+}

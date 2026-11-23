@@ -130,3 +130,33 @@ it("uses observed dates and source IDs for exact folder eligibility and folds fi
     ["faq", false],
   ]);
 });
+
+it("charges distinct successful pages rather than repeated reads or failed attempts", async () => {
+  const { bindGoogleWorkspaceRead } = await import("./drive-workflow-read.js");
+  let calls = 0;
+  const binding = bindGoogleWorkspaceRead({ folder: { id: "owned" }, maxPageReads: 1 }, {
+    inspect: async () => ({ stage: "ready", verified: true, credentialId: "owned", googleWorkspace: { stage: "verified" } }),
+    drive: () => ({ async listFiles() { if (++calls === 1) throw new Error("transient"); return { files: [], nextPageToken: "next" }; } }),
+  } as never);
+  await binding.readiness();
+  await expect(binding.listFolder("owned", null)).rejects.toThrow("transient");
+  await binding.listFolder("owned", null);
+  for (let index = 0; index < 4; index++) await binding.listFolder("owned", null);
+  expect(calls).toBe(6);
+  await expect(binding.listFolder("owned", "next")).rejects.toThrow("distinct-page");
+  await expect(binding.listFolder("foreign", null)).rejects.toThrow("outside");
+  await expect(binding.listFolder("owned", "invented")).rejects.toThrow("outside");
+});
+
+it("does not impose a default24-page quota on a longer authorized source", async () => {
+  const { bindGoogleWorkspaceRead } = await import("./drive-workflow-read.js");
+  let page = 0;
+  const binding = bindGoogleWorkspaceRead({ folder: { id: "owned" } }, {
+    inspect: async () => ({ stage: "ready", verified: true, credentialId: "owned", googleWorkspace: { stage: "verified" } }),
+    drive: () => ({ async listFiles() { page++; return { files: [], ...(page < 30 ? { nextPageToken: "page-" + page } : {}) }; } }),
+  } as never);
+  await binding.readiness();
+  let cursor: string | null = null;
+  do { cursor = (await binding.listFolder("owned", cursor)).next; } while (cursor !== null);
+  expect(page).toBe(30);
+});

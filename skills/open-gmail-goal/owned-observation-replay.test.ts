@@ -1,0 +1,23 @@
+import { expect, it, vi } from "vitest";
+const envelope = (key: string) => ({ messageId: "event-" + key, id: 1, senderId: "owner", payload: { payload: { messageId: "compose-" + key, initialState: { status: "saved", rfcMessageId: `<${key}@example.test>`, threadId: "thread-" + key, draftId: "draft-" + key } } } });
+vi.mock("@workspace/runtime", () => ({ contextId: "owned", rpc: { call: async (_target: string, _method: object, args: string[]) => envelope(args[0].slice(-1)) } }));
+vi.mock("@workspace-skills/gmail-compose-history-bindings", () => ({ bindGmailComposeHistory: (source: any) => ({ request: { operationId: source.messageId }, services: { gmailComposeHistory: { read: async () => ({ events: [{ id: source.envelopeIds[0], seq: 1, state: { status: "saved" } }] }) } } }) }));
+import { prepareOpenGmailGoal } from "./managed.js";
+it("keeps provider observations and identity searches scoped to each issued compose", async () => {
+  const source = (key: string) => ({ key, title: key, room: "owned", channelId: "channel-" + key, targetId: "target-" + key, messageId: "compose-" + key, ownerId: "owner", envelopeIds: ["event-" + key] });
+  const mail = (key: string) => ({ id: "draft-" + key, messageId: "provider-" + key, threadId: "thread-" + key, mimeId: `<${key}@example.test>`, subject: key, sender: "owner@example.test", recipient: "reader@example.test", preview: key });
+  const prepared = await prepareOpenGmailGoal({ contextId: "owned", caseId: "review" }, { id: "review", goal: "Verify the saved A draft", provider: { drafts: [mail("a"), mail("b")] }, expected: { compose: "a", status: "confirmed", operations: [], requests: [], providerId: "draft-a" } }, { contextId: "owned", caseId: "review", sources: [source("a"), source("b")] });
+  const s = prepared.services;
+  const a = await s.gmailGoalCompose.read("compose-a");
+  const before = await s.gmailGoalProvider.getDraft(a.id, "draft-a");
+  expect(before.status).toBe("found");
+  const b = await s.gmailGoalCompose.read("compose-b");
+  await s.gmailGoalProvider.getDraft(b.id, "draft-b");
+  await expect(s.gmailGoalProvider.getDraft(b.id, "draft-a")).rejects.toThrow("retained draft ID");
+  if (before.status !== "found") throw new Error("missing native draft");
+  await s.gmailGoalProvider.verifyDraft(a.id, "draft-a", before.record.digest);
+  const report = { status: "confirmed", composeId: a.id, retainedEvents: a.evidence, provider: before.record };
+  expect((await prepared.verify(report)).passed).toBe(true);
+  expect((await prepared.verify({ ...report, provider: { ...before.record, digest: "invented" } })).passed).toBe(false);
+  await expect(s.gmailGoalProvider.verifyDraft(a.id, "draft-a", "foreign-digest")).rejects.toThrow("exact earlier");
+});

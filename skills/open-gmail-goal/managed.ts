@@ -78,19 +78,22 @@ export async function prepareOpenGmailGoal(
       throw error;
     }
   }
-  let selected: RetainedCompose | null = null;
-  let discovered = false;
+  const issuedComposes = new Map<string, RetainedCompose>();
   const pending = new Map<string, Promise<unknown>>();
   let last: ReadResult | null = null;
   let before: ReadResult | null = null;
   const operations: Operation[] = [];
-  const found = new Set<string>();
-  const searched = new Set<string | null>();
-  const searchPages = new Map<string | null, SearchResult>();
-  let nextCursor: string | null = null;
+  type ProviderEvidence = { found: Set<string>; searched: Set<string | null>; searchPages: Map<string | null, SearchResult>; nextCursor: string | null; reads: ReadResult[] };
+  const providerEvidence = new Map<string, ProviderEvidence>();
+  function evidenceFor(id: string): ProviderEvidence {
+    let evidence = providerEvidence.get(id);
+    if (!evidence) { evidence = { found: new Set(), searched: new Set(), searchPages: new Map(), nextCursor: null, reads: [] }; providerEvidence.set(id, evidence); }
+    return evidence;
+  }
 
   function checkSelection(composeId: string) {
-    if (!selected || selected.id !== composeId) throw new Error("Read the selected retained compose before using its provider details");
+    const selected = issuedComposes.get(composeId);
+    if (!selected) throw new Error("Read the selected retained compose before using its provider details");
     return selected;
   }
   function runInOrder<T>(run: () => Promise<T>): Promise<T> {
@@ -99,44 +102,45 @@ export async function prepareOpenGmailGoal(
   const services = {
     gmailGoalCatalog: {
       async discover() {
-        discovered = true;
         return structuredClone(catalog);
       },
     },
     gmailGoalCompose: {
       read: (id: string) => runInOrder(async () => {
         const source = selectedSources.get(id);
-        if (!discovered || !source || (selected && selected.id !== id))
-          throw new Error("Select one observed compose in the authorized catalog");
-        selected ??= await readRetained(source);
-        return structuredClone(selected);
+        if (!source) throw new Error("Read only an owned compose in the authorized catalog");
+        if (!issuedComposes.has(id)) issuedComposes.set(id, await readRetained(source));
+        return structuredClone(issuedComposes.get(id)!);
       }),
     },
     gmailGoalProvider: {
       getDraft: (composeId: string, draftId: string) => runInOrder(async () => {
         const compose = checkSelection(composeId);
-        if (draftId !== compose.draftId && (!searched.size || nextCursor !== null || !found.has(draftId)))
+        const evidence = evidenceFor(composeId);
+        if (draftId !== compose.draftId && (!evidence.searched.size || evidence.nextCursor !== null || !evidence.found.has(draftId)))
           throw new Error("Use the retained draft ID or a completed matching provider search");
         before = await mail.getDraft(draftId);
         last = before;
+        evidence.reads.push(structuredClone(before));
         operations.push({ kind: "get", id: draftId });
         return structuredClone(before);
       }),
       findDrafts: (composeId: string, cursor: string | null) => runInOrder(async (): Promise<SearchResult> => {
         const compose = checkSelection(composeId);
-        const cached = searchPages.get(cursor);
+        const evidence = evidenceFor(composeId);
+        const cached = evidence.searchPages.get(cursor);
         if (cached) return structuredClone(cached);
-        if (cursor !== nextCursor)
+        if (cursor !== evidence.nextCursor)
           throw new Error("Follow an observed identity search cursor");
-        searched.add(cursor);
+        evidence.searched.add(cursor);
         operations.push({ kind: "find", cursor });
         try {
           const page = await mail.findDrafts(compose.mimeId, cursor);
           const ids = page.drafts.map(({ id }) => id);
-          ids.forEach((id) => found.add(id));
-          nextCursor = page.nextPageToken ?? null;
-          const result: SearchResult = { status: "complete", ids, next: nextCursor };
-          searchPages.set(cursor, result);
+          ids.forEach((id) => evidence.found.add(id));
+          evidence.nextCursor = page.nextPageToken ?? null;
+          const result: SearchResult = { status: "complete", ids, next: evidence.nextCursor };
+          evidence.searchPages.set(cursor, result);
           return structuredClone(result);
         } catch (error) {
           if (isGmailApiError(error)) return { status: "unavailable", ids: [], next: null };
@@ -145,10 +149,12 @@ export async function prepareOpenGmailGoal(
       }),
       verifyDraft: (composeId: string, draftId: string, digest: string) => runInOrder(async () => {
         const compose = checkSelection(composeId);
-        if (before?.status !== "found" || before.record.id !== draftId || before.record.digest !== digest ||
-            before.record.mimeId !== compose.mimeId || before.record.threadId !== compose.threadId)
+        const evidence = evidenceFor(composeId);
+        if (!evidence.reads.some(read => read.status === "found" && read.record.id === draftId && read.record.digest === digest &&
+            read.record.mimeId === compose.mimeId && read.record.threadId === compose.threadId))
           throw new Error("Verify the exact earlier draft revision with matching retained identities");
         last = await mail.getDraft(draftId);
+        evidence.reads.push(structuredClone(last));
         operations.push({ kind: "verify", id: draftId });
         return structuredClone(last);
       }),
@@ -156,6 +162,7 @@ export async function prepareOpenGmailGoal(
         const compose = checkSelection(composeId);
         if (!compose.sentId) throw new Error("Use only the retained provider delivery ID");
         last = await mail.readSent(compose.sentId);
+        evidenceFor(composeId).reads.push(structuredClone(last));
         operations.push({ kind: "sent" });
         return structuredClone(last);
       }),
@@ -168,7 +175,10 @@ export async function prepareOpenGmailGoal(
     const expectedSource = seed.sources.find(({ key }) => key === world.expected.compose);
     const native = expectedSource ? await readRetained(expectedSource) : null;
     const persisted = mail.readback();
-    const observed = last?.status === "found" ? last.record : null;
+    const selected = report?.composeId ? issuedComposes.get(report.composeId) ?? null : null;
+    const reads = selected ? evidenceFor(selected.id).reads : [];
+    const providerRead = reads.find(read => read.status === "found" && isDeepStrictEqual(read.record, report?.provider)) ?? reads.at(-1) ?? null;
+    const observed = providerRead?.status === "found" ? providerRead.record : null;
     const expectedProvider = [...persisted.drafts, ...persisted.sent].find(({ id }) => id === world.expected.providerId) ?? null;
     const providerChange = world.provider.changeAfterRead;
     const unchanged = initial.drafts.filter(({ id }) =>
@@ -179,7 +189,7 @@ export async function prepareOpenGmailGoal(
       return !sent && Boolean(digest) && isDeepStrictEqual(fields, providerChange.next);
     });
     const checks = {
-      discoveredOwnedComposes: discovered && catalog.length === seed.sources.length,
+      discoveredOwnedComposes: catalog.length === seed.sources.length,
       verifiedComposeLineage: isDeepStrictEqual(selected, native),
       boundProviderReadback: isDeepStrictEqual(observed, expectedProvider) &&
         (!providerChange || persisted.providerRevisionChanged),
@@ -191,7 +201,8 @@ export async function prepareOpenGmailGoal(
     };
     return { contextId, caseId, goal: world.goal, passed: Object.values(checks).every(Boolean), checks,
       catalog, selected, native, operations, requests: structuredClone(mail.requests), persisted,
-      before: structuredClone(before), readback: structuredClone(last) };
+      before: structuredClone(reads[0] ?? null), readback: structuredClone(providerRead),
+      providerObservations: Object.fromEntries([...providerEvidence].map(([id, evidence]) => [id, structuredClone(evidence.reads)])) };
   }
 
   async function qualify() {

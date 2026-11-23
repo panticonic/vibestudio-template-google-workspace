@@ -85,3 +85,24 @@ it("joins concurrent and repeated reads without advancing the provider snapshots
   expect(proof.passed).toBe(true);
   expect(proof.attempts).toHaveLength(4);
 });
+
+it("keeps issued event readbacks usable after other owned event/window observations", async () => {
+  const prepared = await prepareOpenCalendarGoal(owner, { ...world,
+    timelines: [{ ...world.timelines[0]!, initial: [[proposal, { ...proposal, id: "other", summary: "Another proposal" }]] }, world.timelines[1]!],
+  });
+  const { calendarGoalCatalog, calendarGoalWindows: windows, calendarGoalReadback: readback } = prepared.services;
+  await calendarGoalCatalog.discover();
+  const opened = await windows.open("review", start, end);
+  const current = await windows.refresh(opened.id);
+  const selection = current.records.find(row => row.eventId === proposal.id)!;
+  await readback.verify(selection);
+  // Neither another issued candidate nor a later source-window read invalidates this receipt.
+  await readback.verify(current.records.find(row => row.eventId === "other")!);
+  const room = await windows.open("room", start, end);
+  await windows.refresh(room.id);
+  expect(await readback.verify(selection)).toMatchObject({ status: "current" });
+  const report = { decision: { status: "selected", selection, evidence: [] }, handoff: null };
+  expect((await prepared.verify(report)).passed).toBe(true);
+  await expect(readback.verify({ ...selection, calendarId: "foreign" })).rejects.toThrow("observed");
+  expect((await prepared.verify({ ...report, decision: { ...report.decision, selection: { ...selection, updated: "stale" } } })).passed).toBe(false);
+});

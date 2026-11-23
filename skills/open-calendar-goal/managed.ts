@@ -61,7 +61,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
   let catalog: CalendarSource[] | null = null;
   const windows = new Map<string, WindowState>();
   const attempts: Attempt[] = [];
-  let lastReadback: { requested: CalendarRecord; observed: CalendarReadback } | null = null;
+  const readbacks: { requested: CalendarRecord; observed: CalendarReadback }[] = [];
   let artifact: CalendarHandoff | null = null;
   const pending = new Map<string, Promise<unknown>>();
 
@@ -106,7 +106,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
         const previous = windows.get(id);
         if (previous?.start === normalizedStart && previous.end === normalizedEnd)
           return structuredClone(previous.opened);
-        if (previous || lastReadback || artifact)
+        if (previous)
           throw new Error("Open the bounded Calendar interval before verification");
         const empty: CalendarWindow = {
           id: "window-" + (windows.size + 1), calendarId: id, status: "unavailable", records: [],
@@ -122,7 +122,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
       refresh: (windowId: string) => runInOrder(async () => {
         const state = [...windows.values()].find(({ current }) => current.id === windowId);
         if (state?.refreshed) return structuredClone(state.current);
-        if (!state || lastReadback || artifact)
+        if (!state)
           throw new Error("Refresh an opened Calendar window before verification");
         const result = await readWindow(state, "refresh");
         state.refreshed = true;
@@ -131,9 +131,9 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     },
     calendarGoalReadback: {
       verify: (record: CalendarRecord) => runInOrder(async () => {
-        if (lastReadback && isDeepStrictEqual(lastReadback.requested, record))
-          return structuredClone(lastReadback.observed);
-        if (lastReadback || artifact || !isObserved(record))
+        const issued = readbacks.find(value => isDeepStrictEqual(value.requested, record));
+        if (issued) return structuredClone(issued.observed);
+        if (!isObserved(record))
           throw new Error("Verify a current observed Calendar event before staging");
         let observed: CalendarReadback;
         try {
@@ -145,17 +145,18 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
           if (!status) throw error;
           observed = { status: status === 404 ? "missing" : "unavailable", record: null };
         }
-        lastReadback = { requested: structuredClone(record), observed };
+        readbacks.push({ requested: structuredClone(record), observed });
         return structuredClone(observed);
       }),
     },
     calendarGoalHandoff: {
       stage: (decision: CalendarDecision) => runInOrder(async () => {
-        const startable = decision.status === "selected" && decision.selection !== null &&
-          lastReadback?.observed.status === "current" && isDeepStrictEqual(lastReadback.observed.record, decision.selection);
+        const startable = decision.status === "selected" && decision.selection !== null && isObserved(decision.selection) &&
+          readbacks.some(value => value.observed.status === "current" && isDeepStrictEqual(value.observed.record, decision.selection));
+        const relevant = new Set([...decision.evidence, ...(decision.selection ? [decision.selection] : [])].map(value => value.calendarId));
         const holdable = decision.status === "held" && decision.selection === null && decision.evidence.length > 0;
         if (artifact || !world.canStage || !(startable || holdable) || !decision.evidence.every(isObserved) ||
-            !windows.size || [...windows.values()].some(({ current, refreshed }) => !refreshed || current.status !== "complete"))
+            !relevant.size || [...relevant].some(id => { const window = windows.get(id); return !window?.refreshed || window.current.status !== "complete"; }))
           throw new Error("Stage an authorized decision only after complete current Calendar evidence");
         const path = (await fs.mkdtemp("calendar-handoff")) + "/scheduling-handoff.json";
         const content = handoffBytes(decision);
@@ -183,7 +184,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     const trace = provider.trace();
     const visibleCatalog = world.timelines.map(({ id, name, description, timeZone }) => ({ id, name, description, timeZone }));
     const ask = world.expected.verify ? resolveExpected(world, world.expected.verify) : null;
-    const observed = lastReadback as { requested: CalendarRecord; observed: CalendarReadback } | null;
+    const observed = readbacks.find(value => isDeepStrictEqual(value.requested, ask)) ?? null;
     const expectedReadback = !ask ? null : decision.status === "stale" ?
       { status: decision.evidence.length ? "changed" : "missing", record: decision.evidence[0] ?? null } :
       decision.status === "incomplete" ? { status: "unavailable", record: null } : { status: "current", record: ask };
