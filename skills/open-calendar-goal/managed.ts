@@ -90,6 +90,12 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     return windows.get(record?.calendarId)?.current.records.some((item) => isDeepStrictEqual(item, record)) ?? false;
   }
 
+  function isEvidence(record: CalendarRecord) {
+    return isObserved(record) || readbacks.some(({ observed }) =>
+      (observed.status === "current" || observed.status === "changed") &&
+      isDeepStrictEqual(observed.record, record));
+  }
+
   const services = {
     calendarGoalCatalog: {
       discover: () => runInOrder(async () => {
@@ -205,7 +211,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
       decision.status === "incomplete" ? { status: "unavailable", record: null } : { status: "current", record: ask };
     const checks = {
       discoveredCalendarSources: isDeepStrictEqual(catalog, visibleCatalog),
-      groundedCalendarEvidence: (!decision.selection || isObserved(decision.selection)) && decision.evidence.every(isObserved),
+      groundedCalendarEvidence: (!decision.selection || isEvidence(decision.selection)) && decision.evidence.every(isEvidence),
       boundCalendarReadback: isDeepStrictEqual(observed?.requested ?? null, ask) &&
         isDeepStrictEqual(observed?.observed ?? null, expectedReadback),
       verifiedCalendarHandoff: world.expected.stage ?

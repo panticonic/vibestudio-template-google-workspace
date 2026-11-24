@@ -101,6 +101,10 @@ it("binds each reported change to its latest provider disposition", async () => 
       checkpoint: "verified", requiredTerms: ["remov", "updat"] },
   });
   expect((await prepared.qualify()).passed).toBe(true);
+  await prepared.services.googleWorkspaceRead.readChanges("initial");
+  const repeated=prepared.verify({status:"complete",action:"none",ids:["draft","map"],checkpoint:"verified",findings:["Draft removed","Map updated"],driveDelta:[
+    {fileId:"draft",removed:true,name:null,time:null},{fileId:"map",removed:false,name:"Map",time:null}]});
+  expect(repeated.passed).toBe(true);expect(repeated.observed.terminal).toBe("verified");
   const swapped = prepared.verify({ status: "complete", action: "none", ids: ["draft", "map"], checkpoint: "verified",
       findings: ["Draft updated", "Map removed"], driveDelta: [
         { fileId: "draft", name: null, time: null, removed: false },
@@ -109,4 +113,23 @@ it("binds each reported change to its latest provider disposition", async () => 
   expect(swapped.checks.groundedDriveFindings).toBe(true);
   expect(swapped.checks.boundDriveOutcome).toBe(false);
   expect(swapped.passed).toBe(false);
+});
+
+it("preserves the saved checkpoint and exact observed delta when continuation is unavailable",async()=>{
+  const world:OpenDriveWorld={goal:"Hand over observed changes and preserve the checkpoint when the rest is unavailable.",folders:[],
+    changeSource:{cursor:"saved",name:"Current",driveId:"current",pages:[{cursor:"saved",response:{nextPageToken:"tail",changes:[{fileId:"map",file:{name:"Map"}}]}},{cursor:"tail",response:null}]},
+    expected:{mode:"changes",status:"partial",ids:["map"],checkpoint:"saved",requiredTerms:["updat"]}};
+  const prepared=prepareOpenGoalDrive(owner,world);
+  const report={status:"partial",action:"none",ids:["map"],checkpoint:"saved",findings:["Map updated; partial coverage. Resume from the saved checkpoint."],driveDelta:[{fileId:"map",removed:false,name:"Map",time:null}]};
+  await prepared.services.googleWorkspaceRead.readiness();await prepared.services.googleGoalDiscovery.discover();
+  expect(prepared.verify(report).checks.boundDriveObservations).toBe(false);
+  await prepared.services.googleWorkspaceRead.readChanges("saved");
+  expect(prepared.verify(report).checks.boundDriveObservations).toBe(false);
+  await expect(prepared.services.googleWorkspaceRead.readChanges("tail")).rejects.toThrow();
+  const proof=prepared.verify(report);expect(proof.passed).toBe(true);
+  expect(proof.observed.terminal).toBeNull();expect(proof.observed.frontier).toBe("tail");
+  expect(prepared.verify({...report,status:"complete",checkpoint:"invented"}).passed).toBe(false);
+  expect(prepared.verify({...report,checkpoint:"tail"}).passed).toBe(false);
+  expect(prepared.verify({...report,driveDelta:[{...report.driveDelta[0],removed:true}]}).passed).toBe(false);
+  expect((await prepareOpenGoalDrive(owner,world).qualify()).passed).toBe(true);
 });

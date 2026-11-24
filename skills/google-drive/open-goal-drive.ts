@@ -1,10 +1,11 @@
 import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
-import { observePages } from "./page-observations.js";
+import { observePages, observePageChain } from "./page-observations.js";
 import { bindTestDriveTransport } from "./test-drive-transport.js";
 import type { DriveGoalScope } from "./driveWorkflow/workOnDriveGoal/types.js";
 import type {
   GoogleChange,
+  GoogleChangesPage,
   GoogleFolderRow,
   GoogleFolderPage,
   GooglePermissionsPage,
@@ -66,7 +67,13 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
   const permissionComplete = new Map<string, boolean>();
   const permissionReads = new Map<string, GooglePermission[]>();
   const changes: GoogleChange[] = [];
-  let terminal: string | null = null;
+  const changePageReads = new Map<string | null, GoogleChangesPage>();
+  function observedFeed() {
+    const chain = observePageChain(changePageReads, changeSource?.cursor ?? null);
+    const last = chain.cursors.at(-1);
+    const terminal = chain.complete && last !== undefined ? changePageReads.get(last)?.checkpoint ?? null : null;
+    return { ...chain, terminal };
+  }
   let discoveries = 0;
   let readinessReads = 0;
   function reply(kind: Request["kind"], resource: string, cursor: string | null, pages: readonly Page[]) {
@@ -139,7 +146,7 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
       async readChanges(cursor: string) {
         const page = await binding.readChanges(cursor);
         changes.push(...structuredClone(page.rows));
-        terminal = page.checkpoint;
+        changePageReads.set(cursor, structuredClone(page));
         return page;
       },
     },
@@ -148,13 +155,19 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
   function verify(value: unknown) {
     const report = value as GoogleWorkflowReport | null;
     const hasAudit = expected.mode === "audit";
+    const feed = observedFeed();
+    const terminal = feed.terminal;
     const observedDelta = expected.mode === "changes"
-      ? [...new Map(changes.map((change) => [change.fileId, change])).values()]
+      ? [...new Map(feed.rows.map((change) => [change.fileId, change])).values()]
       : undefined;
     const checks = {
       discoveredDriveScope: discoveries > 0 && readinessReads > 0,
       boundDriveObservations: expected.mode === "changes"
-        ? terminal === expected.checkpoint
+        ? expected.status === "complete"
+          ? feed.complete && !feed.incomplete && terminal === expected.checkpoint
+          : terminal === null && !feed.incomplete && expected.checkpoint === changeSource?.cursor &&
+            (feed.complete || requests.some(request => request.kind === "changes" &&
+              request.resource === changeSource?.name && request.cursor === feed.frontier && request.status >= 400))
         : Boolean(folderReads.has(expected.folderId) &&
             (expected.status !== "complete" || (folderReads.get(expected.folderId)!.complete && !folderReads.get(expected.folderId)!.incomplete)) &&
             (expected.mode !== "audit" || expected.gate !== "audited" ||
@@ -175,7 +188,7 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
       contextId, caseId, goal, mode: expected.mode, gate: expected.mode === "audit" ? expected.gate : null,
       passed: Object.values(checks).every(Boolean), checks, requests: structuredClone(requests),
       discovery: structuredClone(scope), readinessReads, discoveries,
-      observed: { folders: [...folderReads], permissions: [...permissionReads], changes, terminal },
+      observed: { folders: [...folderReads], permissions: [...permissionReads], changes, terminal, changePages: [...changePageReads], frontier: feed.frontier },
     },contract);
   }
 
@@ -195,9 +208,10 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
           break;
         }
       }
+      const feed = observedFeed(), terminal = feed.terminal;
       report.status = terminal ? "complete" : "partial";
       report.checkpoint = terminal ?? start;
-      const latest = new Map(changes.map((change) => [change.fileId, change]));
+      const latest = new Map(feed.rows.map((change) => [change.fileId, change]));
       report.driveDelta = [...latest.values()];
       report.ids = [...latest.keys()];
       report.findings = [...latest.values()].map((change) => `${change.name ?? change.fileId}: ${change.removed ? "removed" : "updated"}`);

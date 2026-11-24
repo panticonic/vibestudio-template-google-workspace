@@ -117,3 +117,21 @@ it("keeps issued event readbacks usable after other owned event/window observati
   await expect(readback.verify({ ...selection, calendarId: "foreign" })).rejects.toThrow("observed");
   expect((await prepared.verify({ ...report, decision: { ...report.decision, selection: { ...selection, updated: "stale" } } })).passed).toBe(false);
 });
+
+it("grounds a moved event in its exact current readback without authorizing a stale handoff", async () => {
+  const moved = {...proposal, updated:"2026-10-22T08:30:00Z",start:{dateTime:"2026-10-22T14:00:00Z"},end:{dateTime:"2026-10-22T15:00:00Z"}};
+  const revisedWorld:OpenCalendarWorld = {...world,canStage:true,timelines:[{...world.timelines[0]!,readback:{[proposal.id]:moved}},world.timelines[1]!],expected:{...world.expected,status:"stale",selection:null,evidence:[{calendarId:"review",eventId:proposal.id,source:"readback"}]}};
+  const prepared = await prepareOpenCalendarGoal(owner,revisedWorld);
+  const proof = await prepared.qualify();
+  expect(proof.passed).toBe(true);expect(proof.checks.groundedCalendarEvidence).toBe(true);
+  expect(proof.readback?.observed).toMatchObject({status:"changed",record:{startsAt:"2026-10-22T14:00:00.000Z"}});
+  const original=proof.readback!.requested;
+  await expect(prepared.services.calendarGoalHandoff.stage({status:"selected",selection:original,evidence:[]})).rejects.toThrow("current Calendar evidence");
+  const invented={...proof.report,decision:{...proof.report.decision,evidence:[{...proof.report.decision.evidence[0]!,startsAt:"2026-10-22T13:00:00.000Z"}]}};
+  expect((await prepared.verify(invented)).passed).toBe(false);
+  const unread = await prepareOpenCalendarGoal(owner,revisedWorld);
+  const services=unread.services;await services.calendarGoalCatalog.discover();
+  for(const id of revisedWorld.expected.scope){const opened=await services.calendarGoalWindows.open(id,start,end);await services.calendarGoalWindows.refresh(opened.id);}
+  expect((await unread.verify(proof.report)).checks.groundedCalendarEvidence).toBe(false);
+  expect((await unread.verify(proof.report)).passed).toBe(false);
+});
