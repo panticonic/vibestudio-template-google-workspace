@@ -1,4 +1,4 @@
-import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
+import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { observePages } from "./page-observations.js";
 import { bindTestDriveTransport } from "./test-drive-transport.js";

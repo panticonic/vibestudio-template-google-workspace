@@ -4,9 +4,9 @@ import { sha256HexSyncText, sortForCanonicalJson } from "@vibestudio/content-add
 import { contextId as actualContextId, fs } from "@workspace/runtime";
 import type { CalendarDecision, CalendarHandoff, CalendarReadback, CalendarRecord, CalendarReport, CalendarSource, CalendarWindow } from "./program/types.js";
 import { ownedCalendarProvider, projectCalendarRecord, type Timeline } from "./provider.js";
-import { assessSemanticOutcome } from "@workspace-skills/system-testing/semantic-outcome-contract";
-import { assessObservedApplicationOutcome } from "@workspace-skills/system-testing/observed-application-outcome";
-import type { InvocationObservations } from "@workspace-skills/system-testing/observed-invocation";
+import { assessSemanticOutcome } from "@workspace/application-outcomes/semantic-outcome-contract";
+import { assessObservedApplicationOutcome } from "@workspace/application-outcomes/observed-application-outcome";
+import type { InvocationObservations } from "@workspace/application-outcomes/observed-invocation";
 
 type EventRef = { calendarId: string; eventId: string; updated?: string; source?: "readback" };
 export type OpenCalendarWorld = {

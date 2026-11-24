@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { "./managed": "./managed.ts" },
+  "exports": {
+    "./managed": "./managed.ts"
+  },
   "dependencies": {
     "@vibestudio/content-addressing": "workspace:*",
     "@vibestudio/shared": "workspace:*",
@@ -12,6 +14,7 @@
     "@workspace/gmail": "workspace:*",
     "@workspace/pubsub": "workspace:*",
     "@workspace/runtime": "workspace:*",
-    "@workspace-skills/gmail-compose-history-bindings": "workspace:*"
+    "@workspace-skills/gmail-compose-history-bindings": "workspace:*",
+    "@workspace/application-outcomes": "workspace:*"
   }
 }

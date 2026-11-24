@@ -18,7 +18,8 @@
     "@workspace/runtime": "workspace:*",
     "@workspace-skills/google-workspace": "workspace:*",
     "@workspace/testkit": "workspace:*",
-    "@workspace/gmail": "workspace:*"
+    "@workspace/gmail": "workspace:*",
+    "@workspace/application-outcomes": "workspace:*"
   },
   "devDependencies": {
     "@workspace/natlang": "workspace:*",

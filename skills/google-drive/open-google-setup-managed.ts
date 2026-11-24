@@ -1,6 +1,6 @@
-import {assessObservedApplicationOutcome} from "@workspace-skills/system-testing/observed-application-outcome";
-import type {InvocationObservations} from "@workspace-skills/system-testing/observed-invocation";
-import type {SemanticOutcomeContract} from "@workspace-skills/system-testing/semantic-outcome-contract";
+import {assessObservedApplicationOutcome} from "@workspace/application-outcomes/observed-application-outcome";
+import type {InvocationObservations} from "@workspace/application-outcomes/observed-invocation";
+import type {SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { buildPanelLink, type PanelHandle } from "@workspace/runtime";
 import { gmailChatStateArgs } from "@workspace/gmail/chat-state";
