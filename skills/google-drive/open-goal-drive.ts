@@ -1,3 +1,4 @@
+import {observedContentReview} from "@workspace/application-outcomes/observed-content-review";
 import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { observePages, observePageChain } from "./page-observations.js";
@@ -179,17 +180,17 @@ export function prepareOpenGoalDrive({ contextId, caseId }: {
         (hasAudit ? isDeepStrictEqual(report.inventoryAudit, {
           gate: expected.gate, inventoryIds: expected.inventoryIds,
         }) : report.inventoryAudit === undefined),
-      groundedDriveFindings: Array.isArray(report?.findings) && report.findings.every((item) => typeof item === "string") &&
-        expected.requiredTerms.every((item) => report.findings.join(" ").toLowerCase().includes(item.toLowerCase())),
+      groundedDriveFindings: Array.isArray(report?.findings) && report.findings.every((item) => typeof item === "string" && Boolean(item.trim())),
       preservedReadOnlyScope: report?.checkpointWrite === undefined && report?.panelFindings === undefined,
     };
     const contract:SemanticOutcomeContract={effects:{checks:["discoveredDriveScope", "boundDriveObservations"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["boundDriveOutcome", "groundedDriveFindings", "preservedReadOnlyScope"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:[],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
-    return assessSemanticOutcome({
+    const proof={
       contextId, caseId, goal, mode: expected.mode, gate: expected.mode === "audit" ? expected.gate : null,
       passed: Object.values(checks).every(Boolean), checks, requests: structuredClone(requests),
       discovery: structuredClone(scope), readinessReads, discoveries,
       observed: { folders: [...folderReads], permissions: [...permissionReads], changes, terminal, changePages: [...changePageReads], frontier: feed.frontier },
-    },contract);
+    };
+    return {...assessSemanticOutcome(proof,contract),...observedContentReview(proof,contract,value,["requests","discovery","observed"])};
   }
 
   async function qualify() {
