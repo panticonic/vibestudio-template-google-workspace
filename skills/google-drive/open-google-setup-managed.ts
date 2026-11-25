@@ -1,6 +1,6 @@
 import {assessObservedApplicationOutcome} from "@workspace/application-outcomes/observed-application-outcome";
 import type {InvocationObservations} from "@workspace/application-outcomes/observed-invocation";
-import type {SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
+import {extendSemanticOutcomeEffects,type SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
 import { isDeepStrictEqual } from "node:util";
 import { buildPanelLink, type PanelHandle } from "@workspace/runtime";
 import { gmailChatStateArgs } from "@workspace/gmail/chat-state";
@@ -409,12 +409,7 @@ export async function prepareOpenGoogleSetup(
           },
         })
     ).outcomeDimensions.returnedValue.passed;
-    return {
-      outcomeContract:{...result.outcomeContract,effects:{...result.outcomeContract.effects,checks:[...result.outcomeContract.effects.checks,"rejectsRevision","rejectsAlias","rejectsRoute"]}},
-      ...result,
-      checks: { ...result.checks, rejectsRevision, rejectsAlias, rejectsRoute },
-      passed: result.passed && rejectsRevision && rejectsAlias && rejectsRoute,
-    };
+    return extendSemanticOutcomeEffects(result,{rejectsRevision,rejectsAlias,rejectsRoute});
   }
 
   return { services: { openGoogleSetup }, verify, qualify };
