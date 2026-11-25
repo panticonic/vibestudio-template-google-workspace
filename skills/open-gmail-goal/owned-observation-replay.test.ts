@@ -18,6 +18,14 @@ it("keeps provider observations and identity searches scoped to each issued comp
   await s.gmailGoalProvider.verifyDraft(a.id, "draft-a", before.record.digest);
   const report = { status: "confirmed", composeId: a.id, retainedEvents: a.evidence, provider: before.record };
   expect((await prepared.verify(report)).passed).toBe(true);
+  const equivalent = {...report, status: "recovered", retainedEvents: []};
+  const proof = await prepared.verify(equivalent);
+  expect(proof.passed).toBe(true);
+  expect((await prepared.verify({...report,status:"invented"})).passed).toBe(false);
+  expect(proof.semanticReviewRequired).toBe(true);
+  expect(proof.semanticReviewInput.actual.requestedReturn).toEqual(equivalent);
+  expect(proof.semanticReviewInput.actual.observations.providerObservations).toEqual(proof.providerObservations);
+  expect((await prepared.verify({...report,retainedEvents:["foreign-event"]})).passed).toBe(false);
   expect((await prepared.verify({ ...report, provider: { ...before.record, digest: "invented" } })).passed).toBe(false);
   await expect(s.gmailGoalProvider.verifyDraft(a.id, "draft-a", "foreign-digest")).rejects.toThrow("exact earlier");
 });

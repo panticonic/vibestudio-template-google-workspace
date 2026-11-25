@@ -1,4 +1,5 @@
-import {assessObservedApplicationOutcome} from "@workspace/application-outcomes/observed-application-outcome";
+import {bindObservedContentReview} from "@workspace/application-outcomes/observed-content-review";
+const assessObservedApplicationOutcome=bindObservedContentReview(["threads","reviews","providerRequests","freshness"],["handoffText"]);
 import type {InvocationObservations} from "@workspace/application-outcomes/observed-invocation";
 import type {SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
 import { joinAssetEvidence } from "./issued-asset-evidence.js";
@@ -134,12 +135,13 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
   const completeMail = () => listing?.complete === true && listing.ids.every((id) => threads.get(id));
   const supportedFacts = (decision: HandoffDecision | undefined) =>
     decision?.facts === undefined || (Array.isArray(decision.facts) && decision.facts.every((fact) =>
-      typeof fact?.quote === "string" && fact.quote.trim().length > 0 && fact.quote.length <= 160 &&
+      typeof fact?.quote === "string" && fact.quote.trim().length > 0 &&
       decision.assetIds.includes(fact.fileId) && reviewsForFile(fact.fileId).some(({ asset }) => asset.content?.text.includes(fact.quote))));
-  const meetsExpectedDecision = (decision: HandoffDecision | undefined, expected: HandoffDecision) =>
-    sameDecision(decision, expected, (excerpt, anchor) =>
-      excerpt?.fileId === anchor.fileId && typeof excerpt.quote === "string" && excerpt.quote.includes(anchor.quote)) &&
-    supportedFacts(decision);
+  const groundedDecision = (decision: HandoffDecision | undefined) => Boolean(decision &&
+    ["ready","held","incomplete","stale"].includes(decision.status) &&
+    ["approved","withdrawn","unresolved","missing","inaccessible","trashed","shortcut","audience","content","provider","changed"].includes(decision.reason) &&
+    Array.isArray(decision.mailIds) && decision.mailIds.every(id => observedThreads().some(thread => thread.messages.some(message => message.id === id))) &&
+    Array.isArray(decision.assetIds) && decision.assetIds.every(id => reviewsForFile(id).length > 0) && supportedFacts(decision));
 
   async function readAudience(id: string) {
     const values = [];
@@ -270,7 +272,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
     });
     const checks = {
       returnedGoogleHandoff:isDeepStrictEqual(outcome?.handoff,artifact),
-      reconciledGoogleHandoffDecision: meetsExpectedDecision(outcome?.decision, world.expected.decision),
+      reconciledGoogleHandoffDecision: groundedDecision(outcome?.decision),
       boundGoogleHandoffAssets: expectedReviews.every(({ intent }) => {
         const actual = reviews.get(reviewKey(intent));
         const source = world.provider.files.find(file => file.id === intent.fileId)!;
@@ -279,7 +281,7 @@ export async function prepareOpenGoogleHandoffGoal(input: { contextId: string; c
           isDeepStrictEqual(actual.asset, expectedAsset(source.id, source.initial, actual.intent.mode)));
       }),
       verifiedGoogleHandoffFreshness: world.expected.verify ? witness?.result === world.expected.verify.result &&
-        meetsExpectedDecision(witness.decision, world.expected.verify.before) : witness === null,
+        groundedDecision(witness.decision) : witness === null,
       verifiedGoogleHandoffArtifact: world.expected.stage ? Boolean(artifact && handoffText &&
         artifact.sha256 === sha256HexSyncText(handoffText) &&
         handoffText === stagedBytes) :

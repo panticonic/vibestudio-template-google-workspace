@@ -5,7 +5,8 @@ import { contextId as actualContextId, fs } from "@workspace/runtime";
 import type { CalendarDecision, CalendarHandoff, CalendarReadback, CalendarRecord, CalendarReport, CalendarSource, CalendarWindow } from "./program/types.js";
 import { ownedCalendarProvider, projectCalendarRecord, type Timeline } from "./provider.js";
 import { assessSemanticOutcome } from "@workspace/application-outcomes/semantic-outcome-contract";
-import { assessObservedApplicationOutcome } from "@workspace/application-outcomes/observed-application-outcome";
+import {bindObservedContentReview} from "@workspace/application-outcomes/observed-content-review";
+const assessObservedApplicationOutcome=bindObservedContentReview(["catalog","attempts","providerRequests","windows","readback"],["handoffText"]);
 import type { InvocationObservations } from "@workspace/application-outcomes/observed-invocation";
 
 type EventRef = { calendarId: string; eventId: string; updated?: string; source?: "readback" };
@@ -189,8 +190,7 @@ export async function prepareOpenCalendarGoal(input: { contextId: string; caseId
     const actual = value as Partial<CalendarDecision> | null;
     const wanted = expectedDecision();
     return actual?.status === wanted.status && isDeepStrictEqual(actual.selection, wanted.selection) &&
-      Array.isArray(actual.evidence) && actual.evidence.length === wanted.evidence.length &&
-      wanted.evidence.every(item => actual.evidence!.some(seen => isDeepStrictEqual(item, seen)));
+      Array.isArray(actual.evidence) && actual.evidence.every(isEvidence);
   }
 
   /** Native provider/workspace evidence, without claiming a model returned a decision. */

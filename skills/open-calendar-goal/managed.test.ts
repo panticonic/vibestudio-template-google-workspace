@@ -114,6 +114,13 @@ it("keeps issued event readbacks usable after other owned event/window observati
   expect(await readback.verify(selection)).toMatchObject({ status: "current" });
   const report = { decision: { status: "selected", selection, evidence: [] }, handoff: null };
   expect((await prepared.verify(report)).passed).toBe(true);
+  const supported = {...report,decision:{...report.decision,evidence:current.records}};
+  const proof = await prepared.verify(supported);
+  expect(proof.passed).toBe(true);
+  expect(proof.semanticReviewRequired).toBe(true);
+  expect(proof.semanticReviewInput.actual.requestedReturn).toEqual(supported);
+  expect(proof.semanticReviewInput.actual.observations.windows).toEqual(proof.windows);
+  expect((await prepared.verify({...report,decision:{...report.decision,evidence:[{...selection,eventId:"foreign"}]}})).passed).toBe(false);
   await expect(readback.verify({ ...selection, calendarId: "foreign" })).rejects.toThrow("observed");
   expect((await prepared.verify({ ...report, decision: { ...report.decision, selection: { ...selection, updated: "stale" } } })).passed).toBe(false);
 });

@@ -1,4 +1,7 @@
-import {assessSemanticOutcome,type SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
+import type {SemanticOutcomeContract} from "@workspace/application-outcomes/semantic-outcome-contract";
+import type {InvocationObservations} from "@workspace/application-outcomes/observed-invocation";
+import {bindObservedContentReview} from "@workspace/application-outcomes/observed-content-review";
+const assessSemanticOutcome=bindObservedContentReview(["catalog","selected","native","operations","requests","persisted","before","readback","providerObservations"]);
 import { isDeepStrictEqual } from "node:util";
 import { serializeByKey } from "@vibestudio/shared/keyedSerializer";
 import { isGmailApiError } from "@workspace/gmail";
@@ -170,7 +173,7 @@ export async function prepareOpenGmailGoal(
     },
   };
 
-  async function verify(value: unknown) {
+  async function verify(value: unknown, invocation?: InvocationObservations) {
     const envelope = value as GmailGoalReport | null;
     const report = envelope?.outcome ?? value as GmailGoalReport | null;
     const expectedSource = seed.sources.find(({ key }) => key === world.expected.compose);
@@ -197,14 +200,14 @@ export async function prepareOpenGmailGoal(
       preservedGmailState: persisted.blockedProviderCalls === 0 &&
         expectedDrafts && isDeepStrictEqual(persisted.sent, initial.sent) &&
         persisted.credentialReads === Number(mail.requests.length > 0),
-      reportedGmailContinuity: report?.status === world.expected.status && report.composeId === (native?.id ?? null) &&
-        isDeepStrictEqual(report.retainedEvents, native?.evidence ?? []) && isDeepStrictEqual(report.provider, observed),
+      reportedGmailContinuity: Boolean(report && ["confirmed", "recovered", "stale", "ambiguous", "missing", "incomplete", "unavailable", "delivery-confirmed", "delivery-unconfirmed"].includes(report.status)) && report?.composeId === (native?.id ?? null) &&
+        Array.isArray(report.retainedEvents) && report.retainedEvents.every(id => native?.evidence.includes(id)) && isDeepStrictEqual(report.provider, observed),
     };
     const contract:SemanticOutcomeContract={effects:{checks:["discoveredOwnedComposes", "verifiedComposeLineage", "preservedGmailState"],rationale:"Independent native observations, authority and persisted state establish application effects."},returnedValue:{checks:["reportedGmailContinuity", "boundProviderReadback"],required:true,rationale:"These are the actual requested domain findings or query values; mutation-only calls retain their separately observed effects."},incidentalValues:{checks:[],rationale:"Optional incorrect mutation returns are recorded against the actual invocation, without invalidating correct native effects."}};
     return assessSemanticOutcome({ contextId, caseId, goal: world.goal, passed: Object.values(checks).every(Boolean), checks,
       catalog, selected, native, operations, requests: structuredClone(mail.requests), persisted,
       before: structuredClone(reads[0] ?? null), readback: structuredClone(providerRead),
-      providerObservations: Object.fromEntries([...providerEvidence].map(([id, evidence]) => [id, structuredClone(evidence.reads)])) },contract);
+      providerObservations: Object.fromEntries([...providerEvidence].map(([id, evidence]) => [id, structuredClone(evidence.reads)])) },contract,value,invocation);
   }
 
   async function qualify() {
